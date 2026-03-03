@@ -109,6 +109,9 @@ _EVENT_CODE_ALIASES: dict[str, set[str]] = {
     "azva":  {"az", "azva"},                               # Arizona Regional
     # Waterloo
     "onwat": {"wat", "onwat"},                             # Waterloo Regional
+    # Brazil
+    "brba":  {"br", "brbr", "brba"},                       # Brazil Regional → Brasilia
+    "brsp":  {"brsp"},                                     # Brazil - São Paulo (split 2025)
 }
 
 # Build reverse lookup: any code -> set of all sibling codes

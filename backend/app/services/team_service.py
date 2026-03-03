@@ -149,6 +149,17 @@ async def get_team_stats(team_number: int, year: Optional[int] = None) -> dict:
         qual_ranking = (qual.get("ranking") or {}) if qual else {}
         qual_record = qual_ranking.get("record", {})
 
+        # Alliance pick info (already in status, no extra API call)
+        _PICK_LABELS = ['Captain', '1st Pick', '2nd Pick', '3rd Pick', 'Backup']
+        alliance_info = status.get("alliance") if status else None
+        alliance_pick = ""
+        alliance_number = None
+        if alliance_info:
+            pick_idx = alliance_info.get("pick")
+            alliance_number = alliance_info.get("number")
+            if pick_idx is not None and pick_idx < len(_PICK_LABELS):
+                alliance_pick = _PICK_LABELS[pick_idx]
+
         event_results.append({
             "event_key": ek,
             "event_name": ev.get("name", ek),
@@ -158,6 +169,8 @@ async def get_team_stats(team_number: int, year: Optional[int] = None) -> dict:
             "playoff_level": COMP_LEVEL_LABELS.get(ev_comp_level, ev_comp_level)
                              if ev_comp_level != "winner" else "Finals",
             "playoff_status": ev_playoff_status or "-",
+            "alliance_pick": alliance_pick,
+            "alliance_number": alliance_number,
         })
 
     # ── Process awards ──────────────────────────────────────

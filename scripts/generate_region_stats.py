@@ -65,6 +65,13 @@ _COUNTRY_NORMALIZE = {
     "turkey": "Türkiye", "türkiye": "Türkiye", "turkiye": "Türkiye",
 }
 
+# Canadian province codes / full names → district (where one exists).
+# Provinces without a district fall through to the generic "Canada" bucket.
+_CANADA_PROVINCE_DISTRICT = {
+    "ON": "FIRST Canada - Ontario",
+    "Ontario": "FIRST Canada - Ontario",
+}
+
 
 def _norm(c: str) -> str:
     return _COUNTRY_NORMALIZE.get(c.lower().strip(), c)
@@ -77,6 +84,12 @@ def _resolve_event_region(ev: dict) -> str:
     if district and district.get("abbreviation"):
         return district.get("display_name") or district["abbreviation"].upper()
     if country and country not in ("USA", ""):
+        # Canadian events: route by province if a district mapping exists
+        if "Canada" in country or "canada" in country.lower():
+            dist = _CANADA_PROVINCE_DISTRICT.get(state_prov)
+            if dist:
+                return dist
+            return "Canada"
         for label in _COUNTRY_LABELS:
             if label.lower() in country.lower() or country.lower() in label.lower():
                 return _REGION_MERGE.get(label, label)
@@ -120,9 +133,12 @@ async def generate():
     region_meta: dict[str, dict] = {}
     for region, evs in region_events.items():
         years = sorted({int(e["key"][:4]) for e in evs})
-        first_ev = min(evs, key=lambda e: e.get("start_date", "9999"))
+        # Prefer non-cancelled events for first_event display
+        non_cancelled = [e for e in evs if not (e.get("name", "") or "").lstrip().startswith("*")]
+        pool = non_cancelled if non_cancelled else evs
+        first_ev = min(pool, key=lambda e: e.get("start_date", "9999"))
         region_meta[region] = {
-            "first_event_year": years[0] if years else None,
+            "first_event_year": int(first_ev["key"][:4]),
             "first_event_name": first_ev.get("name", first_ev["key"]),
             "active_years": years,
             "total_events": len(evs),
@@ -220,6 +236,24 @@ async def generate():
                     elif at == 69:
                         impact_fin_by_team[tk].append(yr)
 
+    einstein_winner_by_team: dict[str, list[int]] = defaultdict(list)
+    print("  Fetching Einstein/Championship awards (winners)...")
+    # For winners, include ALL event_type==4 (pre-2001 single CMP + post-2001 Einstein)
+    all_cmp_finals_keys = [e["key"] for e in all_events if e.get("event_type") == 4]
+    einstein_award_results = await asyncio.gather(
+        *[_safe(client.get(f"/event/{ek}/awards")) for ek in all_cmp_finals_keys]
+    )
+    for ek, awards in zip(all_cmp_finals_keys, einstein_award_results):
+        if not awards:
+            continue
+        yr = int(ek[:4])
+        for a in awards:
+            if a.get("award_type") == 1:  # Winner
+                for r in a.get("recipient_list", []):
+                    tk = r.get("team_key")
+                    if tk:
+                        einstein_winner_by_team[tk].append(yr)
+
     einstein_by_team: dict[str, list[int]] = defaultdict(list)
     print("  Fetching Einstein match data (robot appearances only)...")
     results = await asyncio.gather(
@@ -247,11 +281,12 @@ async def generate():
             for t in roster:
                 einstein_by_team[t["key"]].append(yr)
 
-    print(f"  HoF: {len(hof_by_team)}, Impact fin: {len(impact_fin_by_team)}, Einstein: {len(einstein_by_team)}")
+    print(f"  HoF: {len(hof_by_team)}, Impact fin: {len(impact_fin_by_team)}, "
+          f"Einstein winners: {len(einstein_winner_by_team)}, Einstein: {len(einstein_by_team)}")
 
     # ── Phase 5: Fetch missing team info ──────────────────────
     print("\nPhase 5: Fetching additional team info...")
-    needed = set(hof_by_team) | set(impact_fin_by_team) | set(einstein_by_team)
+    needed = set(hof_by_team) | set(impact_fin_by_team) | set(einstein_by_team) | set(einstein_winner_by_team)
     missing = [tk for tk in needed if tk not in team_info]
     print(f"  Missing: {len(missing)}")
     for i in range(0, len(missing), BATCH):
@@ -277,6 +312,12 @@ async def generate():
         result = None
         # International team → match by country label
         if c and c not in ("USA", ""):
+            # Canadian teams: route by province if a district exists
+            if "Canada" in c or "canada" in c.lower():
+                dist = _CANADA_PROVINCE_DISTRICT.get(sp)
+                if dist:
+                    return dist
+                return "Canada"
             for lab in _COUNTRY_LABELS:
                 if lab.lower() in c.lower() or c.lower() in lab.lower():
                     result = lab
@@ -301,7 +342,7 @@ async def generate():
     # ── Phase 6: Map achievements to regions ──────────────────
     print("\nPhase 6: Mapping achievements to home regions...")
     build = lambda: defaultdict(list)
-    r_hof, r_imp, r_ein = build(), build(), build()
+    r_hof, r_imp, r_ein, r_ein_win = build(), build(), build(), build()
 
     for tk, yrs in hof_by_team.items():
         reg = _true_home(tk)
@@ -325,6 +366,15 @@ async def generate():
         reg = _true_home(tk)
         inf = team_info.get(tk, {})
         r_ein[reg].append({
+            "team_number": inf.get("team_number", int(tk[3:])),
+            "nickname": inf.get("nickname", ""),
+            "years": sorted(set(yrs)),
+        })
+
+    for tk, yrs in einstein_winner_by_team.items():
+        reg = _true_home(tk)
+        inf = team_info.get(tk, {})
+        r_ein_win[reg].append({
             "team_number": inf.get("team_number", int(tk[3:])),
             "nickname": inf.get("nickname", ""),
             "years": sorted(set(yrs)),
@@ -368,6 +418,8 @@ async def generate():
         imp = sorted(r_imp.get(rn, []), key=lambda x: x.get("team_number", 0))
         ein = sorted(r_ein.get(rn, []),
                      key=lambda x: (-len(x.get("years", [])), x.get("team_number", 0)))
+        ein_win = sorted(r_ein_win.get(rn, []),
+                         key=lambda x: (-len(x.get("years", [])), x.get("team_number", 0)))
         output[rn] = {
             "first_event_year": m["first_event_year"],
             "first_event_name": m["first_event_name"],
@@ -380,6 +432,8 @@ async def generate():
             "hof_count": len(hof),
             "impact_finalists": imp,
             "impact_count": len(imp),
+            "einstein_winners": ein_win,
+            "einstein_winner_count": len(ein_win),
             "einstein_teams": ein[:25],
             "einstein_count": len(ein),
             "top_international_visitors": r_vis.get(rn, []),
@@ -434,6 +488,11 @@ async def generate():
         d["impact_finalists"] = _merge_list(d["impact_finalists"], s["impact_finalists"],
                                              lambda x: x.get("team_number", 0))
         d["impact_count"] = len(d["impact_finalists"])
+
+        d["einstein_winners"] = _merge_list(
+            list(d.get("einstein_winners", [])), s.get("einstein_winners", []),
+            lambda x: (-len(x.get("years", [])), x.get("team_number", 0)))
+        d["einstein_winner_count"] = len(d["einstein_winners"])
 
         all_ein = list(d.get("einstein_teams", []))
         _merge_list(all_ein, s.get("einstein_teams", []),

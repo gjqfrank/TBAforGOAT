@@ -156,8 +156,23 @@ async def get_event_summary_awards(event_key: str) -> dict:
     if not teams:
         return {"past_event_champions": [], "past_season_awards": []}
 
+    # Fetch alliances for every historical event instance (parallel, nearly
+    # free — piggybacked on the already-cached year scan inside get_event_history).
+    alliance_cache: dict[str, list] = {}
+    if event_history and event_history.get("timeline"):
+        hist_keys = [yr["event_key"] for yr in event_history["timeline"]
+                     if yr.get("event_key")]
+        alliance_results = await asyncio.gather(
+            *[_safe(client.get_event_alliances(ek)) for ek in hist_keys]
+        )
+        for ek, alliances in zip(hist_keys, alliance_results):
+            if alliances:
+                alliance_cache[ek] = alliances
+
     # Returning event champions & finalists (from event history)
-    past_event_champions = _extract_past_event_champions(event_history, teams, year)
+    past_event_champions = _extract_past_event_champions(
+        event_history, teams, year, alliance_cache,
+    )
 
     # Previous season awards for all teams
     prev_year = year - 1
@@ -179,11 +194,21 @@ async def get_event_summary_awards(event_key: str) -> dict:
 
 def _extract_past_event_champions(
     event_history: dict | None, teams: list[dict], current_year: int,
+    alliance_cache: dict | None = None,
 ) -> list[dict]:
     """Cross-reference the event's historical timeline with the current
-    participant list to find teams that previously won / were finalists here."""
+    participant list to find teams that previously won / were finalists here.
+
+    *alliance_cache* maps ``event_key`` to the raw TBA alliances list;
+    when supplied, each year entry will include the team's alliance pick
+    label (Captain / 1st Pick / …).
+    """
     if not event_history or not event_history.get("timeline"):
         return []
+
+    _PICK_LABELS = ['Captain', '1st Pick', '2nd Pick', '3rd Pick', 'Backup']
+    if alliance_cache is None:
+        alliance_cache = {}
 
     team_nums = {t["team_number"] for t in teams}
     name_map = {t["team_number"]: t.get("nickname", "") for t in teams}
@@ -192,20 +217,37 @@ def _extract_past_event_champions(
 
     for yr_data in event_history["timeline"]:
         yr = yr_data["year"]
+        ek = yr_data.get("event_key", "")
         if yr >= current_year:
             continue
+
+        # Build team_key -> {pick_label, alliance_number} from alliances
+        pick_map: dict[str, dict] = {}
+        alliances_raw = alliance_cache.get(ek, [])
+        if alliances_raw:
+            for al in alliances_raw:
+                al_num = al.get("number") or al.get("name", "").split()[-1]
+                for idx, tk in enumerate(al.get("picks", [])):
+                    if idx < len(_PICK_LABELS):
+                        pick_map[tk] = {"pick": _PICK_LABELS[idx], "alliance": al_num}
 
         for w in yr_data.get("winners", []):
             num = w["team_number"]
             if num in team_nums:
                 champ_map.setdefault(num, {"years_won": [], "years_finalist": []})
-                champ_map[num]["years_won"].append(yr)
+                info = pick_map.get(f"frc{num}", {})
+                champ_map[num]["years_won"].append(
+                    {"year": yr, "pick": info.get("pick", ""), "alliance": info.get("alliance", "")}
+                )
 
         for f in yr_data.get("finalists", []):
             num = f["team_number"]
             if num in team_nums:
                 champ_map.setdefault(num, {"years_won": [], "years_finalist": []})
-                champ_map[num]["years_finalist"].append(yr)
+                info = pick_map.get(f"frc{num}", {})
+                champ_map[num]["years_finalist"].append(
+                    {"year": yr, "pick": info.get("pick", ""), "alliance": info.get("alliance", "")}
+                )
 
     result = []
     for num in sorted(champ_map):
@@ -213,8 +255,8 @@ def _extract_past_event_champions(
         result.append({
             "team_number": num,
             "nickname": name_map.get(num, ""),
-            "years_won": sorted(d["years_won"]),
-            "years_finalist": sorted(d["years_finalist"]),
+            "years_won": sorted(d["years_won"], key=lambda x: x["year"]),
+            "years_finalist": sorted(d["years_finalist"], key=lambda x: x["year"]),
         })
     return result
 
@@ -231,9 +273,12 @@ async def _build_past_season_awards(
     """Given per-team award results for the previous season, return a list
     of teams that earned Impact / Winner / Finalist at a regional or
     district event."""
+    _PICK_LABELS = ['Captain', '1st Pick', '2nd Pick', '3rd Pick', 'Backup']
     name_map = {t["team_number"]: t.get("nickname", "") for t in teams}
     team_award_map: dict[int, list[dict]] = {}
     award_event_keys: set[str] = set()
+    # Track which events have winner/finalist awards (need alliances)
+    alliance_event_keys: set[str] = set()
 
     for t, awards in zip(teams, prev_award_results):
         if not awards:
@@ -247,23 +292,42 @@ async def _build_past_season_awards(
             label = {0: "impact", 1: "winner", 2: "finalist"}.get(atype, "")
             team_award_map.setdefault(num, []).append({"type": label, "event_key": ek})
             award_event_keys.add(ek)
+            if atype in (_AWARD_TYPE_WINNER, _AWARD_TYPE_FINALIST):
+                alliance_event_keys.add(ek)
 
     if not team_award_map:
         return []
 
-    # Batch-fetch event info so we can show friendly names & filter types
-    infos = await asyncio.gather(
-        *[_safe(client.get_event(ek)) for ek in award_event_keys]
+    # Batch-fetch event info + alliances (for winner/finalist pick labels)
+    ek_list = list(award_event_keys)
+    alliance_ek_list = list(alliance_event_keys)
+    infos, *alliance_results = await asyncio.gather(
+        asyncio.gather(*[_safe(client.get_event(ek)) for ek in ek_list]),
+        *[_safe(client.get_event_alliances(ek)) for ek in alliance_ek_list],
     )
+
     event_names: dict[str, str] = {}
     event_types: dict[str, int] = {}
-    for ek, info in zip(award_event_keys, infos):
+    for ek, info in zip(ek_list, infos):
         if info:
             event_names[ek] = info.get("short_name") or info.get("name", ek)
             event_types[ek] = info.get("event_type", -1)
         else:
             event_names[ek] = ek
             event_types[ek] = -1
+
+    # Build team_key -> {pick, alliance} for each event
+    pick_maps: dict[str, dict[str, dict]] = {}
+    for ek, alliances in zip(alliance_ek_list, alliance_results):
+        if not alliances:
+            continue
+        pm: dict[str, dict] = {}
+        for al in alliances:
+            al_num = al.get("number") or al.get("name", "").split()[-1]
+            for idx, tk in enumerate(al.get("picks", [])):
+                if idx < len(_PICK_LABELS):
+                    pm[tk] = {"pick": _PICK_LABELS[idx], "alliance": al_num}
+        pick_maps[ek] = pm
 
     result = []
     for num in sorted(team_award_map):
@@ -272,11 +336,18 @@ async def _build_past_season_awards(
             ek = a["event_key"]
             if event_types.get(ek) in _CHAMPIONSHIP_EVENT_TYPES:
                 continue
-            filtered.append({
+            info = {}
+            if a["type"] in ("winner", "finalist"):
+                info = pick_maps.get(ek, {}).get(f"frc{num}", {})
+            entry: dict = {
                 "type": a["type"],
                 "event_key": ek,
                 "event_name": event_names.get(ek, ek),
-            })
+            }
+            if info.get("pick"):
+                entry["pick"] = info["pick"]
+                entry["alliance"] = info.get("alliance", "")
+            filtered.append(entry)
         if filtered:
             result.append({
                 "team_number": num,

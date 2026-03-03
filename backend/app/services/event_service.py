@@ -20,7 +20,6 @@ _REGION_MAP = {
     "Mountain": {"MT", "WY", "CO", "NM", "AZ", "UT", "ID", "NV"},
     "Pacific": {"WA", "OR", "CA", "HI", "AK"},
     # International
-    "Canada": set(),       # matched by country
     "Türkiye": set(),
     "Israel": set(),
     "China": set(),
@@ -36,6 +35,12 @@ _REGION_MERGE = {
     "Texas": "FIRST In Texas",
 }
 
+# Canadian province codes → district (where one exists).
+_CANADA_PROVINCE_DISTRICT = {
+    "ON": "FIRST Canada - Ontario",
+    "Ontario": "FIRST Canada - Ontario",
+}
+
 
 def _resolve_region(country: str, state_prov: str, district: dict | None) -> str:
     """Return a human-readable region string for an event."""
@@ -43,11 +48,22 @@ def _resolve_region(country: str, state_prov: str, district: dict | None) -> str
         return district["display_name"] or district["abbreviation"].upper()
 
     if country and country not in ("USA", ""):
-        # Map known FRC countries
-        for label in ("Canada", "Türkiye", "Israel", "China", "Australia"):
+        # Canadian events: route by province if a district mapping exists
+        if "Canada" in country or "canada" in country.lower():
+            dist = _CANADA_PROVINCE_DISTRICT.get(state_prov)
+            if dist:
+                return dist
+            return "Canada"
+        # Map known FRC countries to their region_stats.json key
+        _COUNTRY_LABELS = (
+            "Türkiye", "Israel", "China", "Australia",
+            "Brazil", "Mexico", "Chinese Taipei",
+            "India", "Japan", "Chile", "Colombia", "Egypt", "Poland",
+        )
+        for label in _COUNTRY_LABELS:
             if label.lower() in country.lower() or country.lower() in label.lower():
                 return _REGION_MERGE.get(label, label)
-        return "International"
+        return country
 
     # US state lookup
     for region, states in _REGION_MAP.items():

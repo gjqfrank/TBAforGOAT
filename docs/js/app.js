@@ -1389,11 +1389,32 @@ async function loadSummaryAwards() {
     }
 }
 
+function _champBadge(entries, cls, icon, label) {
+    const years = entries.map(y => typeof y === 'object' ? y.year : y).join(', ');
+    const frontText = `${icon} ${label}: ${years}`;
+    const hasPick = entries.some(y => typeof y === 'object' && y.pick);
+    if (!hasPick) return `<span class="past-champ-badge ${cls}">${frontText}</span>`;
+    const backText = entries.map(y => {
+        if (typeof y === 'object' && y.pick) {
+            const a = y.alliance ? `A${y.alliance}` : '';
+            return `${a} ${y.pick}`.trim();
+        }
+        return '';
+    }).filter(Boolean).join(' \u00b7 ');
+    return `<span class="past-champ-badge ${cls} pick-flip" onclick="this.classList.toggle('flipped')">`
+         + `<span class="pick-flip-inner">`
+         + `<span class="pick-flip-front">${frontText}</span>`
+         + `<span class="pick-flip-back">${backText}</span>`
+         + `</span></span>`;
+}
+
 function renderPastEventChampions(champions) {
     $('summary-past-champs-list').innerHTML = champions.map(t => {
         const badges = [];
-        if (t.years_won.length) badges.push(`<span class="past-champ-badge past-champ-winner">\u{1F3C6} Winner: ${t.years_won.join(', ')}</span>`);
-        if (t.years_finalist.length) badges.push(`<span class="past-champ-badge past-champ-finalist">\u{1F948} Finalist: ${t.years_finalist.join(', ')}</span>`);
+        if (t.years_won.length)
+            badges.push(_champBadge(t.years_won, 'past-champ-winner', '\u{1F3C6}', 'Winner'));
+        if (t.years_finalist.length)
+            badges.push(_champBadge(t.years_finalist, 'past-champ-finalist', '\u{1F948}', 'Finalist'));
         return `<div class="summary-hof-team">
             <span class="summary-hof-num">${t.team_number}</span>
             <span class="summary-hof-name">${t.nickname}</span>
@@ -1432,7 +1453,16 @@ function renderPastSeasonAwards(awards) {
             const icon = a.type === 'winner' ? '\u{1F3C6}' : a.type === 'finalist' ? '\u{1F948}' : '\u{2B50}';
             const cls = `past-award-chip-${a.type}`;
             const label = a.type.charAt(0).toUpperCase() + a.type.slice(1);
-            return `<span class="past-award-chip ${cls}" title="${_esc(a.event_name)}">${icon} ${label} @ ${_esc(a.event_name)}</span>`;
+            const front = `${icon} ${label} @ ${_esc(a.event_name)}`;
+            if (a.pick) {
+                const alLabel = a.alliance ? `A${a.alliance} ` : '';
+                return `<span class="past-award-chip ${cls} pick-flip" onclick="this.classList.toggle('flipped')">`
+                     + `<span class="pick-flip-inner">`
+                     + `<span class="pick-flip-front">${front}</span>`
+                     + `<span class="pick-flip-back">${alLabel}${a.pick}</span>`
+                     + `</span></span>`;
+            }
+            return `<span class="past-award-chip ${cls}" title="${_esc(a.event_name)}">${front}</span>`;
         }).join('');
         return `<div class="summary-hof-team past-award-row">
             <span class="summary-hof-num">${t.team_number}</span>
@@ -2268,21 +2298,34 @@ function renderTeamStats(d) {
             <thead>
                 <tr>
                     <th>Event</th><th>Type</th><th>Qual Rank</th><th>Qual Record</th>
-                    <th>Playoff Level</th><th>Playoff Result</th>
+                    <th>Alliance</th><th>Playoff Result</th>
                 </tr>
             </thead>
             <tbody>
-                ${eventsThisYear.map(e => `
+                ${eventsThisYear.map(e => {
+                    const allianceCell = e.alliance_pick
+                        ? `A${e.alliance_number || '?'} ${e.alliance_pick}`
+                        : (e.playoff_level === 'Qualifications' ? '\u2013' : '\u2013');
+                    let resultCell;
+                    if (e.playoff_status === 'won') {
+                        resultCell = '<span class="winner-text">Won</span>';
+                    } else if (e.playoff_status === 'playing') {
+                        resultCell = `<span class="playing-text">Playing (${e.playoff_level})</span>`;
+                    } else if (e.playoff_level && e.playoff_level !== 'Qualifications' && e.playoff_status && e.playoff_status !== '-') {
+                        resultCell = `Eliminated (${e.playoff_level})`;
+                    } else {
+                        resultCell = '\u2013';
+                    }
+                    return `
                 <tr>
                     <td>${e.event_name}</td>
                     <td class="muted">${e.event_type}</td>
                     <td class="rank">${e.qual_rank}</td>
                     <td class="stat">${e.qual_record}</td>
-                    <td>${e.playoff_level === 'Qualifications' ? '–' : e.playoff_level}</td>
-                    <td>${e.playoff_status === 'won'
-                        ? '<span class="winner-text">Won</span>'
-                        : (e.playoff_status === '-' ? '–' : e.playoff_status)}</td>
-                </tr>`).join('')}
+                    <td>${allianceCell}</td>
+                    <td>${resultCell}</td>
+                </tr>`;
+                }).join('')}
             </tbody>
         </table>` : '<p class="empty">No events yet this year.</p>'}
 
@@ -4434,6 +4477,7 @@ function renderRegionFacts(data) {
     html += _statCard('Total Events', `${data.total_events}`, `${(data.active_years || []).length} seasons`);
     html += _statCard('Active Teams', `${data.current_season_teams || data.team_count}`, `${data.active_year || new Date().getFullYear()} season`);
     html += _statCard('Hall of Fame', `${data.hof_count}`, data.hof_count ? data.hof_teams.map(t => t.team_number).join(', ') : 'none yet');
+    html += _statCard('Einstein Winners', `${data.einstein_winner_count || 0}`, (data.einstein_winners||[]).length ? data.einstein_winners.slice(0,3).map(t => t.team_number).join(', ') : 'none yet');
     html += _statCard('Einstein Teams', `${data.einstein_count}`, data.einstein_count ? `top: ${data.einstein_teams.slice(0,3).map(t => t.team_number).join(', ')}` : 'none yet');
     html += '</div>';
 
@@ -4444,6 +4488,17 @@ function renderRegionFacts(data) {
         html += '<div class="history-team-chips">';
         for (const t of data.hof_teams) {
             html += `<span class="history-chip hof-chip">${t.team_number} <span class="chip-name">${_esc(t.nickname)}</span> <span class="chip-years">${t.years.join(', ')}</span></span>`;
+        }
+        html += '</div></div>';
+    }
+
+    // Einstein Winners
+    if (data.einstein_winners && data.einstein_winners.length) {
+        html += '<div class="history-detail-section">';
+        html += '<h4>\u{1F3C6} Einstein Winners</h4>';
+        html += '<div class="history-team-chips">';
+        for (const t of data.einstein_winners) {
+            html += `<span class="history-chip einstein-win-chip">${t.team_number} <span class="chip-name">${_esc(t.nickname)}</span> <span class="chip-years">${t.years.join(', ')}</span></span>`;
         }
         html += '</div></div>';
     }

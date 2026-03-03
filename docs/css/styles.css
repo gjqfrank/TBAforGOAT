@@ -5600,6 +5600,7 @@ tr:hover .compare-cb,
 
 .hof-chip { border-color: #f59e0b; background: rgba(245, 158, 11, .08); }
 .impact-chip { border-color: #8b5cf6; background: rgba(139, 92, 246, .08); }
+.einstein-win-chip { border-color: #fbbf24; background: rgba(251, 191, 36, .12); }
 .visitor-chip { border-color: #06b6d4; background: rgba(6, 182, 212, .08); }
 
 /* More button for chip lists */
@@ -5707,4 +5708,54 @@ tr:hover .compare-cb,
     min-width: 1.2rem;
     text-align: center;
 }
+
+/* ── Pick flip chip ─────────────────────────────────────── */
+.pick-flip {
+    perspective: 400px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+/* When used on a badge / chip, keep the display it already has */
+.past-champ-badge.pick-flip,
+.past-award-chip.pick-flip { /* display inherited from badge/chip class */ }
+/* Standalone (table cell etc.) */
+span.pick-flip:not(.past-champ-badge):not(.past-award-chip) {
+    display: inline-block;
+}
+.pick-flip-inner {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    width: 100%;
+    transition: transform .45s cubic-bezier(.4,.2,.2,1);
+    transform-style: preserve-3d;
+}
+.pick-flip.flipped .pick-flip-inner { transform: rotateY(180deg); }
+.pick-flip-front,
+.pick-flip-back {
+    display: block;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+}
+.pick-flip-front {
+    transform: rotateY(0deg);  /* establish own stacking context for backface */
+}
+.pick-flip-back {
+    position: absolute;
+    inset: 0;
+    transform: rotateY(180deg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
+    font-weight: 700;
+    font-size: .68rem;
+    letter-spacing: .02em;
+    color: var(--accent);
+}
+/* Inside badges / chips — inherit the chip colour */
+.past-champ-badge .pick-flip-back,
+.past-award-chip .pick-flip-back { font-size: inherit; color: inherit; }
+/* Inside table cells */
+td .pick-flip-back { font-size: inherit; }
 
