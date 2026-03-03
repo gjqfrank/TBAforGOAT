@@ -561,16 +561,49 @@ function renderSeasonDropdown() {
     dropdown.classList.remove('hidden');
 }
 
+let pendingSeasonEvent = null; // staged event awaiting user confirmation
+
 function selectSeasonEvent(idx) {
     const ev = seasonEventsFiltered[idx];
     if (!ev) return;
     $('season-dropdown').classList.add('hidden');
-    $('season-search').value = ev.name;
-    $('season-search').classList.add('input-loading');
+    $('season-search').value = '';
+    $('season-search').blur();
+
+    // Stage the event for confirmation instead of loading immediately
+    pendingSeasonEvent = ev;
+    const bar = $('season-selected-bar');
+    if (bar) {
+        $('ssb-name').textContent = ev.name;
+        const weekLabel = ev.week !== null && ev.week !== undefined ? `Week ${ev.week + 1}` : 'Championship';
+        const loc = [ev.city, ev.country].filter(Boolean).join(', ');
+        $('ssb-meta').textContent = `${weekLabel} · ${loc}`;
+        bar.classList.remove('hidden');
+    }
+}
+
+function confirmSeasonLoad() {
+    if (!pendingSeasonEvent) return;
+    const ev = pendingSeasonEvent;
+    const bar = $('season-selected-bar');
+    const btn = $('ssb-load-btn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Loading…'; btn.classList.add('btn-loading'); }
     // Show loading indicator in header
     const lb = $('season-loading-btn');
     if (lb) { lb.classList.remove('hidden'); lb.classList.add('btn-loading'); }
-    loadEvent(ev.key);
+    loadEvent(ev.key).finally(() => {
+        if (btn) { btn.disabled = false; btn.textContent = 'Load Event'; btn.classList.remove('btn-loading'); }
+        if (bar) bar.classList.add('hidden');
+        pendingSeasonEvent = null;
+    });
+}
+
+function clearSeasonSelection() {
+    pendingSeasonEvent = null;
+    const bar = $('season-selected-bar');
+    if (bar) bar.classList.add('hidden');
+    $('season-search').value = '';
+    $('season-search').focus();
 }
 
 // Keyboard navigation in season dropdown
@@ -708,6 +741,8 @@ async function loadEvent(eventKey) {
     _pbpConnAllTime = false;
     _pbpAwardsCache = {};
     _h2hAllTime = false;
+    _loadingAwards = false;
+    _loadingConnections = false;
     currentAwardFilter = 'all';
     renderedTabs = { playoff: false, alliance: false, playbyplay: false, breakdown: false, history: false };
 
@@ -919,6 +954,8 @@ async function loadSavedEvent(eventKey) {
     _pbpConnCache = {}; _pbpConnAllTime = false;
     _pbpAwardsCache = {};
     _h2hAllTime = false;
+    _loadingAwards = false;
+    _loadingConnections = false;
     renderedTabs = { playoff: false, alliance: false, playbyplay: false, breakdown: false, history: false };
 
     // Reset the connections "All Time" toggle to "Past 3 Seasons"
@@ -1337,11 +1374,14 @@ async function loadSummary() {
 }
 
 /** Lazy-load prior playoff connections for the summary tab */
+let _loadingConnections = false;
 async function loadSummaryConnections() {
-    if (!currentEvent || !summaryData) return;
+    if (!currentEvent || !summaryData || _loadingConnections) return;
+    _loadingConnections = true;
+    const eventKey = currentEvent;
     try {
-        const connections = await API.eventConnections(currentEvent, false);
-        if (!summaryData) return; // user switched events
+        const connections = await API.eventConnections(eventKey, false);
+        if (currentEvent !== eventKey || !summaryData) return; // user switched events
         summaryData.connections = connections;
         summaryData._connections_past3 = connections;
         const histEl = $('summary-history');
@@ -1353,17 +1393,24 @@ async function loadSummaryConnections() {
         } else {
             histEl.classList.add('hidden');
         }
+        // Persist connections into cache alongside the summary
+        autoCacheTab('summary', summaryData);
     } catch {
         $('summary-history-list').innerHTML = '<p class="empty" style="margin:.5rem 0;font-size:.82rem">Could not load connections.</p>';
+    } finally {
+        _loadingConnections = false;
     }
 }
 
 /** Lazy-load returning event champions & previous-season award winners */
+let _loadingAwards = false;
 async function loadSummaryAwards() {
-    if (!currentEvent || !summaryData) return;
+    if (!currentEvent || !summaryData || _loadingAwards) return;
+    _loadingAwards = true;
+    const eventKey = currentEvent;
     try {
-        const data = await API.eventSummaryAwards(currentEvent);
-        if (!summaryData) return; // user switched events
+        const data = await API.eventSummaryAwards(eventKey);
+        if (currentEvent !== eventKey || !summaryData) return; // user switched events
 
         summaryData.past_event_champions = data.past_event_champions || [];
         summaryData.past_season_awards = data.past_season_awards || [];
@@ -1383,9 +1430,18 @@ async function loadSummaryAwards() {
         } else {
             awardsEl.classList.add('hidden');
         }
+
+        // Persist awards into the cached summary so tab switches
+        // and saved-event loads don't need to re-fetch from the API.
+        autoCacheTab('summary', summaryData);
     } catch {
-        $('summary-past-champs').classList.add('hidden');
-        $('summary-past-awards').classList.add('hidden');
+        // Don't hide sections — leave summaryData fields unset so the next
+        // re-render (tab switch) can retry the fetch automatically.
+        if (currentEvent !== eventKey) return;
+        $('summary-past-champs-list').innerHTML = '<p class="empty" style="margin:.5rem 0;font-size:.82rem">Could not load — switch tabs to retry.</p>';
+        $('summary-past-awards-list').innerHTML = '<p class="empty" style="margin:.5rem 0;font-size:.82rem">Could not load — switch tabs to retry.</p>';
+    } finally {
+        _loadingAwards = false;
     }
 }
 
@@ -1581,8 +1637,11 @@ function renderSummary(data) {
         pastAwardsEl.classList.add('hidden');
     }
 
-    // If not cached, fetch awards data in the background
-    if (!data.past_event_champions && !data.past_season_awards) {
+    // If awards haven't been loaded yet (undefined) or came back empty
+    // (possibly due to a transient API failure), retry the fetch.
+    const _noChamps = !data.past_event_champions || data.past_event_champions.length === 0;
+    const _noAwards = !data.past_season_awards  || data.past_season_awards.length === 0;
+    if (_noChamps && _noAwards) {
         loadSummaryAwards();
     }
 

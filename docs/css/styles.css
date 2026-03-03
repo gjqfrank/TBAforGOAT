@@ -1131,6 +1131,94 @@ input.input-loading {
     margin-top: .5rem;
 }
 
+/* ── Season selected confirmation bar ─────────────────── */
+.season-selected-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .75rem;
+    margin-top: .7rem;
+    padding: .6rem .9rem;
+    background: var(--primary-soft);
+    border: 1px solid var(--primary);
+    border-radius: var(--radius);
+    animation: ssb-slide-in .2s ease-out;
+}
+@keyframes ssb-slide-in {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+.ssb-info {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    min-width: 0;
+    flex: 1;
+}
+.ssb-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--primary);
+    flex-shrink: 0;
+}
+.ssb-name {
+    font-weight: 600;
+    font-size: .85rem;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.ssb-meta {
+    font-size: .75rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+.ssb-actions {
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+    flex-shrink: 0;
+}
+.ssb-clear {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 1.2rem;
+    cursor: pointer;
+    padding: .1rem .4rem;
+    border-radius: 4px;
+    line-height: 1;
+    transition: color .15s, background .15s;
+}
+.ssb-clear:hover {
+    color: var(--danger);
+    background: var(--danger-soft, rgba(239,68,68,.1));
+}
+.ssb-load-btn {
+    padding: .35rem 1rem;
+    font-size: .82rem;
+    font-weight: 600;
+    color: #fff;
+    background: var(--primary);
+    border: none;
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: background .15s, transform .1s;
+    white-space: nowrap;
+}
+.ssb-load-btn:hover {
+    background: var(--primary-hover);
+    transform: translateY(-1px);
+}
+.ssb-load-btn:disabled {
+    opacity: .7;
+    cursor: not-allowed;
+    transform: none;
+}
+
 /* ═══ DATA TABLES ══════════════════════════════════════════ */
 .data-table {
     width: 100%;

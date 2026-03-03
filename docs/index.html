@@ -154,6 +154,18 @@
                     </div>
                 </div>
                 <div id="season-status" class="season-status"></div>
+                <!-- Selected event confirmation bar -->
+                <div id="season-selected-bar" class="season-selected-bar hidden">
+                    <div class="ssb-info">
+                        <span class="ssb-dot"></span>
+                        <span id="ssb-name" class="ssb-name"></span>
+                        <span id="ssb-meta" class="ssb-meta"></span>
+                    </div>
+                    <div class="ssb-actions">
+                        <button class="ssb-clear" onclick="clearSeasonSelection()" title="Clear selection">&times;</button>
+                        <button id="ssb-load-btn" class="ssb-load-btn" onclick="confirmSeasonLoad()">Load Event</button>
+                    </div>
+                </div>
             </div>
 
             <!-- Manual event code entry (collapsed by default) -->
