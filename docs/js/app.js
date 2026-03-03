@@ -4586,7 +4586,7 @@ function renderEventHistory(data) {
         html += `<h4>${b.icon} ${b.title}</h4>`;
         html += '<ol class="leaderboard-list">';
         for (const t of b.data) {
-            html += `<li><span class="lb-team">${t.team_number}</span> <span class="lb-name">${_esc(t.nickname)}</span> <span class="lb-count">${t.count}</span></li>`;
+            html += `<li><span class="lb-team has-tooltip">${t.team_number}<span class="custom-tooltip">${_esc(t.nickname)}</span></span> <span class="lb-count">${t.count}</span></li>`;
         }
         html += '</ol></div>';
     }
