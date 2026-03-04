@@ -2,6 +2,97 @@
    app.js — FRC Caster's Tool UI Controller
    ═══════════════════════════════════════════════════════════ */
 
+// ── Toast notification system ──────────────────────────────
+function showToast(message, type = 'info', duration = 3500) {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.textContent = message;
+    container.appendChild(toast);
+    // Trigger entrance animation
+    requestAnimationFrame(() => toast.classList.add('toast-visible'));
+    setTimeout(() => {
+        toast.classList.remove('toast-visible');
+        toast.addEventListener('transitionend', () => toast.remove());
+    }, duration);
+}
+
+// ── Back to top button ─────────────────────────────────────
+(function initBackToTop() {
+    let ticking = false;
+    window.addEventListener('scroll', () => {
+        if (!ticking) {
+            requestAnimationFrame(() => {
+                const btn = document.getElementById('back-to-top');
+                if (btn) btn.classList.toggle('hidden', window.scrollY < 400);
+                ticking = false;
+            });
+            ticking = true;
+        }
+    }, { passive: true });
+})();
+
+// ── Presentation (fullscreen) mode ─────────────────────────
+let presentationMode = false;
+function togglePresentation() {
+    presentationMode = !presentationMode;
+    document.body.classList.toggle('presentation-mode', presentationMode);
+    const exitHint = document.getElementById('presentation-exit');
+    if (exitHint) exitHint.classList.toggle('hidden', !presentationMode);
+    // Update button icon
+    const btn = document.getElementById('fullscreen-btn');
+    if (btn) {
+        btn.innerHTML = presentationMode
+            ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg>'
+            : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>';
+        btn.title = presentationMode ? 'Exit Presentation Mode' : 'Presentation Mode';
+    }
+    // Auto-hide exit hint after 3s
+    if (presentationMode && exitHint) {
+        setTimeout(() => { if (presentationMode) exitHint.classList.add('fade-out'); }, 3000);
+    } else if (exitHint) {
+        exitHint.classList.remove('fade-out');
+    }
+}
+
+// ── Switch to tab programmatically (used by empty state buttons) ──
+function switchToTab(tabName) {
+    const btn = document.querySelector(`.tab[data-tab="${tabName}"]`);
+    if (btn) btn.click();
+}
+
+// ── Tab data loaded indicator dots ─────────────────────────
+function updateTabDots() {
+    const map = {
+        'rankings': !!document.querySelector('#rankings-container:not(.hidden) #event-teams')?.innerHTML,
+        'summary': !!summaryData,
+        'playbyplay': !!pbpData?.matches?.length,
+        'breakdown': renderedTabs.breakdown,
+        'playoff': !!playoffData?.length,
+        'alliance': !!allianceData?.length,
+        'history': renderedTabs.history,
+    };
+    for (const [tab, hasData] of Object.entries(map)) {
+        const btn = document.querySelector(`.tab[data-tab="${tab}"]`);
+        if (btn) btn.classList.toggle('tab-has-data', hasData);
+    }
+}
+
+// ── Find latest scored match index ─────────────────────────
+function findLatestScoredMatch(matches) {
+    if (!matches || !matches.length) return 0;
+    let latest = 0;
+    for (let i = matches.length - 1; i >= 0; i--) {
+        const m = matches[i];
+        if (m.red?.score >= 0 || m.blue?.score >= 0 || m.winning_alliance) {
+            latest = i;
+            break;
+        }
+    }
+    return latest;
+}
+
 // ── Tooltip positioning (fixed to viewport) ───────────────
 document.addEventListener('mouseover', e => {
     // Find the closest .has-tooltip that directly contains the event target
@@ -78,12 +169,12 @@ let bdCache      = {};     // match_key -> breakdown data
 let bdPollTimer  = null;   // auto-poll timer for pending breakdowns
 let bdListTimer  = null;   // timer for refreshing match list has_breakdown flags
 let lastTeamData = null;   // cached last team lookup data for re-render
-const BD_POLL_INTERVAL = 10_000;      // 10s — poll for breakdown availability
-const BD_LIST_REFRESH  = 30_000;      // 30s — refresh match list flags
+const BD_POLL_INTERVAL = 5_000;       // 5s — poll for breakdown availability
+const BD_LIST_REFRESH  = 20_000;      // 20s — refresh match list flags
 
 // PBP auto-refresh
 let pbpRefreshTimer = null;         // setInterval id for PBP live refresh
-const PBP_REFRESH_INTERVAL = 30_000; // 30s — poll for score/match updates
+const PBP_REFRESH_INTERVAL = 15_000; // 15s — poll for score/match updates
 
 // Season events
 let seasonEventsRaw = [];          // full list from backend
@@ -243,6 +334,9 @@ document.querySelectorAll('.tab').forEach(btn => {
         btn.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
         document.getElementById(`tab-${btn.dataset.tab}`).classList.add('active');
 
+        // Update URL hash (without triggering hashchange)
+        history.replaceState(null, '', `#${btn.dataset.tab}`);
+
         // Stop breakdown polling when leaving the breakdown tab
         if (btn.dataset.tab !== 'breakdown') { stopBdPolling(); stopBdListRefresh(); }
 
@@ -311,7 +405,7 @@ document.querySelectorAll('.tab').forEach(btn => {
         }
         if (btn.dataset.tab === 'playbyplay' && currentEvent && !renderedTabs.playbyplay) {
             if (pbpData?.matches?.length) {
-                pbpIndex = 0;
+                pbpIndex = findLatestScoredMatch(pbpData.matches);
                 hide('pbp-empty');
                 hideSkeleton('pbp-loading');
                 show('pbp-container');
@@ -454,7 +548,37 @@ document.addEventListener('keydown', e => {
             compareCurrentMatch();
         }
     }
+
+    // Number keys 1-9 — quick tab switching
+    if (e.key >= '1' && e.key <= '9' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        const tabs = document.querySelectorAll('.tab');
+        const idx = parseInt(e.key) - 1;
+        if (idx < tabs.length) {
+            e.preventDefault();
+            tabs[idx].click();
+        }
+    }
+
+    // Escape — exit presentation mode
+    if (e.key === 'Escape' && presentationMode) {
+        togglePresentation();
+        return;
+    }
+
+    // F key — toggle presentation mode
+    if ((e.key === 'f' || e.key === 'F') && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        togglePresentation();
+    }
 });
+
+// ── Restore tab from URL hash on load ──────────────────────
+(function restoreTabFromHash() {
+    const hash = location.hash.replace('#', '');
+    if (hash) {
+        const btn = document.querySelector(`.tab[data-tab="${hash}"]`);
+        if (btn) requestAnimationFrame(() => btn.click());
+    }
+})();
 
 
 // ── Helpers ────────────────────────────────────────────────
@@ -990,7 +1114,7 @@ async function loadEvent(eventKey) {
         loading(true);
         let phase2Done = 0;
         const phase2Total = 3;
-        const phase2Check = () => { if (++phase2Done >= phase2Total) loading(false); };
+        const phase2Check = () => { if (++phase2Done >= phase2Total) { loading(false); updateTabDots(); } };
 
         // Matches (feeds PBP + Breakdown)
         API.allMatches(code).then(matchData => {
@@ -1238,6 +1362,8 @@ async function loadSavedEvent(eventKey) {
         if (data.connections) {
             // Pre-populate cache but don't block — this is from a saved snapshot
         }
+
+        updateTabDots();
 
         // For ongoing events, do a background refresh
         if (currentEventStatus === 'ongoing') {
@@ -1519,6 +1645,7 @@ async function loadSummary() {
         renderSummary(data);
         fadeIn('summary-container');
         autoCacheTab('summary', data);
+        updateTabDots();
     } catch (err) {
         hideSkeleton('summary-loading');
         showInlineError('summary-error', `Failed to load summary: ${err.message}`, loadSummary);
@@ -1691,8 +1818,12 @@ async function refreshSummaryStats() {
             summaryData.top_scorers = data.top_scorers;
             renderTopScorers(data.top_scorers);
         }
+        if (data.high_scores && summaryData) {
+            summaryData.high_scores = data.high_scores;
+            renderHighScores(data.high_scores);
+        }
     } catch (err) {
-        alert(`Error refreshing stats: ${err.message}`);
+        showToast(`Error refreshing stats: ${err.message}`, 'error');
     } finally {
         if (btn) { btn.disabled = false; btn.textContent = '↻ Refresh Stats'; }
     }
@@ -1815,6 +1946,9 @@ function renderSummary(data) {
 
     // Top scorers
     renderTopScorers(data.top_scorers);
+
+    // High scores (by match)
+    renderHighScores(data.high_scores);
 }
 
 let currentConnFilter = 'all';
@@ -2000,6 +2134,28 @@ function renderTopScorers(scorers) {
     }
 }
 
+function renderHighScores(scores) {
+    const el = $('summary-high-scores');
+    if (!el) return;
+    if (!scores || scores.length === 0) {
+        el.classList.add('hidden');
+        return;
+    }
+    const medals = ['1st', '2nd', '3rd'];
+    $('summary-high-list').innerHTML = scores.map((s, i) => {
+        const colorCls = s.color === 'red' ? 'high-score-red' : 'high-score-blue';
+        const teamNums = s.teams.map(t => `<span class="high-score-team has-tooltip">${t.team_number}${t.nickname ? `<span class="custom-tooltip">${t.nickname}</span>` : ''}</span>`).join(', ');
+        return `
+            <div class="summary-high-row">
+                <span class="top-medal">${medals[i] || ''}</span>
+                <span class="high-score-val ${colorCls}">${s.score}</span>
+                <span class="high-score-match">${s.match}</span>
+                <span class="high-score-teams">${teamNums}</span>
+            </div>`;
+    }).join('');
+    el.classList.remove('hidden');
+}
+
 
 // ═══════════════════════════════════════════════════════════
 // 2. PLAYOFFS
@@ -2025,6 +2181,7 @@ async function loadPlayoffs() {
         hide('playoff-empty');
         renderBracketTree();
         fadeIn('playoff-bracket');
+        updateTabDots();
     } catch (err) {
         hideSkeleton('playoff-loading');
         showInlineError('playoff-error', `Failed to load playoffs: ${err.message}`, loadPlayoffs);
@@ -2257,6 +2414,7 @@ async function loadAlliances() {
         renderAlliances(data);
         fadeIn('alliance-grid');
         autoCacheTab('alliances', data);
+        updateTabDots();
     } catch (err) {
         hideSkeleton('alliance-loading');
         showInlineError('alliance-error', `Failed to load alliances: ${err.message}`, loadAlliances);
@@ -2721,7 +2879,7 @@ async function loadPlayByPlay() {
         setLoadingStatus('pbp-loading-status', 'Fetching match schedule\u2026');
         const data = await API.allMatches(currentEvent);
         pbpData = data;
-        pbpIndex = 0;
+        pbpIndex = findLatestScoredMatch(data?.matches || []);
         hideSkeleton('pbp-loading');
         if (!data?.matches?.length) {
             hide('pbp-container');
@@ -2740,6 +2898,7 @@ async function loadPlayByPlay() {
         renderPbpMatch();
         fadeIn('pbp-container');
         startPbpRefresh();
+        updateTabDots();
     } catch (err) {
         hideSkeleton('pbp-loading');
         showInlineError('pbp-error', `Failed to load matches: ${err.message}`, loadPlayByPlay);
@@ -3318,6 +3477,7 @@ async function loadBreakdownTab() {
         loadBdMatch();
         startBdListRefresh();
         fadeIn('bd-container');
+        updateTabDots();
     } catch (err) {
         hideSkeleton('bd-loading');
         showInlineError('bd-error', `Failed to load breakdowns: ${err.message}`, loadBreakdownTab);
@@ -3477,17 +3637,18 @@ function renderBdAlliance(alliance, color, won, nickMap, statsMap) {
     const bd = alliance.breakdown;
     const sideCls = color === 'red' ? 'red-side' : 'blue-side';
     const title = color === 'red' ? 'Red Alliance' : 'Blue Alliance';
+    const displayScore = alliance.score != null && alliance.score >= 0 ? alliance.score : '–';
 
     const headerContent = color === 'blue'
         ? `<div class="bd-alliance-score-group">
-                <span class="bd-alliance-score">${alliance.score}</span>
+                <span class="bd-alliance-score">${displayScore}</span>
                 ${won ? '<span class="bd-winner-label">WINNER</span>' : ''}
             </div>
             <span>${title}</span>`
         : `<span>${title}</span>
             <div class="bd-alliance-score-group">
                 ${won ? '<span class="bd-winner-label">WINNER</span>' : ''}
-                <span class="bd-alliance-score">${alliance.score}</span>
+                <span class="bd-alliance-score">${displayScore}</span>
             </div>`;
 
     return `
@@ -3708,17 +3869,18 @@ function renderBdAlliance2026(alliance, color, won, nickMap, statsMap) {
     const bd = alliance.breakdown;
     const sideCls = color === 'red' ? 'red-side' : 'blue-side';
     const title = color === 'red' ? 'Red Alliance' : 'Blue Alliance';
+    const displayScore = alliance.score != null && alliance.score >= 0 ? alliance.score : '–';
 
     const headerContent = color === 'blue'
         ? `<div class="bd-alliance-score-group">
-                <span class="bd-alliance-score">${alliance.score}</span>
+                <span class="bd-alliance-score">${displayScore}</span>
                 ${won ? '<span class="bd-winner-label">WINNER</span>' : ''}
             </div>
             <span>${title}</span>`
         : `<span>${title}</span>
             <div class="bd-alliance-score-group">
                 ${won ? '<span class="bd-winner-label">WINNER</span>' : ''}
-                <span class="bd-alliance-score">${alliance.score}</span>
+                <span class="bd-alliance-score">${displayScore}</span>
             </div>`;
 
     // Build fuel shift phases for the timeline
@@ -4856,6 +5018,7 @@ async function loadHistory() {
         renderEventHistory(historyData);
 
         renderedTabs.history = true;
+        updateTabDots();
     } catch (err) {
         hideSkeleton('history-loading');
         showInlineError('history-error', `Failed to load history: ${err.message}`, loadHistory);

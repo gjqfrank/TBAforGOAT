@@ -228,164 +228,298 @@ async def get_all_matches(event_key: str):
 @router.get("/match/{match_key}/breakdown")
 async def get_match_breakdown(match_key: str):
     """Return parsed score breakdown for a single match, with per-robot mapping.
-    Always bypasses cache to get the latest data from TBA."""
+
+    For 2026+ games: uses FRC Events API (primary, instant data).
+    For older games: falls back to TBA (has reef/coral detail).
+    """
+    import re
+
+    year_match = re.match(r"(\d{4})", match_key)
+    game_year = int(year_match.group(1)) if year_match else 2025
+
     try:
-        client = get_tba_client()
-        match = await client.get(f"/match/{match_key}", bypass_cache=True)
-
-        sb = match.get("score_breakdown")
-        if not sb:
-            return {"match_key": match_key, "available": False}
-
-        red_keys = match["alliances"]["red"].get("team_keys", [])
-        blue_keys = match["alliances"]["blue"].get("team_keys", [])
-
-        # Detect game year from match key (e.g. "2026week0_qm12" → 2026)
-        import re
-        year_match = re.match(r"(\d{4})", match_key)
-        game_year = int(year_match.group(1)) if year_match else 2025
-
-        def parse_alliance_2026(data: dict, team_keys: list[str]) -> dict:
-            """Parse one alliance's 2026 score_breakdown."""
-            robots = []
-            for i in range(3):
-                tk = team_keys[i] if i < len(team_keys) else None
-                robots.append({
-                    "team_key": tk,
-                    "team_number": int(tk.replace("frc", "")) if tk else None,
-                    "autoTower": data.get(f"autoTowerRobot{i+1}", "None"),
-                    "endGameTower": data.get(f"endGameTowerRobot{i+1}", "None"),
-                })
-
-            hub = data.get("hubScore", {})
-
-            return {
-                "robots": robots,
-                # Auto
-                "totalAutoPoints": data.get("totalAutoPoints", 0),
-                "autoTowerPoints": data.get("autoTowerPoints", 0),
-                "autoFuelCount": hub.get("autoCount", 0),
-                "autoFuelPoints": hub.get("autoPoints", 0),
-                # Teleop
-                "totalTeleopPoints": data.get("totalTeleopPoints", 0),
-                "transitionFuelCount": hub.get("transitionCount", 0),
-                "transitionFuelPoints": hub.get("transitionPoints", 0),
-                "shift1FuelCount": hub.get("shift1Count", 0),
-                "shift1FuelPoints": hub.get("shift1Points", 0),
-                "shift2FuelCount": hub.get("shift2Count", 0),
-                "shift2FuelPoints": hub.get("shift2Points", 0),
-                "shift3FuelCount": hub.get("shift3Count", 0),
-                "shift3FuelPoints": hub.get("shift3Points", 0),
-                "shift4FuelCount": hub.get("shift4Count", 0),
-                "shift4FuelPoints": hub.get("shift4Points", 0),
-                "endgameFuelCount": hub.get("endgameCount", 0),
-                "endgameFuelPoints": hub.get("endgamePoints", 0),
-                "teleopFuelCount": hub.get("teleopCount", 0),
-                "teleopFuelPoints": hub.get("teleopPoints", 0),
-                "totalFuelCount": hub.get("totalCount", 0),
-                "totalFuelPoints": hub.get("totalPoints", 0),
-                "uncountedFuel": hub.get("uncounted", 0),
-                # Tower
-                "totalTowerPoints": data.get("totalTowerPoints", 0),
-                "endGameTowerPoints": data.get("endGameTowerPoints", 0),
-                # Fouls
-                "minorFoulCount": data.get("minorFoulCount", 0),
-                "majorFoulCount": data.get("majorFoulCount", 0),
-                "foulPoints": data.get("foulPoints", 0),
-                "penalties": data.get("penalties", "None"),
-                "g206Penalty": data.get("g206Penalty", False),
-                # RP
-                "energizedAchieved": data.get("energizedAchieved", False),
-                "superchargedAchieved": data.get("superchargedAchieved", False),
-                "traversalAchieved": data.get("traversalAchieved", False),
-                # Totals
-                "adjustPoints": data.get("adjustPoints", 0),
-                "totalPoints": data.get("totalPoints", 0),
-                "rp": data.get("rp", 0),
-            }
-
-        def parse_alliance_2025(data: dict, team_keys: list[str]) -> dict:
-            """Parse one alliance's 2025 REEFSCAPE score_breakdown."""
-            robots = []
-            for i in range(3):
-                tk = team_keys[i] if i < len(team_keys) else None
-                robots.append({
-                    "team_key": tk,
-                    "team_number": int(tk.replace("frc", "")) if tk else None,
-                    "autoLine": data.get(f"autoLineRobot{i+1}", "No"),
-                    "endGame": data.get(f"endGameRobot{i+1}", "None"),
-                })
-
-            def parse_reef(reef: dict) -> dict:
-                rows = {}
-                for rname in ("topRow", "midRow", "botRow"):
-                    row = reef.get(rname, {})
-                    rows[rname] = {k: v for k, v in row.items() if k.startswith("node")}
-                return {
-                    **rows,
-                    "trough": reef.get("trough", 0),
-                    "tba_botRowCount": reef.get("tba_botRowCount", 0),
-                    "tba_midRowCount": reef.get("tba_midRowCount", 0),
-                    "tba_topRowCount": reef.get("tba_topRowCount", 0),
-                }
-
-            auto_reef = parse_reef(data.get("autoReef", {}))
-            teleop_reef = parse_reef(data.get("teleopReef", {}))
-
-            return {
-                "robots": robots,
-                "autoPoints": data.get("autoPoints", 0),
-                "autoMobilityPoints": data.get("autoMobilityPoints", 0),
-                "autoCoralCount": data.get("autoCoralCount", 0),
-                "autoCoralPoints": data.get("autoCoralPoints", 0),
-                "autoBonusAchieved": data.get("autoBonusAchieved", False),
-                "autoReef": auto_reef,
-                "teleopPoints": data.get("teleopPoints", 0),
-                "teleopCoralCount": data.get("teleopCoralCount", 0),
-                "teleopCoralPoints": data.get("teleopCoralPoints", 0),
-                "teleopReef": teleop_reef,
-                "algaePoints": data.get("algaePoints", 0),
-                "netAlgaeCount": data.get("netAlgaeCount", 0),
-                "wallAlgaeCount": data.get("wallAlgaeCount", 0),
-                "endGameBargePoints": data.get("endGameBargePoints", 0),
-                "bargeBonusAchieved": data.get("bargeBonusAchieved", False),
-                "coralBonusAchieved": data.get("coralBonusAchieved", False),
-                "coopertitionCriteriaMet": data.get("coopertitionCriteriaMet", False),
-                "foulCount": data.get("foulCount", 0),
-                "techFoulCount": data.get("techFoulCount", 0),
-                "foulPoints": data.get("foulPoints", 0),
-                "g206Penalty": data.get("g206Penalty", False),
-                "g410Penalty": data.get("g410Penalty", False),
-                "g418Penalty": data.get("g418Penalty", False),
-                "g428Penalty": data.get("g428Penalty", False),
-                "adjustPoints": data.get("adjustPoints", 0),
-                "totalPoints": data.get("totalPoints", 0),
-                "rp": data.get("rp", 0),
-            }
-
-        parse_fn = parse_alliance_2026 if game_year >= 2026 else parse_alliance_2025
-
-        return {
-            "match_key": match_key,
-            "available": True,
-            "game_year": game_year,
-            "comp_level": match.get("comp_level", ""),
-            "match_number": match.get("match_number", 0),
-            "set_number": match.get("set_number", 0),
-            "red": {
-                "score": match["alliances"]["red"].get("score", -1),
-                "team_keys": red_keys,
-                "breakdown": parse_fn(sb.get("red", {}), red_keys),
-            },
-            "blue": {
-                "score": match["alliances"]["blue"].get("score", -1),
-                "team_keys": blue_keys,
-                "breakdown": parse_fn(sb.get("blue", {}), blue_keys),
-            },
-            "winning_alliance": match.get("winning_alliance", ""),
-        }
+        if game_year >= 2026:
+            return await _breakdown_from_frc(match_key, game_year)
+        else:
+            return await _breakdown_from_tba(match_key, game_year)
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        # If primary source fails, try the other
+        try:
+            if game_year >= 2026:
+                return await _breakdown_from_tba(match_key, game_year)
+            else:
+                return await _breakdown_from_frc(match_key, game_year)
+        except Exception:
+            raise HTTPException(status_code=400, detail=str(e))
+
+
+# ── Comp level mapping ──────────────────────────────────────
+_COMP_LEVEL_TO_FRC = {"qm": "Qualification", "qf": "Playoff", "sf": "Playoff", "ef": "Playoff", "f": "Playoff"}
+
+
+async def _breakdown_from_frc(match_key: str, game_year: int) -> dict:
+    """Fetch breakdown from FRC Events API (instant data from FIRST)."""
+    import re
+
+    m = re.match(r"(\d{4})(\w+)_(\w+?)(\d+)$", match_key)
+    if not m:
+        return {"match_key": match_key, "available": False}
+
+    season = int(m.group(1))
+    event_code = m.group(2).upper()
+    comp_level = m.group(3)
+    match_number = int(m.group(4))
+
+    frc_level = _COMP_LEVEL_TO_FRC.get(comp_level, "Qualification")
+
+    frc = get_frc_client()
+
+    # Fetch scores + match results in parallel (bypass cache for live data)
+    scores_list, matches_list = await asyncio.gather(
+        frc.get_scores(season, event_code, frc_level, match_number=match_number, bypass_cache=True),
+        frc.get_matches(season, event_code, level=frc_level, bypass_cache=True),
+    )
+
+    # Find the specific score entry
+    score_entry = None
+    for s in scores_list:
+        if s.get("matchNumber") == match_number:
+            score_entry = s
+            break
+
+    if not score_entry or not score_entry.get("alliances"):
+        return {"match_key": match_key, "available": False}
+
+    # Find the specific match result for team info + final scores
+    match_result = None
+    for mr in matches_list:
+        if mr.get("matchNumber") == match_number:
+            match_result = mr
+            break
+
+    # Build team_keys from match result stations
+    red_keys = []
+    blue_keys = []
+    if match_result:
+        for t in match_result.get("teams", []):
+            station = t.get("station", "")
+            tk = f"frc{t['teamNumber']}"
+            if station.startswith("Red"):
+                red_keys.append((station, tk))
+            else:
+                blue_keys.append((station, tk))
+        # Sort by station number (Red1, Red2, Red3)
+        red_keys = [tk for _, tk in sorted(red_keys)]
+        blue_keys = [tk for _, tk in sorted(blue_keys)]
+
+    # Parse alliances from score data
+    red_data = None
+    blue_data = None
+    for a in score_entry.get("alliances", []):
+        if a.get("alliance") == "Red":
+            red_data = a
+        elif a.get("alliance") == "Blue":
+            blue_data = a
+
+    if not red_data or not blue_data:
+        return {"match_key": match_key, "available": False}
+
+    # Determine winner
+    red_score = red_data.get("totalPoints", 0)
+    blue_score = blue_data.get("totalPoints", 0)
+    winning_alliance = ""
+    wa = score_entry.get("winningAlliance")
+    if wa == 1:
+        winning_alliance = "red"
+    elif wa == 2:
+        winning_alliance = "blue"
+    elif red_score > blue_score:
+        winning_alliance = "red"
+    elif blue_score > red_score:
+        winning_alliance = "blue"
+
+    # Use the same parse functions — FRC Events field names match our 2026 parser
+    parse_fn = _parse_alliance_2026 if game_year >= 2026 else _parse_alliance_2025
+
+    return {
+        "match_key": match_key,
+        "available": True,
+        "game_year": game_year,
+        "comp_level": comp_level,
+        "match_number": match_number,
+        "set_number": score_entry.get("setNumber", 0),
+        "red": {
+            "score": red_score,
+            "team_keys": red_keys,
+            "breakdown": parse_fn(red_data, red_keys),
+        },
+        "blue": {
+            "score": blue_score,
+            "team_keys": blue_keys,
+            "breakdown": parse_fn(blue_data, blue_keys),
+        },
+        "winning_alliance": winning_alliance,
+    }
+
+
+async def _breakdown_from_tba(match_key: str, game_year: int) -> dict:
+    """Fetch breakdown from TBA (secondary, may lag 20-30s behind FIRST)."""
+    client = get_tba_client()
+    match = await client.get(f"/match/{match_key}", bypass_cache=True)
+
+    sb = match.get("score_breakdown")
+    if not sb:
+        return {"match_key": match_key, "available": False}
+
+    red_keys = match["alliances"]["red"].get("team_keys", [])
+    blue_keys = match["alliances"]["blue"].get("team_keys", [])
+
+    parse_fn = _parse_alliance_2026 if game_year >= 2026 else _parse_alliance_2025
+
+    return {
+        "match_key": match_key,
+        "available": True,
+        "game_year": game_year,
+        "comp_level": match.get("comp_level", ""),
+        "match_number": match.get("match_number", 0),
+        "set_number": match.get("set_number", 0),
+        "red": {
+            "score": match["alliances"]["red"].get("score", -1),
+            "team_keys": red_keys,
+            "breakdown": parse_fn(sb.get("red", {}), red_keys),
+        },
+        "blue": {
+            "score": match["alliances"]["blue"].get("score", -1),
+            "team_keys": blue_keys,
+            "breakdown": parse_fn(sb.get("blue", {}), blue_keys),
+        },
+        "winning_alliance": match.get("winning_alliance", ""),
+    }
+
+
+# ── Shared alliance parsers (used by both FRC and TBA paths) ──
+
+def _parse_alliance_2026(data: dict, team_keys: list[str]) -> dict:
+    """Parse one alliance's 2026 score_breakdown.
+    Works with both FRC Events API and TBA data (same field names)."""
+    robots = []
+    for i in range(3):
+        tk = team_keys[i] if i < len(team_keys) else None
+        robots.append({
+            "team_key": tk,
+            "team_number": int(tk.replace("frc", "")) if tk else None,
+            "autoTower": data.get(f"autoTowerRobot{i+1}", "None"),
+            "endGameTower": data.get(f"endGameTowerRobot{i+1}", "None"),
+        })
+
+    hub = data.get("hubScore", {})
+
+    return {
+        "robots": robots,
+        # Auto
+        "totalAutoPoints": data.get("totalAutoPoints", 0),
+        "autoTowerPoints": data.get("autoTowerPoints", 0),
+        "autoFuelCount": hub.get("autoCount", 0),
+        "autoFuelPoints": hub.get("autoPoints", 0),
+        # Teleop
+        "totalTeleopPoints": data.get("totalTeleopPoints", 0),
+        "transitionFuelCount": hub.get("transitionCount", 0),
+        "transitionFuelPoints": hub.get("transitionPoints", 0),
+        "shift1FuelCount": hub.get("shift1Count", 0),
+        "shift1FuelPoints": hub.get("shift1Points", 0),
+        "shift2FuelCount": hub.get("shift2Count", 0),
+        "shift2FuelPoints": hub.get("shift2Points", 0),
+        "shift3FuelCount": hub.get("shift3Count", 0),
+        "shift3FuelPoints": hub.get("shift3Points", 0),
+        "shift4FuelCount": hub.get("shift4Count", 0),
+        "shift4FuelPoints": hub.get("shift4Points", 0),
+        "endgameFuelCount": hub.get("endgameCount", 0),
+        "endgameFuelPoints": hub.get("endgamePoints", 0),
+        "teleopFuelCount": hub.get("teleopCount", 0),
+        "teleopFuelPoints": hub.get("teleopPoints", 0),
+        "totalFuelCount": hub.get("totalCount", 0),
+        "totalFuelPoints": hub.get("totalPoints", 0),
+        "uncountedFuel": hub.get("uncounted", 0),
+        # Tower
+        "totalTowerPoints": data.get("totalTowerPoints", 0),
+        "endGameTowerPoints": data.get("endGameTowerPoints", 0),
+        # Fouls
+        "minorFoulCount": data.get("minorFoulCount", 0),
+        "majorFoulCount": data.get("majorFoulCount", 0),
+        "foulPoints": data.get("foulPoints", 0),
+        "penalties": data.get("penalties", "None"),
+        "g206Penalty": data.get("g206Penalty", False),
+        # RP
+        "energizedAchieved": data.get("energizedAchieved", False),
+        "superchargedAchieved": data.get("superchargedAchieved", False),
+        "traversalAchieved": data.get("traversalAchieved", False),
+        # Totals
+        "adjustPoints": data.get("adjustPoints", 0),
+        "totalPoints": data.get("totalPoints", 0),
+        "rp": data.get("rp", 0),
+    }
+
+
+def _parse_alliance_2025(data: dict, team_keys: list[str]) -> dict:
+    """Parse one alliance's 2025 REEFSCAPE score_breakdown."""
+    robots = []
+    for i in range(3):
+        tk = team_keys[i] if i < len(team_keys) else None
+        robots.append({
+            "team_key": tk,
+            "team_number": int(tk.replace("frc", "")) if tk else None,
+            "autoLine": data.get(f"autoLineRobot{i+1}", "No"),
+            "endGame": data.get(f"endGameRobot{i+1}", "None"),
+        })
+
+    def parse_reef(reef: dict) -> dict:
+        rows = {}
+        for rname in ("topRow", "midRow", "botRow"):
+            row = reef.get(rname, {})
+            rows[rname] = {k: v for k, v in row.items() if k.startswith("node")}
+        return {
+            **rows,
+            "trough": reef.get("trough", 0),
+            "tba_botRowCount": reef.get("tba_botRowCount", 0),
+            "tba_midRowCount": reef.get("tba_midRowCount", 0),
+            "tba_topRowCount": reef.get("tba_topRowCount", 0),
+        }
+
+    auto_reef = parse_reef(data.get("autoReef", {}))
+    teleop_reef = parse_reef(data.get("teleopReef", {}))
+
+    return {
+        "robots": robots,
+        "autoPoints": data.get("autoPoints", 0),
+        "autoMobilityPoints": data.get("autoMobilityPoints", 0),
+        "autoCoralCount": data.get("autoCoralCount", 0),
+        "autoCoralPoints": data.get("autoCoralPoints", 0),
+        "autoBonusAchieved": data.get("autoBonusAchieved", False),
+        "autoReef": auto_reef,
+        "teleopPoints": data.get("teleopPoints", 0),
+        "teleopCoralCount": data.get("teleopCoralCount", 0),
+        "teleopCoralPoints": data.get("teleopCoralPoints", 0),
+        "teleopReef": teleop_reef,
+        "algaePoints": data.get("algaePoints", 0),
+        "netAlgaeCount": data.get("netAlgaeCount", 0),
+        "wallAlgaeCount": data.get("wallAlgaeCount", 0),
+        "endGameBargePoints": data.get("endGameBargePoints", 0),
+        "bargeBonusAchieved": data.get("bargeBonusAchieved", False),
+        "coralBonusAchieved": data.get("coralBonusAchieved", False),
+        "coopertitionCriteriaMet": data.get("coopertitionCriteriaMet", False),
+        "foulCount": data.get("foulCount", 0),
+        "techFoulCount": data.get("techFoulCount", 0),
+        "foulPoints": data.get("foulPoints", 0),
+        "g206Penalty": data.get("g206Penalty", False),
+        "g410Penalty": data.get("g410Penalty", False),
+        "g418Penalty": data.get("g418Penalty", False),
+        "g428Penalty": data.get("g428Penalty", False),
+        "adjustPoints": data.get("adjustPoints", 0),
+        "totalPoints": data.get("totalPoints", 0),
+        "rp": data.get("rp", 0),
+    }
 
 
 async def _safe(coro):

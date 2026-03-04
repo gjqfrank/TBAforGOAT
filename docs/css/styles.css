@@ -5565,6 +5565,57 @@ tr:hover .compare-cb,
     text-align: right;
 }
 
+/* ── Summary dual-row (top scorers + high scores side-by-side) ── */
+.summary-dual-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 0;
+}
+.summary-dual-row .summary-card {
+    margin-bottom: 0;
+}
+@media (max-width: 768px) {
+    .summary-dual-row {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* High scores */
+.summary-high-row {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    padding: .5rem 0;
+    border-bottom: 1px solid var(--border-subtle);
+}
+.summary-high-row:last-child { border-bottom: none; }
+.high-score-val {
+    font-family: var(--mono);
+    font-weight: 800;
+    font-size: 1.05rem;
+    min-width: 3rem;
+    text-align: center;
+}
+.high-score-red { color: var(--red, #ef4444); }
+.high-score-blue { color: var(--blue, #3b82f6); }
+.high-score-match {
+    font-size: .78rem;
+    color: var(--text-muted);
+    min-width: 4rem;
+    white-space: nowrap;
+}
+.high-score-teams {
+    flex: 1;
+    font-size: .82rem;
+    color: var(--text-secondary);
+}
+.high-score-team {
+    font-family: var(--mono);
+    font-weight: 600;
+    color: var(--text);
+}
+
 /* ── 2026 RP Progress Bars ─────────────────────────────────── */
 .bd-rp-progress {
     display: flex;
@@ -6279,4 +6330,177 @@ span.pick-flip:not(.past-champ-badge):not(.past-award-chip) {
 .past-award-chip .pick-flip-back { font-size: inherit; color: inherit; }
 /* Inside table cells */
 td .pick-flip-back { font-size: inherit; }
+
+/* ═══════════════════════════════════════════════════════════
+   UX ENHANCEMENTS — Toast / Back-to-top / Presentation /
+   Empty State / Tab Indicators
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── Toast Notifications ──────────────────────────────────── */
+.toast-container {
+    position: fixed;
+    bottom: 5rem;
+    right: 1.5rem;
+    z-index: 10000;
+    display: flex;
+    flex-direction: column-reverse;
+    gap: .5rem;
+    pointer-events: none;
+}
+.toast {
+    pointer-events: auto;
+    min-width: 260px;
+    max-width: 400px;
+    padding: .85rem 1.2rem;
+    border-radius: var(--radius-lg);
+    font-size: .88rem;
+    font-weight: 500;
+    line-height: 1.4;
+    color: #fff;
+    background: var(--card);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    box-shadow: 0 8px 24px rgba(0,0,0,.25);
+    transform: translateX(120%);
+    opacity: 0;
+    transition: transform .35s cubic-bezier(.4,0,.2,1), opacity .35s ease;
+}
+.toast-visible {
+    transform: translateX(0);
+    opacity: 1;
+}
+.toast-info {
+    border-left: 4px solid var(--primary);
+}
+.toast-success {
+    border-left: 4px solid #22c55e;
+}
+.toast-error {
+    border-left: 4px solid #ef4444;
+}
+
+/* ── Back to Top Button ───────────────────────────────────── */
+.back-to-top {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    z-index: 9000;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--text-secondary);
+    cursor: pointer;
+    box-shadow: 0 4px 16px rgba(0,0,0,.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: opacity .3s ease, transform .3s ease, background .2s ease;
+    opacity: 1;
+}
+.back-to-top.hidden {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(10px);
+}
+.back-to-top:hover {
+    background: var(--primary);
+    color: #fff;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0,0,0,.3);
+}
+
+/* ── Presentation (Fullscreen) Mode ───────────────────────── */
+.presentation-mode .site-header,
+.presentation-mode .tabs-wrap,
+.presentation-mode .site-footer,
+.presentation-mode .aeb-bar {
+    display: none !important;
+}
+.presentation-mode .main-content {
+    padding-top: 0;
+    max-width: 100%;
+}
+.presentation-mode .tab-content.active {
+    padding-top: 1rem;
+}
+
+.presentation-exit {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 11000;
+    padding: .6rem 1rem;
+    text-align: center;
+    background: rgba(0,0,0,.75);
+    color: #ccc;
+    font-size: .82rem;
+    cursor: pointer;
+    transition: opacity .5s ease;
+}
+.presentation-exit.hidden { display: none; }
+.presentation-exit.fade-out { opacity: 0; pointer-events: none; }
+.presentation-exit kbd {
+    display: inline-block;
+    padding: .15rem .45rem;
+    border: 1px solid rgba(255,255,255,.3);
+    border-radius: 4px;
+    font-family: inherit;
+    font-size: .8rem;
+    background: rgba(255,255,255,.1);
+}
+
+/* ── Enhanced Empty States ────────────────────────────────── */
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: .8rem;
+}
+.empty-state .empty-icon {
+    opacity: .4;
+    margin-bottom: .25rem;
+}
+.empty-state p {
+    margin: 0;
+    font-style: italic;
+}
+.empty-action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    padding: .45rem 1.1rem;
+    font-size: .82rem;
+    font-weight: 600;
+    font-family: var(--font);
+    color: var(--primary);
+    background: var(--primary-soft);
+    border: 1px solid transparent;
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: var(--transition);
+}
+.empty-action-btn:hover {
+    background: var(--primary);
+    color: #fff;
+    border-color: var(--primary);
+}
+
+/* ── Tab Data Loaded Indicator Dot ────────────────────────── */
+.tab.tab-has-data::after {
+    content: '';
+    position: absolute;
+    top: .55rem;
+    right: .45rem;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--primary);
+    opacity: .7;
+}
+.tab.active.tab-has-data::after {
+    opacity: 0;  /* hide dot on active tab — it's obvious */
+}
 

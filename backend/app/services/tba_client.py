@@ -9,7 +9,7 @@ import httpx
 from ..config import BLUE_ALLIANCE_API_KEY
 
 TBA_BASE = "https://www.thebluealliance.com/api/v3"
-CACHE_TTL = 300  # seconds
+CACHE_TTL = 120  # seconds – reduced for faster updates during live events
 
 
 class TBAClient:

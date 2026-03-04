@@ -32,9 +32,9 @@ class FRCClient:
             )
         return self._http
 
-    async def get(self, endpoint: str) -> Any:
+    async def get(self, endpoint: str, *, bypass_cache: bool = False) -> Any:
         now = time.time()
-        if endpoint in self._cache:
+        if not bypass_cache and endpoint in self._cache:
             ts, data = self._cache[endpoint]
             if now - ts < CACHE_TTL:
                 return data
@@ -52,12 +52,13 @@ class FRCClient:
     async def get_scores(
         self, season: int, event_code: str, level: str = "Qualification",
         match_number: int | None = None,
+        *, bypass_cache: bool = False,
     ) -> list[dict]:
         """Return MatchScores array from the score details endpoint."""
         url = f"/{season}/scores/{event_code}/{level}"
         if match_number is not None:
             url += f"?matchNumber={match_number}"
-        data = await self.get(url)
+        data = await self.get(url, bypass_cache=bypass_cache)
         return data.get("MatchScores", [])
 
     # ── Match Results ────────────────────────────────────
@@ -65,6 +66,7 @@ class FRCClient:
         self, season: int, event_code: str,
         level: str | None = None,
         team_number: int | None = None,
+        *, bypass_cache: bool = False,
     ) -> list[dict]:
         """Return Matches array from the match results endpoint."""
         url = f"/{season}/matches/{event_code}"
@@ -75,7 +77,7 @@ class FRCClient:
             params.append(f"teamNumber={team_number}")
         if params:
             url += "?" + "&".join(params)
-        data = await self.get(url)
+        data = await self.get(url, bypass_cache=bypass_cache)
         return data.get("Matches", [])
 
     # ── Events ───────────────────────────────────────────

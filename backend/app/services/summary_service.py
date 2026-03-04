@@ -51,13 +51,14 @@ async def get_event_summary(event_key: str) -> dict:
     year = int(event_key[:4])
     current_year = date.today().year
 
-    # Parallel fetch: event info, teams (full detail), rankings, OPRs
-    event_info, teams, rankings, oprs, epa_data = await asyncio.gather(
+    # Parallel fetch: event info, teams (full detail), rankings, OPRs, matches
+    event_info, teams, rankings, oprs, epa_data, matches_raw = await asyncio.gather(
         _safe(client.get_event(event_key)),
         client.get_event_teams_full(event_key),
         _safe(client.get_event_rankings(event_key)),
         _safe(client.get_event_oprs(event_key)),
         _safe(get_epa_map(event_key)),
+        _safe(client.get_event_matches(event_key)),
     )
     if epa_data is None:
         epa_data = {}
@@ -128,12 +129,17 @@ async def get_event_summary(event_key: str) -> dict:
     # ── Top 3 OPR contributors ──────────────────────────────
     top_scorers = _compute_top_scorers(teams, oprs, rankings, epa_data)
 
+    # ── High scores (by match) ──────────────────────────────
+    name_map_full = {f"frc{t['team_number']}": t.get("nickname", "") for t in teams}
+    high_scores = _compute_high_scores(matches_raw, name_map_full)
+
     return {
         "event_key": event_key,
         "demographics": demographics,
         "hall_of_fame": hof_teams,
         "impact_finalists": impact_finalists,
         "top_scorers": top_scorers,
+        "high_scores": high_scores,
     }
 
 
@@ -360,23 +366,26 @@ async def _build_past_season_awards(
 async def get_event_summary_stats(event_key: str) -> dict:
     """Lighter refresh — just OPR/rankings-based stats (no history scan)."""
     client = get_tba_client()
-    # Clear cache for rankings/OPRs so we get fresh data
-    for suffix in ["/rankings", "/oprs"]:
+    # Clear cache for rankings/OPRs/matches so we get fresh data
+    for suffix in ["/rankings", "/oprs", "/matches"]:
         endpoint = f"/event/{event_key}{suffix}"
         if endpoint in client._cache:
             del client._cache[endpoint]
 
-    teams, rankings, oprs, epa_data = await asyncio.gather(
+    teams, rankings, oprs, epa_data, matches_raw = await asyncio.gather(
         client.get_event_teams(event_key),
         _safe(client.get_event_rankings(event_key)),
         _safe(client.get_event_oprs(event_key)),
         _safe(get_epa_map(event_key)),
+        _safe(client.get_event_matches(event_key)),
     )
     if epa_data is None:
         epa_data = {}
 
+    name_map = {t["key"]: t.get("nickname", "") for t in (teams or [])}
     return {
         "top_scorers": _compute_top_scorers(teams, oprs, rankings, epa_data),
+        "high_scores": _compute_high_scores(matches_raw, name_map),
     }
 
 
@@ -408,6 +417,58 @@ def _compute_top_scorers(teams, oprs, rankings, epa_data: dict | None = None) ->
 
     scored.sort(key=lambda x: x["opr"], reverse=True)
     return scored[:3]
+
+
+_COMP_LEVEL_LABELS_SHORT = {
+    "qm": "Qual", "ef": "Eighths", "qf": "QF",
+    "sf": "SF", "f": "F",
+}
+
+
+def _match_label(m: dict) -> str:
+    """Build a human-friendly match label, e.g. 'Qual 42' or 'SF 2-1'."""
+    cl = m.get("comp_level", "qm")
+    prefix = _COMP_LEVEL_LABELS_SHORT.get(cl, cl.upper())
+    mn = m.get("match_number", "?")
+    if cl == "qm":
+        return f"{prefix} {mn}"
+    sn = m.get("set_number", "")
+    return f"{prefix} {sn}-{mn}" if sn else f"{prefix} {mn}"
+
+
+def _compute_high_scores(matches_raw: list | None, name_map: dict) -> list[dict]:
+    """Return top-3 highest single-alliance scores across all completed matches."""
+    if not matches_raw:
+        return []
+
+    entries: list[dict] = []
+    for m in matches_raw:
+        # Skip unplayed matches
+        if m.get("winning_alliance") is None and m.get("alliances", {}).get("red", {}).get("score", -1) < 0:
+            continue
+        for color in ("red", "blue"):
+            alliance = m.get("alliances", {}).get(color, {})
+            score = alliance.get("score", -1)
+            if score <= 0:
+                continue
+            team_keys = alliance.get("team_keys", [])
+            teams = []
+            for tk in team_keys:
+                num = int(tk.replace("frc", ""))
+                teams.append({
+                    "team_number": num,
+                    "nickname": name_map.get(tk, ""),
+                })
+            entries.append({
+                "score": score,
+                "match": _match_label(m),
+                "match_key": m.get("key", ""),
+                "color": color,
+                "teams": teams,
+            })
+
+    entries.sort(key=lambda x: x["score"], reverse=True)
+    return entries[:3]
 
 
 COMP_LEVEL_LABELS = {
