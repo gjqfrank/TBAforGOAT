@@ -81,6 +81,10 @@ let lastTeamData = null;   // cached last team lookup data for re-render
 const BD_POLL_INTERVAL = 10_000;      // 10s — poll for breakdown availability
 const BD_LIST_REFRESH  = 30_000;      // 30s — refresh match list flags
 
+// PBP auto-refresh
+let pbpRefreshTimer = null;         // setInterval id for PBP live refresh
+const PBP_REFRESH_INTERVAL = 30_000; // 30s — poll for score/match updates
+
 // Season events
 let seasonEventsRaw = [];          // full list from backend
 let seasonEventsFiltered = [];     // after applying region/week/search
@@ -242,6 +246,9 @@ document.querySelectorAll('.tab').forEach(btn => {
         // Stop breakdown polling when leaving the breakdown tab
         if (btn.dataset.tab !== 'breakdown') { stopBdPolling(); stopBdListRefresh(); }
 
+        // Stop PBP live refresh when leaving the PBP tab
+        if (btn.dataset.tab !== 'playbyplay') { stopPbpRefresh(); }
+
         // Clear compare selection when leaving Rankings tab
         if (btn.dataset.tab !== 'rankings') { clearCompareSelection(); }
 
@@ -249,9 +256,24 @@ document.querySelectorAll('.tab').forEach(btn => {
         if (btn.dataset.tab === 'summary' && currentEvent) {
             if (summaryData) {
                 hide('summary-empty');
-                hide('summary-loading');
+                hideSkeleton('summary-loading');
                 renderSummary(summaryData);
+                fadeIn('summary-container');
+                // Stale-while-revalidate: for ongoing events, silently refresh in background
+                if (currentEventStatus === 'ongoing') {
+                    const _code = currentEvent;
+                    API.eventSummary(_code).then(freshData => {
+                        if (currentEvent !== _code) return;
+                        summaryData = freshData;
+                        renderSummary(freshData);
+                        autoCacheTab('summary', freshData);
+                    }).catch(() => {});
+                }
             } else {
+                // Optimistic skeleton
+                hide('summary-empty');
+                hideInlineError('summary-error');
+                showSkeleton('summary-loading', 'summary-loading-status', 'Fetching event summary\u2026');
                 loadSummary();
             }
         }
@@ -260,19 +282,30 @@ document.querySelectorAll('.tab').forEach(btn => {
         if (btn.dataset.tab === 'playoff' && currentEvent && !renderedTabs.playoff) {
             if (playoffData?.length) {
                 hide('playoff-empty');
+                hideSkeleton('playoff-loading');
                 renderBracketTree();
+                fadeIn('playoff-bracket');
                 renderedTabs.playoff = true;
             } else {
+                // Optimistic skeleton
+                hide('playoff-empty');
+                hideInlineError('playoff-error');
+                showSkeleton('playoff-loading', 'playoff-loading-status', 'Loading playoff bracket\u2026');
                 loadPlayoffs();
             }
         }
         if (btn.dataset.tab === 'alliance' && currentEvent && !renderedTabs.alliance) {
             if (allianceData?.length) {
                 hide('alliance-empty');
-                hide('alliance-loading');
+                hideSkeleton('alliance-loading');
                 renderAlliances(allianceData);
+                fadeIn('alliance-grid');
                 renderedTabs.alliance = true;
             } else {
+                // Optimistic skeleton
+                hide('alliance-empty');
+                hideInlineError('alliance-error');
+                showSkeleton('alliance-loading', 'alliance-loading-status', 'Fetching alliances\u2026');
                 loadAlliances();
             }
         }
@@ -280,18 +313,26 @@ document.querySelectorAll('.tab').forEach(btn => {
             if (pbpData?.matches?.length) {
                 pbpIndex = 0;
                 hide('pbp-empty');
+                hideSkeleton('pbp-loading');
                 show('pbp-container');
                 buildPbpSelector();
                 renderPbpMatch();
+                fadeIn('pbp-container');
                 renderedTabs.playbyplay = true;
+                startPbpRefresh();
             } else if (currentEventStatus === 'upcoming') {
                 hide('pbp-container');
+                hideSkeleton('pbp-loading');
                 const el = $('pbp-empty');
                 if (el) {
                     el.textContent = 'The match schedule for this event has not been published yet.';
                     el.classList.remove('hidden');
                 }
             } else {
+                // Optimistic skeleton
+                hide('pbp-empty');
+                hideInlineError('pbp-error');
+                showSkeleton('pbp-loading', 'pbp-loading-status', 'Loading match data\u2026');
                 loadPlayByPlay();
             }
         }
@@ -308,22 +349,34 @@ document.querySelectorAll('.tab').forEach(btn => {
                 bdIndex = 0;
                 bdCache = {};
                 hide('bd-empty');
+                hideSkeleton('bd-loading');
                 show('bd-container');
                 buildBdSelector();
                 loadBdMatch();
                 startBdListRefresh();
+                fadeIn('bd-container');
                 renderedTabs.breakdown = true;
             } else if (currentEventStatus === 'upcoming') {
                 hide('bd-container');
+                hideSkeleton('bd-loading');
                 const el = $('bd-empty');
                 if (el) {
                     el.textContent = 'The match schedule for this event has not been published yet.';
                     el.classList.remove('hidden');
                 }
             } else {
+                // Optimistic skeleton
+                hide('bd-empty');
+                hideInlineError('bd-error');
+                showSkeleton('bd-loading', 'bd-loading-status', 'Loading breakdowns\u2026');
                 loadBreakdownTab();
             }
         }
+        // Re-entering PBP tab after it was already loaded — resume live refresh
+        if (btn.dataset.tab === 'playbyplay' && renderedTabs.playbyplay && pbpData) {
+            startPbpRefresh();
+        }
+
         // Re-entering breakdown tab after it was already loaded — resume timers
         if (btn.dataset.tab === 'breakdown' && renderedTabs.breakdown && bdData) {
             startBdListRefresh();
@@ -334,6 +387,9 @@ document.querySelectorAll('.tab').forEach(btn => {
 
         // ── History tab ──
         if (btn.dataset.tab === 'history' && currentEvent && !renderedTabs.history) {
+            hide('history-empty');
+            hideInlineError('history-error');
+            showSkeleton('history-loading', 'history-loading-status', 'Loading region & event history\u2026');
             loadHistory();
         }
     });
@@ -405,6 +461,57 @@ document.addEventListener('keydown', e => {
 const $ = id => document.getElementById(id);
 const show = (id) => $(id)?.classList.remove('hidden');
 const hide = (id) => $(id)?.classList.add('hidden');
+
+// ── Inline error helper (replaces alert() for loading errors) ──
+function showInlineError(containerId, message, retryFn) {
+    const el = $(containerId);
+    if (!el) return;
+    const retryId = containerId + '-retry-btn';
+    const retryBtn = retryFn
+        ? `<button class="inline-error-retry" id="${retryId}">Retry</button>`
+        : '';
+    el.innerHTML = `
+        <div class="inline-error">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+            <span class="inline-error-msg">${message}</span>
+            ${retryBtn}
+        </div>`;
+    el.classList.remove('hidden');
+    // Bind retry handler directly
+    if (retryFn) {
+        const btn = document.getElementById(retryId);
+        if (btn) btn.addEventListener('click', () => { hideInlineError(containerId); retryFn(); });
+    }
+}
+function hideInlineError(containerId) {
+    const el = $(containerId);
+    if (el) { el.innerHTML = ''; el.classList.add('hidden'); }
+}
+
+// ── Content fade-in helper ──
+function fadeIn(elementOrId) {
+    const el = typeof elementOrId === 'string' ? $(elementOrId) : elementOrId;
+    if (!el) return;
+    el.classList.remove('content-fade-in');
+    // Force reflow to restart animation
+    void el.offsetWidth;
+    el.classList.add('content-fade-in');
+}
+
+// ── Contextual loading status helper ──
+function setLoadingStatus(statusId, text) {
+    const el = $(statusId);
+    if (el) el.textContent = text;
+}
+
+// ── Skeleton show/hide helpers ──
+function showSkeleton(loadingId, statusId, statusText) {
+    show(loadingId);
+    if (statusId && statusText) setLoadingStatus(statusId, statusText);
+}
+function hideSkeleton(loadingId) {
+    hide(loadingId);
+}
 
 // Breathing indicator on the banner dot instead of fullscreen overlay
 function loading(on) {
@@ -665,6 +772,7 @@ function clearActiveEvent() {
     currentEventStatus = null;
     localStorage.removeItem('selectedEvent');
     stopRankingsPolling();
+    stopPbpRefresh();
     hide('active-event-banner');
     const badge = $('event-badge');
     badge.classList.remove('status-ongoing', 'status-upcoming', 'status-completed');
@@ -737,6 +845,7 @@ async function loadEvent(eventKey) {
     regionData = null;
     stopBdPolling();
     stopBdListRefresh();
+    stopPbpRefresh();
     _pbpConnCache = {};
     _pbpConnAllTime = false;
     _pbpAwardsCache = {};
@@ -809,7 +918,7 @@ async function loadEvent(eventKey) {
             ? `<span class="aeb-status-badge status-${info.status}">${info.status.toUpperCase()}</span>`
             : '';
         $('aeb-name').textContent = info.name;
-        $('aeb-meta').innerHTML = `<span>${info.event_type_string} · ${info.city}, ${info.state_prov} · ${info.start_date} → ${info.end_date} · ${teams.length} teams</span>${statusBadge}`;
+        $('aeb-meta').innerHTML = `<span>${info.event_type_string} · ${info.city}, ${info.state_prov} · ${_fmtDate(info.start_date)} → ${_fmtDate(info.end_date)} · ${teams.length} teams</span>${statusBadge}`;
 
         // Match dot color to event status
         const dot = document.querySelector('.aeb-dot');
@@ -831,21 +940,27 @@ async function loadEvent(eventKey) {
         hide('rankings-empty');
         show('rankings-container');
         $('event-teams').innerHTML = buildTeamTable(teams);
+        fadeIn('rankings-container');
 
         // Reset dependent tabs — clear both visibility and inner content
         $('summary-empty')?.classList.remove('hidden');
         $('summary-container')?.classList.add('hidden');
+        hideSkeleton('summary-loading');
         $('playoff-empty')?.classList.remove('hidden');
         $('playoff-bracket').innerHTML = '';
+        hideSkeleton('playoff-loading');
         $('alliance-empty')?.classList.remove('hidden');
         $('alliance-grid').innerHTML = '';
+        hideSkeleton('alliance-loading');
         $('bd-empty')?.classList.remove('hidden');
         $('bd-container')?.classList.add('hidden');
+        hideSkeleton('bd-loading');
         if ($('bd-content')) $('bd-content').innerHTML = '';
         if ($('bd-status')) $('bd-status').innerHTML = '';
         if ($('bd-match-select')) $('bd-match-select').innerHTML = '';
         $('pbp-empty')?.classList.remove('hidden');
         $('pbp-container')?.classList.add('hidden');
+        hideSkeleton('pbp-loading');
         if ($('pbp-arena')) $('pbp-arena').innerHTML = '';
         if ($('pbp-footer')) $('pbp-footer').innerHTML = '';
         if ($('pbp-match-select')) $('pbp-match-select').innerHTML = '';
@@ -854,39 +969,62 @@ async function loadEvent(eventKey) {
         if (_oldConn) _oldConn.innerHTML = '';
         $('history-empty')?.classList.remove('hidden');
         $('history-container')?.classList.add('hidden');
+        hideSkeleton('history-loading');
+        hideSkeleton('team-loading');
+        hideSkeleton('h2h-loading');
 
         // Hide cache badge for fresh loads
         $('aeb-cache-badge')?.classList.add('hidden');
 
-        // ── Phase 2: Preload secondary data in background (non-blocking) ──
-        loading(true); // breathing dot while background data loads
-        Promise.all([
-            API.allMatches(code).catch(() => null),
-            API.playoffMatches(code).catch(() => null),
-            API.alliances(code).catch(() => null),
-        ]).then(([matchData, playoffResult, allianceResult]) => {
-            if (currentEvent !== code) return; // user switched events
+        // Also hide any leftover inline error containers
+        hideInlineError('summary-error');
+        hideInlineError('alliance-error');
+        hideInlineError('playoff-error');
+        hideInlineError('pbp-error');
+        hideInlineError('bd-error');
+        hideInlineError('history-error');
 
+        // ── Phase 2: Preload secondary data in background (progressive) ──
+        // Each promise renders its section independently as soon as it resolves,
+        // instead of waiting for all to finish together.
+        loading(true);
+        let phase2Done = 0;
+        const phase2Total = 3;
+        const phase2Check = () => { if (++phase2Done >= phase2Total) loading(false); };
+
+        // Matches (feeds PBP + Breakdown)
+        API.allMatches(code).then(matchData => {
+            if (currentEvent !== code) return;
             if (matchData) {
                 pbpData = matchData;
                 bdData  = matchData;
                 autoCacheTab('matches', matchData);
             }
+        }).catch(() => {}).finally(phase2Check);
+
+        // Playoffs
+        API.playoffMatches(code).then(playoffResult => {
+            if (currentEvent !== code) return;
             if (playoffResult && playoffResult.matches) {
                 playoffData = playoffResult.matches;
             }
+        }).catch(() => {}).finally(phase2Check);
+
+        // Alliances
+        API.alliances(code).then(allianceResult => {
+            if (currentEvent !== code) return;
             if (allianceResult) {
                 allianceData = allianceResult;
                 autoCacheTab('alliances', allianceResult);
             }
-        }).catch(() => {}).finally(() => loading(false));
+        }).catch(() => {}).finally(phase2Check);
 
     } catch (err) {
         if (btn) { btn.disabled = false; btn.textContent = btn.dataset.origText || 'Load Event'; btn.classList.remove('btn-loading'); }
         $('season-search')?.classList.remove('input-loading');
         const _lb2 = $('season-loading-btn');
         if (_lb2) { _lb2.classList.add('hidden'); _lb2.classList.remove('btn-loading'); }
-        alert(`Error loading event: ${err.message}`);
+        showInlineError('summary-error', `Error loading event: ${err.message}`, () => loadEvent(code));
         loading(false);
     }
 }
@@ -950,7 +1088,7 @@ async function loadSavedEvent(eventKey) {
     playoffData = null; allianceData = null; summaryData = null; eventInfoData = null;
     pbpData = null; pbpIndex = 0; bdData = null; bdIndex = 0; bdCache = {};
     historyData = null; regionData = null;
-    stopBdPolling(); stopBdListRefresh();
+    stopBdPolling(); stopBdListRefresh(); stopPbpRefresh();
     _pbpConnCache = {}; _pbpConnAllTime = false;
     _pbpAwardsCache = {};
     _h2hAllTime = false;
@@ -1028,7 +1166,7 @@ async function loadSavedEvent(eventKey) {
             ? `<span class="aeb-status-badge status-${info.status}">${info.status.toUpperCase()}</span>`
             : '';
         $('aeb-name').textContent = info.name;
-        $('aeb-meta').innerHTML = `<span>${info.event_type_string || ''} · ${info.city || ''}, ${info.state_prov || ''} · ${info.start_date || ''} → ${info.end_date || ''} · ${teams.length} teams</span>${statusBadge}`;
+        $('aeb-meta').innerHTML = `<span>${info.event_type_string || ''} · ${info.city || ''}, ${info.state_prov || ''} · ${_fmtDate(info.start_date)} → ${_fmtDate(info.end_date)} · ${teams.length} teams</span>${statusBadge}`;
 
         const dot = document.querySelector('.aeb-dot');
         if (dot) {
@@ -1064,16 +1202,28 @@ async function loadSavedEvent(eventKey) {
         // Reset dependent tabs
         $('summary-empty')?.classList.remove('hidden');
         $('summary-container')?.classList.add('hidden');
+        hideSkeleton('summary-loading');
+        hideInlineError('summary-error');
         $('playoff-empty')?.classList.remove('hidden');
         $('playoff-bracket').innerHTML = '';
+        hideSkeleton('playoff-loading');
+        hideInlineError('playoff-error');
         $('alliance-empty')?.classList.remove('hidden');
         $('alliance-grid').innerHTML = '';
+        hideSkeleton('alliance-loading');
+        hideInlineError('alliance-error');
         $('bd-empty')?.classList.remove('hidden');
         $('bd-container')?.classList.add('hidden');
+        hideSkeleton('bd-loading');
+        hideInlineError('bd-error');
         $('pbp-empty')?.classList.remove('hidden');
         $('pbp-container')?.classList.add('hidden');
+        hideSkeleton('pbp-loading');
+        hideInlineError('pbp-error');
         $('history-empty')?.classList.remove('hidden');
         $('history-container')?.classList.add('hidden');
+        hideSkeleton('history-loading');
+        hideInlineError('history-error');
 
         // Pre-populate tab data from cache
         if (data.matches) { pbpData = data.matches; bdData = data.matches; }
@@ -1095,7 +1245,7 @@ async function loadSavedEvent(eventKey) {
         }
 
     } catch (err) {
-        alert(`Error loading saved event: ${err.message}`);
+        showInlineError('summary-error', `Error loading saved event: ${err.message}`, () => loadSavedEvent(eventKey));
     }
 }
 
@@ -1357,19 +1507,21 @@ function sortTeams(col) {
 async function loadSummary() {
     if (!currentEvent) return;
     hide('summary-empty');
-    show('summary-loading');
+    hideInlineError('summary-error');
+    showSkeleton('summary-loading', 'summary-loading-status', 'Fetching event summary\u2026');
     hide('summary-container');
 
     try {
+        setLoadingStatus('summary-loading-status', 'Analysing event data\u2026');
         const data = await API.eventSummary(currentEvent);
         summaryData = data;
+        hideSkeleton('summary-loading');
         renderSummary(data);
+        fadeIn('summary-container');
         autoCacheTab('summary', data);
     } catch (err) {
-        alert(`Error loading summary: ${err.message}`);
-        show('summary-empty');
-    } finally {
-        hide('summary-loading');
+        hideSkeleton('summary-loading');
+        showInlineError('summary-error', `Failed to load summary: ${err.message}`, loadSummary);
     }
 }
 
@@ -1854,14 +2006,28 @@ function renderTopScorers(scorers) {
 // ═══════════════════════════════════════════════════════════
 async function loadPlayoffs() {
     if (!currentEvent) return;
+    hideInlineError('playoff-error');
     try {
+        setLoadingStatus('playoff-loading-status', 'Fetching playoff matches\u2026');
         const data = await API.playoffMatches(currentEvent);
         playoffData = data.matches;
-        if (!playoffData?.length) return; // no playoff matches yet
+        hideSkeleton('playoff-loading');
+        if (!playoffData?.length) {
+            const el = $('playoff-empty');
+            if (el) {
+                el.textContent = currentEventStatus === 'upcoming'
+                    ? 'The playoff schedule for this event has not been published yet.'
+                    : 'No playoff data available for this event.';
+                el.classList.remove('hidden');
+            }
+            return;
+        }
         hide('playoff-empty');
         renderBracketTree();
+        fadeIn('playoff-bracket');
     } catch (err) {
-        alert(`Error loading playoffs: ${err.message}`);
+        hideSkeleton('playoff-loading');
+        showInlineError('playoff-error', `Failed to load playoffs: ${err.message}`, loadPlayoffs);
     }
 }
 
@@ -2081,16 +2247,19 @@ function _buildMobileBracket(slot) {
 async function loadAlliances() {
     if (!currentEvent) return;
     hide('alliance-empty');
-    show('alliance-loading');
+    hideInlineError('alliance-error');
+    showSkeleton('alliance-loading', 'alliance-loading-status', 'Fetching alliance selections\u2026');
     try {
+        setLoadingStatus('alliance-loading-status', 'Loading partnerships & EPA data\u2026');
         const data = await API.alliances(currentEvent);
         allianceData = data;
-        hide('alliance-loading');
+        hideSkeleton('alliance-loading');
         renderAlliances(data);
+        fadeIn('alliance-grid');
         autoCacheTab('alliances', data);
     } catch (err) {
-        hide('alliance-loading');
-        alert(`Error loading alliances: ${err.message}`);
+        hideSkeleton('alliance-loading');
+        showInlineError('alliance-error', `Failed to load alliances: ${err.message}`, loadAlliances);
     }
 }
 
@@ -2223,15 +2392,19 @@ async function loadTeam() {
 
     loading(true);
     $('team-stats').innerHTML = '';
-    show('team-loading');
+    hideInlineError('team-error');
+    showSkeleton('team-loading', 'team-loading-status', `Loading team ${num} data\u2026`);
     try {
+        setLoadingStatus('team-loading-status', `Fetching stats for team ${num}\u2026`);
         const data = await API.teamStats(num, year);
         lastTeamData = data;
+        hideSkeleton('team-loading');
         $('team-stats').innerHTML = renderTeamStats(data);
+        fadeIn('team-stats');
     } catch (err) {
-        alert(`Error loading team: ${err.message}`);
+        hideSkeleton('team-loading');
+        showInlineError('team-error', `Failed to load team ${num}: ${err.message}`, loadTeam);
     } finally {
-        hide('team-loading');
         loading(false);
     }
 }
@@ -2427,14 +2600,17 @@ async function loadH2H() {
 
     loading(true);
     $('h2h-results').innerHTML = '';
-    show('h2h-loading');
+    hideInlineError('h2h-error');
+    showSkeleton('h2h-loading', 'h2h-loading-status', `Loading ${a} vs ${b} history\u2026`);
     try {
         const data = await API.headToHead(a, b, null, _h2hAllTime);
+        hideSkeleton('h2h-loading');
         $('h2h-results').innerHTML = renderH2H(data);
+        fadeIn('h2h-results');
     } catch (err) {
-        alert(`Error loading H2H: ${err.message}`);
+        hideSkeleton('h2h-loading');
+        showInlineError('h2h-error', `Failed to load head-to-head: ${err.message}`, loadH2H);
     } finally {
-        hide('h2h-loading');
         loading(false);
     }
 }
@@ -2540,10 +2716,13 @@ function renderH2H(d) {
 // ═══════════════════════════════════════════════════════════
 async function loadPlayByPlay() {
     if (!currentEvent) return;
+    hideInlineError('pbp-error');
     try {
+        setLoadingStatus('pbp-loading-status', 'Fetching match schedule\u2026');
         const data = await API.allMatches(currentEvent);
         pbpData = data;
         pbpIndex = 0;
+        hideSkeleton('pbp-loading');
         if (!data?.matches?.length) {
             hide('pbp-container');
             const el = $('pbp-empty');
@@ -2559,8 +2738,11 @@ async function loadPlayByPlay() {
         show('pbp-container');
         buildPbpSelector();
         renderPbpMatch();
+        fadeIn('pbp-container');
+        startPbpRefresh();
     } catch (err) {
-        alert(`Error loading matches: ${err.message}`);
+        hideSkeleton('pbp-loading');
+        showInlineError('pbp-error', `Failed to load matches: ${err.message}`, loadPlayByPlay);
     }
 }
 
@@ -2971,6 +3153,124 @@ function pbpToggleAwardsOverflow(el) {
 
 
 // ═══════════════════════════════════════════════════════════
+// 6b. PLAY-BY-PLAY LIVE REFRESH
+// ═══════════════════════════════════════════════════════════
+
+function startPbpRefresh() {
+    stopPbpRefresh();
+    if (currentEventStatus !== 'ongoing') return;
+    pbpRefreshTimer = setInterval(pbpAutoRefresh, PBP_REFRESH_INTERVAL);
+    // Show live badge
+    $('pbp-live-badge')?.classList.remove('hidden');
+}
+
+function stopPbpRefresh() {
+    if (pbpRefreshTimer) {
+        clearInterval(pbpRefreshTimer);
+        pbpRefreshTimer = null;
+    }
+    $('pbp-live-badge')?.classList.add('hidden');
+}
+
+/** Manual refresh (triggered by refresh button) */
+async function pbpManualRefresh() {
+    const btn = $('pbp-refresh-btn');
+    if (btn) btn.classList.add('spinning');
+    await pbpAutoRefresh();
+    if (btn) btn.classList.remove('spinning');
+}
+
+/** Auto-refresh: fetch latest match data, diff against current, and update. */
+async function pbpAutoRefresh() {
+    if (!currentEvent || !pbpData) return;
+    try {
+        const fresh = await API.allMatches(currentEvent);
+        if (!fresh || !fresh.matches || currentEvent !== fresh.event_key) return;
+
+        const oldMatches = pbpData.matches;
+        const newMatches = fresh.matches;
+
+        // Track what changed
+        let scoresChanged = false;
+        let newMatchesAdded = false;
+        const wasAtLatest = pbpIndex === oldMatches.length - 1;
+
+        // Build a map of old matches by key for diffing
+        const oldMap = {};
+        oldMatches.forEach(m => { oldMap[m.key] = m; });
+
+        // Check for score changes in existing matches
+        for (const nm of newMatches) {
+            const om = oldMap[nm.key];
+            if (!om) {
+                newMatchesAdded = true;
+                continue;
+            }
+            if (om.red.score !== nm.red.score || om.blue.score !== nm.blue.score) {
+                scoresChanged = true;
+            }
+            if (om.winning_alliance !== nm.winning_alliance) {
+                scoresChanged = true;
+            }
+        }
+
+        if (newMatches.length > oldMatches.length) {
+            newMatchesAdded = true;
+        }
+
+        // Check quals high score change
+        const oldQHS = pbpData.quals_high_score;
+        const newQHS = fresh.quals_high_score;
+        if (oldQHS?.score !== newQHS?.score) scoresChanged = true;
+
+        // Update global data
+        pbpData = fresh;
+        bdData = fresh;  // Shared data source for breakdown tab
+
+        // If nothing changed, skip re-render
+        if (!scoresChanged && !newMatchesAdded) return;
+
+        // Rebuild the selector (may have new matches)
+        const currentMatchKey = oldMatches[pbpIndex]?.key;
+        buildPbpSelector();
+
+        // Preserve the user's current match selection
+        if (currentMatchKey) {
+            const newIdx = newMatches.findIndex(m => m.key === currentMatchKey);
+            if (newIdx >= 0) pbpIndex = newIdx;
+        }
+
+        // Auto-advance to newest match if user was viewing the latest
+        if (wasAtLatest && newMatchesAdded) {
+            pbpIndex = newMatches.length - 1;
+        }
+
+        $('pbp-match-select').value = pbpIndex;
+
+        // Re-render the current match with updated scores/stats
+        renderPbpMatch();
+
+        // Also update breakdown selector if it was already rendered
+        if (renderedTabs.breakdown) buildBdSelector();
+
+        // Flash the arena container to indicate an update
+        const arena = $('pbp-arena');
+        if (arena) {
+            arena.classList.remove('pbp-updated-flash');
+            void arena.offsetWidth; // force reflow
+            arena.classList.add('pbp-updated-flash');
+        }
+
+        // Cache the updated data
+        autoCacheTab('matches', fresh);
+
+    } catch (_) {
+        // Silently ignore — network hiccups shouldn't disrupt the UI
+    }
+}
+
+
+// ═══════════════════════════════════════════════════════════
 // 7. SCORE BREAKDOWN
 // ═══════════════════════════════════════════════════════════
 
@@ -2989,7 +3289,9 @@ function updateBreakdownTabState() {
 
 async function loadBreakdownTab() {
     if (!currentEvent) return;
+    hideInlineError('bd-error');
     try {
+        setLoadingStatus('bd-loading-status', 'Loading score data\u2026');
         // Reuse the same all-matches data as PBP (or fetch if needed)
         if (!pbpData) {
             const data = await API.allMatches(currentEvent);
@@ -2998,6 +3300,7 @@ async function loadBreakdownTab() {
         bdData = pbpData;
         bdIndex = 0;
         bdCache = {};
+        hideSkeleton('bd-loading');
         if (!bdData?.matches?.length) {
             hide('bd-container');
             const el = $('bd-empty');
@@ -3014,8 +3317,10 @@ async function loadBreakdownTab() {
         buildBdSelector();
         loadBdMatch();
         startBdListRefresh();
+        fadeIn('bd-container');
     } catch (err) {
-        alert(`Error loading matches: ${err.message}`);
+        hideSkeleton('bd-loading');
+        showInlineError('bd-error', `Failed to load breakdowns: ${err.message}`, loadBreakdownTab);
     }
 }
 
@@ -3142,13 +3447,17 @@ async function pollBdMatch() {
 function renderBreakdown(data) {
     $('bd-status').innerHTML = `<span class="bd-available">✓ Score breakdown available</span>`;
 
-    // Build team_number -> nickname map from bdData match teams
+    // Build team_number -> nickname map and stats map from bdData match teams
     const nickMap = {};
+    const statsMap = {};
     if (bdData && bdData.matches && bdData.matches[bdIndex]) {
         const m = bdData.matches[bdIndex];
         for (const side of ['red', 'blue']) {
             if (m[side] && m[side].teams) {
-                m[side].teams.forEach(t => { if (t.nickname) nickMap[t.team_number] = t.nickname; });
+                m[side].teams.forEach(t => {
+                    if (t.nickname) nickMap[t.team_number] = t.nickname;
+                    statsMap[t.team_number] = { opr: t.opr, epa: t.epa };
+                });
             }
         }
     }
@@ -3159,12 +3468,12 @@ function renderBreakdown(data) {
     const renderFn = (data.game_year >= 2026) ? renderBdAlliance2026 : renderBdAlliance;
 
     $('bd-content').innerHTML = `
-        ${renderFn(data.red, 'red', redWon, nickMap)}
-        ${renderFn(data.blue, 'blue', blueWon, nickMap)}
+        ${renderFn(data.red, 'red', redWon, nickMap, statsMap)}
+        ${renderFn(data.blue, 'blue', blueWon, nickMap, statsMap)}
     `;
 }
 
-function renderBdAlliance(alliance, color, won, nickMap) {
+function renderBdAlliance(alliance, color, won, nickMap, statsMap) {
     const bd = alliance.breakdown;
     const sideCls = color === 'red' ? 'red-side' : 'blue-side';
     const title = color === 'red' ? 'Red Alliance' : 'Blue Alliance';
@@ -3191,7 +3500,7 @@ function renderBdAlliance(alliance, color, won, nickMap) {
         <div class="bd-section">
             <div class="bd-section-title">Per-Team Performance</div>
             <div class="bd-robots">
-                ${bd.robots.map(r => renderBdRobot(r, nickMap, color)).join('')}
+                ${bd.robots.map(r => renderBdRobot(r, nickMap, statsMap, color)).join('')}
             </div>
         </div>
 
@@ -3298,11 +3607,10 @@ function renderBdAlliance(alliance, color, won, nickMap) {
                     <span class="bd-stat-label">Ranking Points</span>
                     <span class="bd-stat-value">${bd.rp}</span>
                 </div>
-                ${bd.adjustPoints ? `
                 <div class="bd-stat-row">
                     <span class="bd-stat-label">Adjust Points</span>
-                    <span class="bd-stat-value">${bd.adjustPoints}</span>
-                </div>` : ''}
+                    <span class="bd-stat-value">${bd.adjustPoints || 0}</span>
+                </div>
             </div>
         </div>
 
@@ -3314,7 +3622,7 @@ function renderBdAlliance(alliance, color, won, nickMap) {
     </div>`;
 }
 
-function renderBdRobot(robot, nickMap, color) {
+function renderBdRobot(robot, nickMap, statsMap, color) {
     const leaveVal = robot.autoLine === 'Yes' ? 'Yes' : 'No';
     const leaveCls = robot.autoLine === 'Yes' ? 'yes' : 'no';
 
@@ -3328,10 +3636,13 @@ function renderBdRobot(robot, nickMap, color) {
     const num = robot.team_number || '?';
     const nick = (nickMap && nickMap[num]) || '';
     const tooltipHtml = nick ? `<span class="custom-tooltip">${nick}</span>` : '';
+    const st = (statsMap && statsMap[num]) || {};
+    const oprStr = st.opr != null ? st.opr : '–';
+    const epaStr = st.epa != null ? st.epa : '–';
 
     return `
-    <div class="bd-robot-card" data-team="${num}" data-color="${color}">
-        <div class="bd-robot-num has-tooltip bd-spotlight-trigger" onclick="toggleSpotlight(${num}, '${color}')">${num}${tooltipHtml}</div>
+    <div class="bd-robot-card bd-robot-card-clickable" data-team="${num}" data-color="${color}" onclick="toggleSpotlight(${num}, '${color}')">
+        <div class="bd-robot-num has-tooltip">${num}${tooltipHtml}</div>
         <div class="bd-robot-field">
             <span class="bd-robot-label">Leave</span>
             <span class="bd-robot-value ${leaveCls}">${leaveVal}</span>
@@ -3393,7 +3704,7 @@ function renderReefGrid(reef, otherPhaseReef, isAuto) {
 //  2026 GAME — BREAKDOWN RENDERER
 // ═══════════════════════════════════════════════════════════
 
-function renderBdAlliance2026(alliance, color, won, nickMap) {
+function renderBdAlliance2026(alliance, color, won, nickMap, statsMap) {
     const bd = alliance.breakdown;
     const sideCls = color === 'red' ? 'red-side' : 'blue-side';
     const title = color === 'red' ? 'Red Alliance' : 'Blue Alliance';
@@ -3410,15 +3721,17 @@ function renderBdAlliance2026(alliance, color, won, nickMap) {
                 <span class="bd-alliance-score">${alliance.score}</span>
             </div>`;
 
-    // Build fuel shift rows for teleop
-    const shiftRows = [
-        { label: 'Transition Shift', count: bd.transitionFuelCount, pts: bd.transitionFuelPoints },
-        { label: 'Shift 1', count: bd.shift1FuelCount, pts: bd.shift1FuelPoints },
-        { label: 'Shift 2', count: bd.shift2FuelCount, pts: bd.shift2FuelPoints },
-        { label: 'Shift 3', count: bd.shift3FuelCount, pts: bd.shift3FuelPoints },
-        { label: 'Shift 4', count: bd.shift4FuelCount, pts: bd.shift4FuelPoints },
-        { label: 'Endgame Fuel', count: bd.endgameFuelCount, pts: bd.endgameFuelPoints },
+    // Build fuel shift phases for the timeline
+    const phases = [
+        { label: 'Auto',       count: bd.autoFuelCount },
+        { label: 'Transition', count: bd.transitionFuelCount },
+        { label: 'Shift 1',    count: bd.shift1FuelCount },
+        { label: 'Shift 2',    count: bd.shift2FuelCount },
+        { label: 'Shift 3',    count: bd.shift3FuelCount },
+        { label: 'Shift 4',    count: bd.shift4FuelCount },
+        { label: 'Endgame',    count: bd.endgameFuelCount },
     ];
+    const maxPhase = Math.max(...phases.map(p => p.count), 1);
 
     const penaltyStr = bd.penalties && bd.penalties !== 'None' ? bd.penalties : '';
 
@@ -3432,7 +3745,7 @@ function renderBdAlliance2026(alliance, color, won, nickMap) {
         <div class="bd-section">
             <div class="bd-section-title">Per-Team Performance</div>
             <div class="bd-robots">
-                ${bd.robots.map(r => renderBdRobot2026(r, nickMap, color)).join('')}
+                ${bd.robots.map(r => renderBdRobot2026(r, nickMap, statsMap, color)).join('')}
             </div>
         </div>
 
@@ -3448,26 +3761,28 @@ function renderBdAlliance2026(alliance, color, won, nickMap) {
                     <span class="bd-stat-label">Fuel Scored</span>
                     <span class="bd-stat-value">${bd.autoFuelCount}</span>
                 </div>
-                <div class="bd-stat-row">
-                    <span class="bd-stat-label">Fuel Points</span>
-                    <span class="bd-stat-value">${bd.autoFuelPoints}</span>
-                </div>
             </div>
         </div>
 
-        <!-- Teleop -->
+        <!-- Fuel Timeline -->
         <div class="bd-section">
-            <div class="bd-section-title">Teleop (${bd.totalTeleopPoints} pts)</div>
-            <div class="bd-stats">
-                ${shiftRows.map(s => `
-                <div class="bd-stat-row">
-                    <span class="bd-stat-label">${s.label}</span>
-                    <span class="bd-stat-value">${s.count} fuel · ${s.pts} pts</span>
-                </div>`).join('')}
-                <div class="bd-stat-row" style="border-top:1px solid var(--border);padding-top:.3rem;margin-top:.2rem">
-                    <span class="bd-stat-label"><strong>Total Teleop Fuel</strong></span>
-                    <span class="bd-stat-value"><strong>${bd.teleopFuelCount}</strong></span>
-                </div>
+            <div class="bd-section-title">Fuel by Phase</div>
+            <div class="bd-fuel-timeline">
+                ${phases.map(p => {
+                    const pct = Math.round((p.count / maxPhase) * 100);
+                    const active = p.count > 0;
+                    return `<div class="bd-fuel-phase ${active ? 'active' : ''}">
+                        <div class="bd-fuel-bar-track">
+                            <div class="bd-fuel-bar-fill" style="height:${pct}%"></div>
+                        </div>
+                        <span class="bd-fuel-count">${p.count}</span>
+                        <span class="bd-fuel-label">${p.label}</span>
+                    </div>`;
+                }).join('')}
+            </div>
+            <div class="bd-fuel-totals">
+                <span>Total Fuel <strong>${bd.totalFuelCount}</strong></span>
+                ${(bd.uncountedFuel || 0) > 0 ? `<span class="bd-fuel-uncounted">Uncounted <strong>${bd.uncountedFuel}</strong></span>` : ''}
             </div>
         </div>
 
@@ -3476,11 +3791,11 @@ function renderBdAlliance2026(alliance, color, won, nickMap) {
             <div class="bd-section-title">Tower (${bd.totalTowerPoints} pts)</div>
             <div class="bd-stats">
                 <div class="bd-stat-row">
-                    <span class="bd-stat-label">Auto Tower Points</span>
+                    <span class="bd-stat-label">Auto Tower</span>
                     <span class="bd-stat-value">${bd.autoTowerPoints}</span>
                 </div>
                 <div class="bd-stat-row">
-                    <span class="bd-stat-label">Endgame Tower Points</span>
+                    <span class="bd-stat-label">Endgame Tower</span>
                     <span class="bd-stat-value">${bd.endGameTowerPoints}</span>
                 </div>
             </div>
@@ -3511,26 +3826,6 @@ function renderBdAlliance2026(alliance, color, won, nickMap) {
             ` : ''}
         </div>
 
-        <!-- Fuel Summary -->
-        <div class="bd-section">
-            <div class="bd-section-title">Fuel Summary</div>
-            <div class="bd-stats">
-                <div class="bd-stat-row">
-                    <span class="bd-stat-label">Total Fuel Scored</span>
-                    <span class="bd-stat-value">${bd.totalFuelCount}</span>
-                </div>
-                <div class="bd-stat-row">
-                    <span class="bd-stat-label">Total Fuel Points</span>
-                    <span class="bd-stat-value">${bd.totalFuelPoints}</span>
-                </div>
-                ${bd.uncountedFuel ? `
-                <div class="bd-stat-row">
-                    <span class="bd-stat-label">Uncounted Fuel</span>
-                    <span class="bd-stat-value">${bd.uncountedFuel}</span>
-                </div>` : ''}
-            </div>
-        </div>
-
         <!-- RP Progress -->
         <div class="bd-section">
             <div class="bd-section-title">Ranking Points</div>
@@ -3545,11 +3840,10 @@ function renderBdAlliance2026(alliance, color, won, nickMap) {
                     <span class="bd-stat-label">Ranking Points</span>
                     <span class="bd-stat-value">${bd.rp}</span>
                 </div>
-                ${bd.adjustPoints ? `
                 <div class="bd-stat-row">
                     <span class="bd-stat-label">Adjust Points</span>
-                    <span class="bd-stat-value">${bd.adjustPoints}</span>
-                </div>` : ''}
+                    <span class="bd-stat-value">${bd.adjustPoints || 0}</span>
+                </div>
             </div>
         </div>
 
@@ -3561,7 +3855,7 @@ function renderBdAlliance2026(alliance, color, won, nickMap) {
     </div>`;
 }
 
-function renderBdRobot2026(robot, nickMap, color) {
+function renderBdRobot2026(robot, nickMap, statsMap, color) {
     const autoVal = robot.autoTower || 'None';
     const autoCls = autoVal === 'Leave' ? 'yes' : 'no';
     const autoLabel = autoVal === 'None' ? 'None' : autoVal;
@@ -3578,10 +3872,13 @@ function renderBdRobot2026(robot, nickMap, color) {
     const num = robot.team_number || '?';
     const nick = (nickMap && nickMap[num]) || '';
     const tooltipHtml = nick ? `<span class="custom-tooltip">${nick}</span>` : '';
+    const st = (statsMap && statsMap[num]) || {};
+    const oprStr = st.opr != null ? st.opr : '–';
+    const epaStr = st.epa != null ? st.epa : '–';
 
     return `
-    <div class="bd-robot-card" data-team="${num}" data-color="${color}">
-        <div class="bd-robot-num has-tooltip bd-spotlight-trigger" onclick="toggleSpotlight(${num}, '${color}')">${num}${tooltipHtml}</div>
+    <div class="bd-robot-card bd-robot-card-clickable" data-team="${num}" data-color="${color}" onclick="toggleSpotlight(${num}, '${color}')">
+        <div class="bd-robot-num has-tooltip">${num}${tooltipHtml}</div>
         <div class="bd-robot-field">
             <span class="bd-robot-label">Auto Tower</span>
             <span class="bd-robot-value ${autoCls}">${autoLabel}</span>
@@ -3640,15 +3937,22 @@ function toggleSpotlight(teamNum, color) {
     const robot = abdwn.robots.find(r => r.team_number === teamNum);
     if (!robot) return;
 
-    // Nickname
+    // Nickname + stats
     const nickMap = {};
+    const statsMap = {};
     if (m) {
         for (const side of ['red', 'blue']) {
             if (m[side] && m[side].teams)
-                m[side].teams.forEach(t => { if (t.nickname) nickMap[t.team_number] = t.nickname; });
+                m[side].teams.forEach(t => {
+                    if (t.nickname) nickMap[t.team_number] = t.nickname;
+                    statsMap[t.team_number] = { opr: t.opr, epa: t.epa };
+                });
         }
     }
     const nick = nickMap[teamNum] || '';
+    const st = statsMap[teamNum] || {};
+    const oprStr = st.opr != null ? st.opr : '–';
+    const epaStr = st.epa != null ? st.epa : '–';
 
     const colorLabel = color === 'red' ? 'Red Alliance' : 'Blue Alliance';
 
@@ -3660,6 +3964,8 @@ function toggleSpotlight(teamNum, color) {
                     <span class="spotlight-team-num">${teamNum}</span>
                     ${nick ? `<span class="spotlight-team-nick">${nick}</span>` : ''}
                     <span class="spotlight-alliance-badge spotlight-badge-${color}">${colorLabel}</span>
+                    <span class="spotlight-stat-pill">OPR ${oprStr}</span>
+                    <span class="spotlight-stat-pill">EPA ${epaStr}</span>
                 </div>
                 <button class="spotlight-close" onclick="closeSpotlight()" title="Close Spotlight">&times;</button>
             </div>
@@ -3692,7 +3998,7 @@ function toggleSpotlight(teamNum, color) {
     API.teamPerf(eventKey, teamNum).then(perf => {
         if (_spotlightTeam !== teamNum) return;  // user closed or switched
 
-        _renderSpotlightContent(panel, perf, robot, bd.game_year, color, nick, teamNum, colorLabel, frcLevel, currentMatchNum);
+        _renderSpotlightContent(panel, perf, robot, bd.game_year, color, nick, teamNum, colorLabel, frcLevel, currentMatchNum, oprStr, epaStr);
     }).catch(err => {
         if (_spotlightTeam !== teamNum) return;
         // Fallback: show just the current-match per-robot data
@@ -3711,7 +4017,7 @@ function _towerBadge(val) {
     return `<span class="tower-badge ${cls}">${label}</span>`;
 }
 
-function _renderSpotlightContent(panel, perf, robot, gameYear, color, nick, teamNum, colorLabel, frcLevel, currentMatchNum) {
+function _renderSpotlightContent(panel, perf, robot, gameYear, color, nick, teamNum, colorLabel, frcLevel, currentMatchNum, oprStr, epaStr) {
     let html = '';
 
     if (gameYear >= 2026) {
@@ -3757,25 +4063,39 @@ function _renderSpotlightContent(panel, perf, robot, gameYear, color, nick, team
                     </div>
                 </div>
                 <div style="margin-top: .4rem;">
-                    <div class="spotlight-bar-row">
-                        <span class="spotlight-bar-label">Auto Tower</span>
-                        <div class="spotlight-bar-track">
-                            <div class="spotlight-bar-fill spotlight-bar-fill-green" style="width: ${perf.autoTower.activeRate}%"></div>
-                        </div>
-                        <span class="spotlight-bar-value">${perf.autoTower.activeRate}%</span>
+                    <div class="spotlight-tower-dist">
+                        ${(() => {
+                            const ad = perf.autoTower.distribution || {};
+                            const atot = perf.autoTower.total || 1;
+                            const aL1 = ad['1'] || 0;
+                            return `
+                            <span class="spotlight-tower-label">Auto</span>
+                            <div class="spotlight-tower-levels">
+                                <span class="tower-level-chip tower-level1">L1 <b>${aL1}</b> / ${perf.autoTower.total}</span>
+                            </div>`;
+                        })()}
                     </div>
-                    <div class="spotlight-bar-row">
-                        <span class="spotlight-bar-label">End Tower</span>
-                        <div class="spotlight-bar-track">
-                            <div class="spotlight-bar-fill spotlight-bar-fill-purple" style="width: ${perf.endGameTower.activeRate}%"></div>
-                        </div>
-                        <span class="spotlight-bar-value">${perf.endGameTower.activeRate}%</span>
+                    <div class="spotlight-tower-dist">
+                        ${(() => {
+                            const d = perf.endGameTower.distribution || {};
+                            const l1 = d['1'] || 0;
+                            const l2 = d['2'] || 0;
+                            const l3 = d['3'] || 0;
+                            const tot = perf.endGameTower.total;
+                            return `
+                            <span class="spotlight-tower-label">Endgame</span>
+                            <div class="spotlight-tower-levels">
+                                <span class="tower-level-chip tower-level1">L1 <b>${l1}</b> / ${tot}</span>
+                                <span class="tower-level-chip tower-level2">L2 <b>${l2}</b> / ${tot}</span>
+                                <span class="tower-level-chip tower-level3">L3 <b>${l3}</b> / ${tot}</span>
+                            </div>`;
+                        })()}
                     </div>
                 </div>
             </div>`;
         }
 
-        // ── Match-by-match history ──
+        // ── Match-by-match history (collapsible) ──
         if (perf.matches && perf.matches.length > 0) {
             let rows = '';
             for (const pm of perf.matches) {
@@ -3792,14 +4112,18 @@ function _renderSpotlightContent(panel, perf, robot, gameYear, color, nick, team
             }
 
             html += `
-            <div class="spotlight-section">
-                <div class="spotlight-section-title">Match History</div>
-                <table class="spotlight-matches-table">
-                    <thead><tr>
-                        <th>Match</th><th></th><th>Score</th><th>Auto</th><th>End</th>
-                    </tr></thead>
-                    <tbody>${rows}</tbody>
-                </table>
+            <div class="spotlight-section spotlight-collapsible collapsed">
+                <button type="button" class="spotlight-collapse-btn" onclick="const p=this.parentElement;p.classList.toggle('collapsed');this.textContent=p.classList.contains('collapsed')?'View Match History (${perf.matches.length})':'Hide Match History'">
+                    View Match History (${perf.matches.length})
+                </button>
+                <div class="spotlight-collapse-body">
+                    <table class="spotlight-matches-table">
+                        <thead><tr>
+                            <th>Match</th><th></th><th>Score</th><th>Auto</th><th>End</th>
+                        </tr></thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                </div>
             </div>`;
         }
     } else {
@@ -3862,6 +4186,8 @@ function _renderSpotlightContent(panel, perf, robot, gameYear, color, nick, team
                     <span class="spotlight-team-num">${teamNum}</span>
                     ${nick ? `<span class="spotlight-team-nick">${nick}</span>` : ''}
                     <span class="spotlight-alliance-badge spotlight-badge-${color}">${colorLabel}</span>
+                    ${oprStr ? `<span class="spotlight-stat-pill">OPR ${oprStr}</span>` : ''}
+                    ${epaStr ? `<span class="spotlight-stat-pill">EPA ${epaStr}</span>` : ''}
                 </div>
                 <button class="spotlight-close" onclick="closeSpotlight()" title="Close Spotlight">&times;</button>
             </div>
@@ -4262,12 +4588,25 @@ function floatLookupQuick(teamNumber) {
 // Escape key closes it
 document.addEventListener('keydown', e => {
     const tag = document.activeElement?.tagName;
-    if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+    const isInput = tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA';
 
+    // Q toggles the floating lookup even when its own input is focused
     if ((e.key === 'q' || e.key === 'Q') && !e.ctrlKey && !e.metaKey && !e.altKey) {
-        e.preventDefault();
-        toggleFloatingLookup();
+        const panel = $('float-lookup');
+        if (!panel.classList.contains('hidden')) {
+            e.preventDefault();
+            closeFloatingLookup();
+            return;
+        }
+        if (!isInput) {
+            e.preventDefault();
+            openFloatingLookup();
+            return;
+        }
     }
+
+    if (isInput) return;
+
     if (e.key === 'Escape' && !$('float-lookup').classList.contains('hidden')) {
         closeFloatingLookup();
     }
@@ -4490,10 +4829,12 @@ function renderComparison(data, opts) {
 async function loadHistory() {
     if (!currentEvent) return;
     hide('history-empty');
-    show('history-loading');
+    hideInlineError('history-error');
+    showSkeleton('history-loading', 'history-loading-status', 'Loading region & event history\u2026');
     hide('history-container');
 
     try {
+        setLoadingStatus('history-loading-status', 'Fetching region facts\u2026');
         // Region facts load instantly from static JSON; event history is dynamic
         const [regionResult, historyResult] = await Promise.all([
             eventRegion ? API.regionFacts(eventRegion).catch(() => null) : Promise.resolve(null),
@@ -4503,17 +4844,17 @@ async function loadHistory() {
         regionData = regionResult;
         historyData = historyResult;
 
-        hide('history-loading');
+        hideSkeleton('history-loading');
         show('history-container');
+        fadeIn('history-container');
 
         renderRegionFacts(regionData);
         renderEventHistory(historyData);
 
         renderedTabs.history = true;
     } catch (err) {
-        hide('history-loading');
-        show('history-empty');
-        console.error('History load error:', err);
+        hideSkeleton('history-loading');
+        showInlineError('history-error', `Failed to load history: ${err.message}`, loadHistory);
     }
 }
 
@@ -4536,7 +4877,6 @@ function renderRegionFacts(data) {
     html += _statCard('Total Events', `${data.total_events}`, `${(data.active_years || []).length} seasons`);
     html += _statCard('Active Teams', `${data.current_season_teams || data.team_count}`, `${data.active_year || new Date().getFullYear()} season`);
     html += _statCard('Hall of Fame', `${data.hof_count}`, data.hof_count ? data.hof_teams.map(t => t.team_number).join(', ') : 'none yet');
-    html += _statCard('Einstein Winners', `${data.einstein_winner_count || 0}`, (data.einstein_winners||[]).length ? data.einstein_winners.slice(0,3).map(t => t.team_number).join(', ') : 'none yet');
     html += _statCard('Einstein Teams', `${data.einstein_count}`, data.einstein_count ? `top: ${data.einstein_teams.slice(0,3).map(t => t.team_number).join(', ')}` : 'none yet');
     html += '</div>';
 
@@ -4674,5 +5014,16 @@ function _statCard(label, value, sub) {
     return `<div class="history-stat-card"><div class="hsc-value">${value}</div><div class="hsc-label">${label}</div>${sub ? `<div class="hsc-sub">${sub}</div>` : ''}</div>`;
 }
 function _esc(s) { return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+/** Format ISO date (2026-03-15) as "Mar 15" */
+function _fmtDate(dateStr) {
+    if (!dateStr) return '';
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const parts = dateStr.split('-');
+    if (parts.length < 3) return dateStr;
+    const m = parseInt(parts[1], 10);
+    const d = parseInt(parts[2], 10);
+    return `${months[m - 1] || parts[1]} ${d}`;
+}
 
 

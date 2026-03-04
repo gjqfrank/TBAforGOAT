@@ -562,14 +562,19 @@ async def get_team_performance(event_key: str, team_number: int):
 
     def tower_summary(levels: list[int]) -> dict:
         if not levels:
-            return {"total": 0, "active": 0, "activeRate": 0, "avgLevel": 0, "maxLevel": 0}
+            return {"total": 0, "active": 0, "activeRate": 0, "avgLevel": 0, "maxLevel": 0, "distribution": {}}
         active = [l for l in levels if l > 0]
+        dist = {}
+        for l in levels:
+            key = str(l)
+            dist[key] = dist.get(key, 0) + 1
         return {
             "total": len(levels),
             "active": len(active),
             "activeRate": round(len(active) / len(levels) * 100) if levels else 0,
             "avgLevel": round(sum(active) / len(active), 1) if active else 0,
             "maxLevel": max(levels) if levels else 0,
+            "distribution": dist,
         }
 
     return {

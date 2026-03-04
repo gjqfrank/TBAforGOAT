@@ -132,7 +132,7 @@
                         <button id="season-refresh-btn" class="season-refresh-btn" onclick="refreshSeasonEventsFromAPI()" title="Refresh event list from TBA">↻</button>
                     </div>
                 </div>
-                <p class="event-section-desc">Select an event from the current season. Filter by region or week, or search by name.</p>
+                <p class="event-section-desc">Select an event from the list below, then click Load Event to get started.</p>
                 <div class="season-controls">
                     <div class="season-filter-row">
                         <select id="season-filter-region" onchange="filterSeasonEvents()">
@@ -308,16 +308,36 @@
                     <div id="summary-top-list"></div>
                 </div>
             </div>
-            <div id="summary-loading" class="hidden loading-msg">
-                Analysing event data …
+            <div id="summary-loading" class="hidden">
+                <div class="loading-status" id="summary-loading-status">Analysing event data…</div>
+                <div class="skeleton" style="padding:1.2rem">
+                    <div class="skeleton-stats-row">
+                        <div class="skeleton-stat"></div>
+                        <div class="skeleton-stat"></div>
+                        <div class="skeleton-stat"></div>
+                        <div class="skeleton-stat"></div>
+                    </div>
+                    <div class="skeleton-block" style="height:100px"></div>
+                    <div class="skeleton-block" style="height:70px"></div>
+                </div>
             </div>
+            <div id="summary-error" class="hidden"></div>
         </section>
 
-        <!-- ═══ Play by Play ═══ -->
+        <!-- Inline error containers for tabs that use alert() -->
+        <!-- pbp and breakdown errors -->
         <section id="tab-playbyplay" class="tab-content">
             <p id="pbp-empty" class="empty">
                 Load an event first, then switch here for the play-by-play view.
             </p>
+            <div id="pbp-loading" class="hidden">
+                <div class="loading-status" id="pbp-loading-status">Loading match data…</div>
+                <div class="skeleton" style="padding:1.2rem">
+                    <div class="skeleton-block" style="height:50px"></div>
+                    <div class="skeleton-block" style="height:200px"></div>
+                </div>
+            </div>
+            <div id="pbp-error" class="hidden"></div>
             <div id="pbp-container" class="hidden">
                 <div class="pbp-topbar">
                     <button class="pbp-nav-btn" onclick="pbpPrev()" title="Previous Match">◀ Previous</button>
@@ -325,6 +345,10 @@
                         <div id="pbp-match-label" class="pbp-match-label"></div>
                         <div class="pbp-selector-row">
                             <select id="pbp-match-select" onchange="pbpGoTo(this.value)"></select>
+                            <span id="pbp-live-badge" class="pbp-live-badge hidden" title="Auto-refreshing scores">● LIVE</span>
+                            <button id="pbp-refresh-btn" class="pbp-refresh-btn" onclick="pbpManualRefresh()" title="Refresh match data">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                            </button>
                         </div>
                     </div>
                     <button class="pbp-nav-btn" onclick="pbpNext()" title="Next Match">Next ▶</button>
@@ -339,6 +363,14 @@
             <p id="bd-empty" class="empty">
                 Load an event first, then switch here for detailed score breakdowns.
             </p>
+            <div id="bd-loading" class="hidden">
+                <div class="loading-status" id="bd-loading-status">Loading breakdown data…</div>
+                <div class="skeleton" style="padding:1.2rem">
+                    <div class="skeleton-block" style="height:50px"></div>
+                    <div class="skeleton-block" style="height:200px"></div>
+                </div>
+            </div>
+            <div id="bd-error" class="hidden"></div>
             <div id="bd-container" class="hidden">
                 <div class="pbp-topbar">
                     <button class="pbp-nav-btn" onclick="bdPrev()" title="Previous Match">◀ Previous</button>
@@ -361,6 +393,27 @@
             <p id="playoff-empty" class="empty">
                 Load an event first, then switch here to see playoff matches.
             </p>
+            <div id="playoff-loading" class="hidden">
+                <div class="loading-status" id="playoff-loading-status">Loading playoff bracket…</div>
+                <div class="skeleton" style="padding:1.2rem">
+                    <div class="skeleton-bracket">
+                        <div class="skeleton-bracket-col">
+                            <div class="skeleton-bracket-match"></div>
+                            <div class="skeleton-bracket-match"></div>
+                            <div class="skeleton-bracket-match"></div>
+                            <div class="skeleton-bracket-match"></div>
+                        </div>
+                        <div class="skeleton-bracket-col">
+                            <div class="skeleton-bracket-match"></div>
+                            <div class="skeleton-bracket-match"></div>
+                        </div>
+                        <div class="skeleton-bracket-col">
+                            <div class="skeleton-bracket-match"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div id="playoff-error" class="hidden"></div>
             <div id="playoff-bracket"></div>
         </section>
 
@@ -369,9 +422,24 @@
             <p id="alliance-empty" class="empty">
                 Load an event first, then switch here to view alliances.
             </p>
-            <div id="alliance-loading" class="hidden loading-msg">
-                Fetching alliance data &amp; partnership history …
+            <div id="alliance-loading" class="hidden">
+                <div class="loading-status" id="alliance-loading-status">Fetching alliance data &amp; partnership history…</div>
+                <div class="skeleton" style="padding:1.2rem">
+                    <div class="skeleton-card-row">
+                        <div class="skeleton-card"></div>
+                        <div class="skeleton-card"></div>
+                        <div class="skeleton-card"></div>
+                        <div class="skeleton-card"></div>
+                    </div>
+                    <div class="skeleton-card-row">
+                        <div class="skeleton-card"></div>
+                        <div class="skeleton-card"></div>
+                        <div class="skeleton-card"></div>
+                        <div class="skeleton-card"></div>
+                    </div>
+                </div>
             </div>
+            <div id="alliance-error" class="hidden"></div>
             <div id="alliance-toolbar" class="alliance-toolbar hidden">
                 <label class="toggle-label"><input type="checkbox" id="alliance-toggle-avatars" checked onchange="toggleAllianceAvatars(this.checked)"> Avatars</label>
                 <label class="toggle-label"><input type="checkbox" id="alliance-toggle-names" onchange="toggleAllianceNames(this.checked)"> Team Names</label>
@@ -386,9 +454,19 @@
             <p id="history-empty" class="empty">
                 Load an event first, then switch here for region & event history.
             </p>
-            <div id="history-loading" class="hidden loading-msg">
-                Loading event history …
+            <div id="history-loading" class="hidden">
+                <div class="loading-status" id="history-loading-status">Loading event history…</div>
+                <div class="skeleton" style="padding:1.2rem">
+                    <div class="skeleton-stats-row">
+                        <div class="skeleton-stat"></div>
+                        <div class="skeleton-stat"></div>
+                        <div class="skeleton-stat"></div>
+                    </div>
+                    <div class="skeleton-block" style="height:90px"></div>
+                    <div class="skeleton-block" style="height:90px"></div>
+                </div>
             </div>
+            <div id="history-error" class="hidden"></div>
             <div id="history-container" class="hidden">
                 <div class="history-panels">
                     <!-- Region Facts panel -->
@@ -415,9 +493,20 @@
                 <button onclick="loadTeam()">Look Up</button>
                 <span class="input-hint">Leave year blank for current season</span>
             </div>
-            <div id="team-loading" class="hidden loading-msg">
-                Loading team data …
+            <div id="team-loading" class="hidden">
+                <div class="loading-status" id="team-loading-status">Loading team data…</div>
+                <div class="skeleton" style="padding:1.2rem">
+                    <div class="skeleton-stats-row">
+                        <div class="skeleton-stat"></div>
+                        <div class="skeleton-stat"></div>
+                        <div class="skeleton-stat"></div>
+                    </div>
+                    <div class="skeleton-block" style="height:60px"></div>
+                    <div class="skeleton-line w-80"></div>
+                    <div class="skeleton-line w-60"></div>
+                </div>
             </div>
+            <div id="team-error" class="hidden"></div>
             <div id="team-stats"></div>
 
             <div class="h2h-section">
@@ -436,9 +525,13 @@
                     <input type="text" id="h2h-team-b" placeholder="Team B" />
                     <button onclick="loadH2H()">Check</button>
                 </div>
-                <div id="h2h-loading" class="hidden loading-msg">
-                    Loading head-to-head data …
+                <div id="h2h-loading" class="hidden">
+                    <div class="loading-status" id="h2h-loading-status">Loading head-to-head data…</div>
+                    <div class="skeleton" style="padding:1rem">
+                        <div class="skeleton-block" style="height:80px"></div>
+                    </div>
                 </div>
+                <div id="h2h-error" class="hidden"></div>
                 <div id="h2h-results"></div>
             </div>
         </section>
