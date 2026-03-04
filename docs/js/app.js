@@ -1205,6 +1205,7 @@ async function saveCurrentEvent() {
             matches:    pbpData || null,
             playoffs:   playoffData ? { matches: playoffData } : null,
             alliances:  allianceData || null,
+            breakdowns: (bdCache && Object.keys(bdCache).length) ? bdCache : null,
             connections: null,
             connections_alltime: null,
         };
@@ -1383,6 +1384,7 @@ async function loadSavedEvent(eventKey) {
             playoffData = data.playoffs.matches;
         }
         if (data.alliances) allianceData = data.alliances;
+        if (data.breakdowns) bdCache = data.breakdowns;
         if (data.summary) {
             summaryData = data.summary;
             if (data.summary.connections) summaryData._connections_past3 = data.summary.connections;
@@ -3620,7 +3622,13 @@ async function loadBdMatch() {
     $('bd-match-label').textContent = m.label;
     $('bd-match-select').value = bdIndex;
 
-    // Always try fetching from TBA (bypass cache on backend) — don't rely on stale has_breakdown flag
+    // Use client-side cache if available (instant render, no API call)
+    if (bdCache[m.key] && bdCache[m.key].available) {
+        renderBreakdown(bdCache[m.key]);
+        return;
+    }
+
+    // Fetch from API
     $('bd-status').innerHTML = '<span style="color:var(--text-muted)">Loading breakdown…</span>';
     $('bd-content').innerHTML = '';
 
@@ -3629,6 +3637,7 @@ async function loadBdMatch() {
         if (data.available) {
             m.has_breakdown = true;   // update local flag
             bdCache[m.key] = data;
+            autoCacheTab('breakdowns', bdCache);
             renderBreakdown(data);
             stopBdPolling();
             return;
@@ -3659,6 +3668,7 @@ async function pollBdMatch() {
         if (data.available) {
             m.has_breakdown = true;
             bdCache[m.key] = data;
+            autoCacheTab('breakdowns', bdCache);
             stopBdPolling();
             renderBreakdown(data);
             // Flash the status briefly to signal live update
