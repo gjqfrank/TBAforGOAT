@@ -5683,13 +5683,14 @@ tr:hover .compare-cb,
     background: none;
     border: none;
     color: var(--text-muted);
-    font-size: 1.3rem;
+    font-size: 1.8rem;
     cursor: pointer;
-    padding: 0 .3rem;
+    padding: .2rem .6rem;
     line-height: 1;
-    transition: color .15s;
+    border-radius: var(--radius);
+    transition: color .15s, background .15s;
 }
-.spotlight-close:hover { color: var(--text); }
+.spotlight-close:hover { color: var(--text); background: var(--danger-soft, rgba(239,68,68,.1)); }
 
 .spotlight-stats-grid {
     display: grid;

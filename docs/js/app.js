@@ -4290,6 +4290,10 @@ function closeCompare() {
 
 // Close on Escape
 document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && _spotlightTeam != null) {
+        closeSpotlight();
+        return;
+    }
     if (e.key === 'Escape' && !$('lookup-overlay')?.classList.contains('hidden')) {
         closeLookup();
         return;
