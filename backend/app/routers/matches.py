@@ -225,6 +225,77 @@ async def get_all_matches(event_key: str):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.get("/{event_key}/scores")
+async def get_fast_scores(event_key: str):
+    """Lightweight score fetch from FRC Events API.
+
+    Returns just match keys + scores + winning alliance so the frontend
+    can merge fresh scores into existing PBP data without re-fetching
+    the full match list from TBA.
+    """
+    try:
+        year = int(event_key[:4])
+        event_code = event_key[4:]
+        frc = get_frc_client()
+
+        # Fetch qual + playoff results in parallel, bypass cache
+        qual_matches, playoff_matches = await asyncio.gather(
+            _safe(frc.get_matches(year, event_code.upper(), level="Qualification", bypass_cache=True)),
+            _safe(frc.get_matches(year, event_code.upper(), level="Playoff", bypass_cache=True)),
+        )
+
+        all_frc = (qual_matches or []) + (playoff_matches or [])
+
+        # Map FRC comp levels back to TBA-style match keys
+        results = []
+        for m in all_frc:
+            level = m.get("tournamentLevel", "Qualification")
+            mn = m.get("matchNumber", 0)
+
+            if level == "Qualification":
+                match_key = f"{event_key}_qm{mn}"
+            else:
+                # Playoff – use description to infer comp_level, or fall back to sf
+                desc = (m.get("description") or "").lower()
+                if "final" in desc and "semi" not in desc:
+                    match_key = f"{event_key}_f1m{mn}"
+                else:
+                    # Generic playoff — set_number from FRC
+                    sn = m.get("matchNumber", mn)
+                    match_key = f"{event_key}_sf{sn}m1"
+
+            # Extract scores from teams array
+            red_score = 0
+            blue_score = 0
+            for t in m.get("teams", []):
+                station = t.get("station", "")
+                # FRC doesn't have per-alliance score in match results,
+                # but scoreRedFinal / scoreBlueFinal are on the match object
+                pass
+
+            red_score = m.get("scoreRedFinal", -1) or -1
+            blue_score = m.get("scoreBlueFinal", -1) or -1
+
+            winning = ""
+            if red_score >= 0 and blue_score >= 0:
+                if red_score > blue_score:
+                    winning = "red"
+                elif blue_score > red_score:
+                    winning = "blue"
+
+            results.append({
+                "key": match_key,
+                "red_score": red_score if red_score is not None else -1,
+                "blue_score": blue_score if blue_score is not None else -1,
+                "winning_alliance": winning,
+            })
+
+        return {"event_key": event_key, "scores": results}
+
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @router.get("/match/{match_key}/breakdown")
 async def get_match_breakdown(match_key: str):
     """Return parsed score breakdown for a single match, with per-robot mapping.

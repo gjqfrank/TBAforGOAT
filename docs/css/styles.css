@@ -1153,12 +1153,13 @@ input.input-loading {
     align-items: center;
     justify-content: space-between;
     gap: .75rem;
-    margin-top: .7rem;
-    padding: .6rem .9rem;
+    margin-top: .5rem;
+    padding: .65rem 1rem;
     background: var(--primary-soft);
     border: 1px solid var(--primary);
     border-radius: var(--radius);
-    animation: ssb-slide-in .2s ease-out;
+    animation: ssb-slide-in .25s ease-out;
+    box-shadow: 0 2px 12px var(--primary-glow);
 }
 @keyframes ssb-slide-in {
     from { opacity: 0; transform: translateY(-6px); }
@@ -4540,6 +4541,11 @@ tr:hover .compare-cb,
         font-size: 16px !important;
     }
 
+    /* Keep search icon padding on mobile */
+    .season-search-wrap input {
+        padding-left: 2.4rem !important;
+    }
+
     /* ── Compare modal ── */
     .compare-overlay { padding: .5rem; }
     .compare-modal { max-width: 100%; max-height: 92vh; }
@@ -4638,6 +4644,9 @@ tr:hover .compare-cb,
     select {
         font-size: 16px !important;
         padding: .55rem .85rem;
+    }
+    .season-search-wrap input {
+        padding-left: 2.4rem !important;
     }
     button {
         padding: .55rem 1.1rem;
@@ -6392,12 +6401,16 @@ td .pick-flip-back { font-size: inherit; }
     background: var(--card);
     color: var(--text-secondary);
     cursor: pointer;
+    padding: 0;
     box-shadow: 0 4px 16px rgba(0,0,0,.2);
     display: flex;
     align-items: center;
     justify-content: center;
     transition: opacity .3s ease, transform .3s ease, background .2s ease;
     opacity: 1;
+    font-size: 0;
+    line-height: 1;
+    letter-spacing: 0;
 }
 .back-to-top.hidden {
     opacity: 0;

@@ -572,13 +572,21 @@ document.addEventListener('keydown', e => {
 });
 
 // ── Restore tab from URL hash on load ──────────────────────
-(function restoreTabFromHash() {
+// ── Store pending tab from URL hash (restored after event loads) ──
+let _pendingTabHash = null;
+(function captureTabHash() {
     const hash = location.hash.replace('#', '');
-    if (hash) {
-        const btn = document.querySelector(`.tab[data-tab="${hash}"]`);
-        if (btn) requestAnimationFrame(() => btn.click());
-    }
+    if (hash && hash !== 'event') _pendingTabHash = hash;
 })();
+
+/** Restore the tab from URL hash after event data is available. */
+function restorePendingTab() {
+    if (!_pendingTabHash) return;
+    const tab = _pendingTabHash;
+    _pendingTabHash = null;
+    const btn = document.querySelector(`.tab[data-tab="${tab}"]`);
+    if (btn) requestAnimationFrame(() => btn.click());
+}
 
 
 // ── Helpers ────────────────────────────────────────────────
@@ -810,6 +818,13 @@ function selectSeasonEvent(idx) {
         const loc = [ev.city, ev.country].filter(Boolean).join(', ');
         $('ssb-meta').textContent = `${weekLabel} · ${loc}`;
         bar.classList.remove('hidden');
+        // Scroll the bar into view so the Load button is immediately visible
+        requestAnimationFrame(() => {
+            bar.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            // Auto-focus the Load button so Enter key loads immediately
+            const loadBtn = $('ssb-load-btn');
+            if (loadBtn) loadBtn.focus();
+        });
     }
 }
 
@@ -840,6 +855,16 @@ function clearSeasonSelection() {
 // Keyboard navigation in season dropdown
 $('season-search')?.addEventListener('keydown', e => {
     const dropdown = $('season-dropdown');
+
+    // If dropdown is closed but we have a pending event, Enter loads it
+    if (e.key === 'Enter' && (dropdown.classList.contains('hidden') || !dropdown.querySelectorAll('.season-dropdown-item[data-idx]').length)) {
+        if (pendingSeasonEvent) {
+            e.preventDefault();
+            confirmSeasonLoad();
+            return;
+        }
+    }
+
     if (dropdown.classList.contains('hidden')) return;
     const items = dropdown.querySelectorAll('.season-dropdown-item[data-idx]');
     if (!items.length) return;
@@ -1116,6 +1141,9 @@ async function loadEvent(eventKey) {
         const phase2Total = 3;
         const phase2Check = () => { if (++phase2Done >= phase2Total) { loading(false); updateTabDots(); } };
 
+        // Restore tab from URL hash now that the event is loaded
+        restorePendingTab();
+
         // Matches (feeds PBP + Breakdown)
         API.allMatches(code).then(matchData => {
             if (currentEvent !== code) return;
@@ -1364,6 +1392,9 @@ async function loadSavedEvent(eventKey) {
         }
 
         updateTabDots();
+
+        // Restore tab from URL hash now that the saved event is loaded
+        restorePendingTab();
 
         // For ongoing events, do a background refresh
         if (currentEventStatus === 'ongoing') {
@@ -3343,6 +3374,44 @@ async function pbpManualRefresh() {
 async function pbpAutoRefresh() {
     if (!currentEvent || !pbpData) return;
     try {
+        // Fast path: try FRC Events API scores first (instant from FIRST)
+        let fastScoresApplied = false;
+        try {
+            const fast = await API.fastScores(currentEvent);
+            if (fast?.scores?.length) {
+                const oldMatches = pbpData.matches;
+                let changed = false;
+                const matchMap = {};
+                oldMatches.forEach(m => { matchMap[m.key] = m; });
+
+                for (const fs of fast.scores) {
+                    const m = matchMap[fs.key];
+                    if (!m) continue;
+                    if (fs.red_score >= 0 && fs.blue_score >= 0) {
+                        if (m.red.score !== fs.red_score || m.blue.score !== fs.blue_score) {
+                            m.red.score = fs.red_score;
+                            m.blue.score = fs.blue_score;
+                            m.winning_alliance = fs.winning_alliance;
+                            changed = true;
+                        }
+                    }
+                }
+
+                if (changed) {
+                    fastScoresApplied = true;
+                    renderPbpMatch();
+                    if (renderedTabs.breakdown) buildBdSelector();
+                    const arena = $('pbp-arena');
+                    if (arena) {
+                        arena.classList.remove('pbp-updated-flash');
+                        void arena.offsetWidth;
+                        arena.classList.add('pbp-updated-flash');
+                    }
+                }
+            }
+        } catch (_) { /* FRC scores unavailable, continue to TBA */ }
+
+        // Full refresh from TBA (gets new matches, OPR, stats, etc)
         const fresh = await API.allMatches(currentEvent);
         if (!fresh || !fresh.matches || currentEvent !== fresh.event_key) return;
 
