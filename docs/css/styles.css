@@ -5950,7 +5950,6 @@ tr:hover .compare-cb,
 }
 .bd-robot-card-clickable:hover {
     box-shadow: 0 0 0 2px var(--primary), 0 2px 8px rgba(108, 99, 255, .18);
-    transform: translateY(-1px);
 }
 
 /* OPR/EPA stats row inside robot card */
