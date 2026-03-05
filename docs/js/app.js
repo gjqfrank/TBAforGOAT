@@ -3718,18 +3718,23 @@ function renderBreakdown(data) {
     const redWon = data.winning_alliance === 'red';
     const blueWon = data.winning_alliance === 'blue';
 
+    // Extract alliance numbers from PBP match data (playoff matches only)
+    const m = (bdData && bdData.matches) ? bdData.matches[bdIndex] : null;
+    const redAllianceNum = m && m.red ? m.red.alliance_number : null;
+    const blueAllianceNum = m && m.blue ? m.blue.alliance_number : null;
+
     const renderFn = (data.game_year >= 2026) ? renderBdAlliance2026 : renderBdAlliance;
 
     $('bd-content').innerHTML = `
-        ${renderFn(data.red, 'red', redWon, nickMap, statsMap)}
-        ${renderFn(data.blue, 'blue', blueWon, nickMap, statsMap)}
+        ${renderFn(data.red, 'red', redWon, nickMap, statsMap, redAllianceNum)}
+        ${renderFn(data.blue, 'blue', blueWon, nickMap, statsMap, blueAllianceNum)}
     `;
 }
 
-function renderBdAlliance(alliance, color, won, nickMap, statsMap) {
+function renderBdAlliance(alliance, color, won, nickMap, statsMap, allianceNum) {
     const bd = alliance.breakdown;
     const sideCls = color === 'red' ? 'red-side' : 'blue-side';
-    const title = color === 'red' ? 'Red Alliance' : 'Blue Alliance';
+    const title = (color === 'red' ? 'Red Alliance' : 'Blue Alliance') + (allianceNum ? ` #${allianceNum}` : '');
     const displayScore = alliance.score != null && alliance.score >= 0 ? alliance.score : '–';
 
     const headerContent = color === 'blue'
@@ -3958,10 +3963,10 @@ function renderReefGrid(reef, otherPhaseReef, isAuto) {
 //  2026 GAME — BREAKDOWN RENDERER
 // ═══════════════════════════════════════════════════════════
 
-function renderBdAlliance2026(alliance, color, won, nickMap, statsMap) {
+function renderBdAlliance2026(alliance, color, won, nickMap, statsMap, allianceNum) {
     const bd = alliance.breakdown;
     const sideCls = color === 'red' ? 'red-side' : 'blue-side';
-    const title = color === 'red' ? 'Red Alliance' : 'Blue Alliance';
+    const title = (color === 'red' ? 'Red Alliance' : 'Blue Alliance') + (allianceNum ? ` #${allianceNum}` : '');
     const displayScore = alliance.score != null && alliance.score >= 0 ? alliance.score : '–';
 
     const headerContent = color === 'blue'

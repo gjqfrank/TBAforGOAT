@@ -38,7 +38,7 @@ async def get_all_matches(event_key: str):
         year = int(event_key[:4])
         event_code = event_key[4:]
 
-        matches_raw, rankings, oprs, teams_raw, frc_teams_raw, epa_data, pred_data = await asyncio.gather(
+        matches_raw, rankings, oprs, teams_raw, frc_teams_raw, epa_data, pred_data, alliances_raw = await asyncio.gather(
             client.get_event_matches(event_key),
             _safe(client.get_event_rankings(event_key)),
             _safe(client.get_event_oprs(event_key)),
@@ -46,11 +46,19 @@ async def get_all_matches(event_key: str):
             _safe(frc.get_event_teams(year, event_code)),
             _safe(get_epa_map(event_key)),
             _safe(get_match_predictions(event_key)),
+            _safe(client.get_event_alliances(event_key)),
         )
         if epa_data is None:
             epa_data = {}
         if pred_data is None:
             pred_data = {}
+
+        # Alliance-number lookup (team_key → alliance #) for playoff matches
+        alliance_lookup: dict[str, int] = {}
+        if alliances_raw:
+            for idx, a in enumerate(alliances_raw):
+                for tk in a.get("picks", []):
+                    alliance_lookup[tk] = idx + 1
 
         # Build FRC Events org-name lookup (teamNumber → schoolOrg)
         frc_org_map: dict[int, str] = {}
@@ -198,17 +206,66 @@ async def get_all_matches(event_key: str):
                     "teams": red_teams,
                     "score": m["alliances"]["red"].get("score", -1),
                     "total_opr": round(sum(opr_map.get(tk, 0) for tk in red_keys), 2),
+                    "alliance_number": alliance_lookup.get(red_keys[0]) if (cl != "qm" and red_keys) else None,
                 },
                 "blue": {
                     "teams": blue_teams,
                     "score": m["alliances"]["blue"].get("score", -1),
                     "total_opr": round(sum(opr_map.get(tk, 0) for tk in blue_keys), 2),
+                    "alliance_number": alliance_lookup.get(blue_keys[0]) if (cl != "qm" and blue_keys) else None,
                 },
                 "winning_alliance": m.get("winning_alliance", ""),
                 "pred": pred_data.get(m["key"]),
             })
 
         result.sort(key=lambda x: x["sort_key"])
+
+        # ── Ensure all 13 double-elim sets + finals appear ──────
+        # When any playoff match exists, inject placeholders for
+        # sets that TBA hasn't created yet so the frontend always
+        # shows the full bracket in the PBP / breakdown selectors.
+        has_playoffs = any(r["comp_level"] != "qm" for r in result)
+        if has_playoffs:
+            existing_sets: set[int] = set()
+            has_final = False
+            for r in result:
+                if r["comp_level"] == "sf":
+                    existing_sets.add(r["set_number"])
+                elif r["comp_level"] == "f":
+                    has_final = True
+            _EMPTY_SIDE = {"teams": [], "score": -1, "total_opr": 0, "alliance_number": None}
+            for sn in range(1, 14):
+                if sn not in existing_sets:
+                    result.append({
+                        "key": f"{event_key}_sf{sn}m1",
+                        "comp_level": "sf",
+                        "match_number": 1,
+                        "set_number": sn,
+                        "label": f"Semifinal {sn}",
+                        "sort_key": (COMP_LEVEL_ORDER["sf"], sn, 1),
+                        "time": None,
+                        "has_breakdown": False,
+                        "red": _EMPTY_SIDE,
+                        "blue": _EMPTY_SIDE,
+                        "winning_alliance": "",
+                        "pred": None,
+                    })
+            if not has_final:
+                result.append({
+                    "key": f"{event_key}_f1m1",
+                    "comp_level": "f",
+                    "match_number": 1,
+                    "set_number": 1,
+                    "label": "Final 1",
+                    "sort_key": (COMP_LEVEL_ORDER["f"], 1, 1),
+                    "time": None,
+                    "has_breakdown": False,
+                    "red": _EMPTY_SIDE,
+                    "blue": _EMPTY_SIDE,
+                    "winning_alliance": "",
+                    "pred": None,
+                })
+            result.sort(key=lambda x: x["sort_key"])
 
         # Remove sort_key from output
         for r in result:
@@ -920,6 +977,48 @@ async def get_playoff_matches(event_key: str):
                     "time": m.get("actual_time") or m.get("predicted_time"),
                 }
             )
+
+        # ── Ensure all 13 double-elim sets + finals appear ──────
+        existing_sets: set[int] = set()
+        has_final = False
+        for r in result:
+            if r["bracket"] == "final":
+                has_final = True
+            elif r["set_number"] in DOUBLE_ELIM_MAP:
+                existing_sets.add(r["set_number"])
+        _EMPTY_PO_SIDE = {
+            "team_keys": [], "team_numbers": [], "team_names": [],
+            "team_countries": [], "score": -1, "alliance_number": None, "total_opr": 0,
+        }
+        for sn, (rnd, bkt) in DOUBLE_ELIM_MAP.items():
+            if sn not in existing_sets:
+                result.append({
+                    "key": f"{event_key}_sf{sn}m1",
+                    "round": rnd,
+                    "round_label": ROUND_LABELS.get(rnd, f"Round {rnd}"),
+                    "bracket": bkt,
+                    "set_number": sn,
+                    "match_number": 1,
+                    "red": _EMPTY_PO_SIDE,
+                    "blue": _EMPTY_PO_SIDE,
+                    "winning_alliance": "",
+                    "score_breakdown": None,
+                    "time": None,
+                })
+        if not has_final:
+            result.append({
+                "key": f"{event_key}_f1m1",
+                "round": 0,
+                "round_label": "Grand Final",
+                "bracket": "final",
+                "set_number": 1,
+                "match_number": 1,
+                "red": _EMPTY_PO_SIDE,
+                "blue": _EMPTY_PO_SIDE,
+                "winning_alliance": "",
+                "score_breakdown": None,
+                "time": None,
+            })
 
         # Sort: rounds 1-5 then grand final (0), by set_number, then match_number
         result.sort(
