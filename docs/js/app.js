@@ -3718,20 +3718,21 @@ function renderBreakdown(data) {
     const redWon = data.winning_alliance === 'red';
     const blueWon = data.winning_alliance === 'blue';
 
-    // Extract alliance numbers from PBP match data (playoff matches only)
+    // Extract alliance numbers and playoff flag from PBP match data
     const m = (bdData && bdData.matches) ? bdData.matches[bdIndex] : null;
     const redAllianceNum = m && m.red ? m.red.alliance_number : null;
     const blueAllianceNum = m && m.blue ? m.blue.alliance_number : null;
+    const isPlayoff = m && m.comp_level && m.comp_level !== 'qm';
 
     const renderFn = (data.game_year >= 2026) ? renderBdAlliance2026 : renderBdAlliance;
 
     $('bd-content').innerHTML = `
-        ${renderFn(data.red, 'red', redWon, nickMap, statsMap, redAllianceNum)}
-        ${renderFn(data.blue, 'blue', blueWon, nickMap, statsMap, blueAllianceNum)}
+        ${renderFn(data.red, 'red', redWon, nickMap, statsMap, redAllianceNum, isPlayoff)}
+        ${renderFn(data.blue, 'blue', blueWon, nickMap, statsMap, blueAllianceNum, isPlayoff)}
     `;
 }
 
-function renderBdAlliance(alliance, color, won, nickMap, statsMap, allianceNum) {
+function renderBdAlliance(alliance, color, won, nickMap, statsMap, allianceNum, isPlayoff) {
     const bd = alliance.breakdown;
     const sideCls = color === 'red' ? 'red-side' : 'blue-side';
     const title = (color === 'red' ? 'Red Alliance' : 'Blue Alliance') + (allianceNum ? ` #${allianceNum}` : '');
@@ -3854,14 +3855,14 @@ function renderBdAlliance(alliance, color, won, nickMap, statsMap, allianceNum) 
 
         <!-- Bonuses / RP -->
         <div class="bd-section">
-            <div class="bd-section-title">Bonuses & Ranking Points</div>
+            <div class="bd-section-title">${isPlayoff ? 'Bonuses' : 'Bonuses & Ranking Points'}</div>
             <div class="bd-bonuses">
                 <span class="bd-bonus-badge ${bd.autoBonusAchieved ? 'achieved' : ''}">Auto Bonus</span>
                 <span class="bd-bonus-badge ${bd.coralBonusAchieved ? 'achieved' : ''}">Coral Bonus</span>
                 <span class="bd-bonus-badge ${bd.bargeBonusAchieved ? 'achieved' : ''}">Barge Bonus</span>
                 <span class="bd-bonus-badge ${bd.coopertitionCriteriaMet ? 'achieved' : ''}">Coopertition</span>
             </div>
-            <div class="bd-stats" style="margin-top:.4rem">
+            ${!isPlayoff ? `<div class="bd-stats" style="margin-top:.4rem">
                 <div class="bd-stat-row">
                     <span class="bd-stat-label">Ranking Points</span>
                     <span class="bd-stat-value">${bd.rp}</span>
@@ -3870,7 +3871,12 @@ function renderBdAlliance(alliance, color, won, nickMap, statsMap, allianceNum) 
                     <span class="bd-stat-label">Adjust Points</span>
                     <span class="bd-stat-value">${bd.adjustPoints || 0}</span>
                 </div>
-            </div>
+            </div>` : `<div class="bd-stats" style="margin-top:.4rem">
+                <div class="bd-stat-row">
+                    <span class="bd-stat-label">Adjust Points</span>
+                    <span class="bd-stat-value">${bd.adjustPoints || 0}</span>
+                </div>
+            </div>`}
         </div>
 
         <!-- Total -->
@@ -3963,7 +3969,7 @@ function renderReefGrid(reef, otherPhaseReef, isAuto) {
 //  2026 GAME — BREAKDOWN RENDERER
 // ═══════════════════════════════════════════════════════════
 
-function renderBdAlliance2026(alliance, color, won, nickMap, statsMap, allianceNum) {
+function renderBdAlliance2026(alliance, color, won, nickMap, statsMap, allianceNum, isPlayoff) {
     const bd = alliance.breakdown;
     const sideCls = color === 'red' ? 'red-side' : 'blue-side';
     const title = (color === 'red' ? 'Red Alliance' : 'Blue Alliance') + (allianceNum ? ` #${allianceNum}` : '');
@@ -4087,7 +4093,7 @@ function renderBdAlliance2026(alliance, color, won, nickMap, statsMap, allianceN
         </div>
 
         <!-- RP Progress -->
-        <div class="bd-section">
+        ${!isPlayoff ? `<div class="bd-section">
             <div class="bd-section-title">Ranking Points</div>
             <div class="bd-bonuses">
                 <span class="bd-bonus-badge ${bd.energizedAchieved ? 'achieved' : ''}">⚡ Energized</span>
@@ -4105,7 +4111,20 @@ function renderBdAlliance2026(alliance, color, won, nickMap, statsMap, allianceN
                     <span class="bd-stat-value">${bd.adjustPoints || 0}</span>
                 </div>
             </div>
-        </div>
+        </div>` : `<div class="bd-section">
+            <div class="bd-section-title">Bonuses</div>
+            <div class="bd-bonuses">
+                <span class="bd-bonus-badge ${bd.energizedAchieved ? 'achieved' : ''}">⚡ Energized</span>
+                <span class="bd-bonus-badge ${bd.superchargedAchieved ? 'achieved' : ''}">🔋 Supercharged</span>
+                <span class="bd-bonus-badge ${bd.traversalAchieved ? 'achieved' : ''}">🗼 Traversal</span>
+            </div>
+            <div class="bd-stats" style="margin-top:.4rem">
+                <div class="bd-stat-row">
+                    <span class="bd-stat-label">Adjust Points</span>
+                    <span class="bd-stat-value">${bd.adjustPoints || 0}</span>
+                </div>
+            </div>
+        </div>`}
 
         <!-- Total -->
         <div class="bd-total-bar">
