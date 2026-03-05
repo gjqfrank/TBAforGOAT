@@ -468,6 +468,7 @@ document.querySelectorAll('.tab').forEach(btn => {
         }
         // Re-entering PBP tab after it was already loaded — resume live refresh
         if (btn.dataset.tab === 'playbyplay' && renderedTabs.playbyplay && pbpData) {
+            renderPbpMatch();  // re-render with any scores updated while away
             startPbpRefresh();
         }
 
@@ -1432,8 +1433,11 @@ async function backgroundRefreshEvent(eventKey) {
             pbpData = freshMatches;
             bdData  = freshMatches;
             autoCacheTab('matches', freshMatches);
-            // If PBP or Breakdown tab was already rendered, refresh their selectors
-            if (renderedTabs.playbyplay) buildPbpSelector();
+            // If PBP or Breakdown tab was already rendered, refresh their selectors + re-render
+            if (renderedTabs.playbyplay) {
+                buildPbpSelector();
+                renderPbpMatch();
+            }
             if (renderedTabs.breakdown)  buildBdSelector();
         }
 
@@ -3409,6 +3413,8 @@ async function pbpAutoRefresh() {
                         void arena.offsetWidth;
                         arena.classList.add('pbp-updated-flash');
                     }
+                    // Scores changed — refresh rankings immediately
+                    refreshRankings();
                 }
             }
         } catch (_) { /* FRC scores unavailable, continue to TBA */ }
@@ -3482,6 +3488,9 @@ async function pbpAutoRefresh() {
 
         // Also update breakdown selector if it was already rendered
         if (renderedTabs.breakdown) buildBdSelector();
+
+        // Scores changed — refresh rankings immediately
+        if (scoresChanged) refreshRankings();
 
         // Flash the arena container to indicate an update
         const arena = $('pbp-arena');
