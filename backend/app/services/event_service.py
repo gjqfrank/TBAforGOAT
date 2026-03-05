@@ -223,6 +223,8 @@ async def get_event_teams_with_stats(event_key: str) -> list[dict]:
         rec = r.get("record", {})
         o = opr_map.get(tk, {"opr": 0})
         epa = epa_data.get(tk, {})
+        sort_orders = r.get("sort_orders", [])
+        ranking_points = round(sort_orders[0], 2) if sort_orders and isinstance(sort_orders[0], (int, float)) else None
         result.append(
             {
                 "team_key": tk,
@@ -238,6 +240,7 @@ async def get_event_teams_with_stats(event_key: str) -> list[dict]:
                 "losses": rec.get("losses", 0),
                 "ties": rec.get("ties", 0),
                 "qual_average": r.get("qual_average", 0),
+                "ranking_points": ranking_points,
                 "opr": o["opr"],
                 "epa": epa.get("epa", None),
                 "epa_auto": epa.get("epa_auto", None),

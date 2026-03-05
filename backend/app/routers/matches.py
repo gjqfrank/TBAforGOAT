@@ -334,29 +334,47 @@ async def _breakdown_from_frc(match_key: str, game_year: int) -> dict:
     """Fetch breakdown from FRC Events API (instant data from FIRST)."""
     import re
 
-    m = re.match(r"(\d{4})(\w+)_(\w+?)(\d+)$", match_key)
+    # TBA match keys:
+    #   Quals:    {year}{event}_qm{match}           e.g. 2026tuhc_qm15
+    #   Playoffs: {year}{event}_sf{set}m{match}      e.g. 2026tuhc_sf1m1
+    #   Finals:   {year}{event}_f{set}m{match}       e.g. 2026tuhc_f1m1
+    m = re.match(r"(\d{4})(\w+?)_([a-z]+)(\d+)(?:m(\d+))?$", match_key)
     if not m:
         return {"match_key": match_key, "available": False}
 
     season = int(m.group(1))
     event_code = m.group(2).upper()
-    comp_level = m.group(3)
-    match_number = int(m.group(4))
+    comp_level = m.group(3)            # "qm", "sf", "f", "qf", "ef"
+    first_num = int(m.group(4))        # match_number for qm; set_number for sf/f
+    second_num = int(m.group(5)) if m.group(5) else None  # match_number within the set
 
     frc_level = _COMP_LEVEL_TO_FRC.get(comp_level, "Qualification")
+
+    if comp_level == "qm":
+        # Quals: FRC matchNumber == TBA match_number
+        frc_match_number = first_num
+        tba_set_number = 0
+        tba_match_number = first_num
+    else:
+        # Playoffs (sf/f/qf/ef): first_num is TBA set_number,
+        # which equals FRC matchNumber for double-elim.
+        # second_num is match-within-set (replay indicator).
+        frc_match_number = first_num
+        tba_set_number = first_num
+        tba_match_number = second_num or 1
 
     frc = get_frc_client()
 
     # Fetch scores + match results in parallel (bypass cache for live data)
     scores_list, matches_list = await asyncio.gather(
-        frc.get_scores(season, event_code, frc_level, match_number=match_number, bypass_cache=True),
+        frc.get_scores(season, event_code, frc_level, match_number=frc_match_number, bypass_cache=True),
         frc.get_matches(season, event_code, level=frc_level, bypass_cache=True),
     )
 
     # Find the specific score entry
     score_entry = None
     for s in scores_list:
-        if s.get("matchNumber") == match_number:
+        if s.get("matchNumber") == frc_match_number:
             score_entry = s
             break
 
@@ -366,7 +384,7 @@ async def _breakdown_from_frc(match_key: str, game_year: int) -> dict:
     # Find the specific match result for team info + final scores
     match_result = None
     for mr in matches_list:
-        if mr.get("matchNumber") == match_number:
+        if mr.get("matchNumber") == frc_match_number:
             match_result = mr
             break
 
@@ -419,8 +437,8 @@ async def _breakdown_from_frc(match_key: str, game_year: int) -> dict:
         "available": True,
         "game_year": game_year,
         "comp_level": comp_level,
-        "match_number": match_number,
-        "set_number": score_entry.get("setNumber", 0),
+        "match_number": tba_match_number,
+        "set_number": tba_set_number,
         "red": {
             "score": red_score,
             "team_keys": red_keys,

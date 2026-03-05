@@ -1560,6 +1560,10 @@ function sortTeamsData() {
                 vb = b.wins - b.losses;
                 if (va !== vb) return asc ? vb - va : va - vb;
                 return asc ? b.wins - a.wins : a.wins - b.wins;
+            case 'ranking_points':
+                va = a.ranking_points ?? -Infinity;
+                vb = b.ranking_points ?? -Infinity;
+                return asc ? vb - va : va - vb;
             case 'opr':
                 return asc ? b.opr - a.opr : a.opr - b.opr;
             case 'epa':
@@ -1608,6 +1612,7 @@ function renderTeamTable(teams, sortCol, asc) {
                 ${compact ? '' : th('location', 'Location')}
                 ${school ? th('school_name', 'School / Org') : ''}
                 ${th('record', 'Record')}
+                ${th('ranking_points', 'RP')}
                 ${th('opr', 'OPR')}
                 ${compact ? '' : th('epa', 'EPA')}
             </tr>
@@ -1631,6 +1636,7 @@ function renderTeamTable(teams, sortCol, asc) {
                 ${compact ? '' : `<td class="location">${loc}</td>`}
                 ${school ? `<td class="location">${t.school_name || ''}</td>` : ''}
                 <td class="stat">${t.wins}-${t.losses}-${t.ties}</td>
+                <td class="stat">${t.ranking_points != null ? t.ranking_points : '\u2013'}</td>
                 <td class="stat stat-opr">${t.opr}</td>
                 ${compact ? '' : `<td class="stat stat-epa">${t.epa != null ? t.epa : '\u2013'}</td>`}
             </tr>`;
@@ -2314,7 +2320,6 @@ function renderBracketTree() {
     $('playoff-bracket').innerHTML = `
         <div class="bracket-grid">
             <!-- ── Round headers ─────────────────── -->
-            <div class="bg-corner"></div>
             <div class="bg-rnd-hdr">Round 1</div>
             <div class="bg-rnd-hdr">Round 2</div>
             <div class="bg-rnd-hdr">Round 3</div>
@@ -2326,11 +2331,11 @@ function renderBracketTree() {
             </div>
 
             <!-- ── Upper bracket row ─────────────── -->
-            <div class="bg-side-label bg-upper-label">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"/></svg>
-                Upper
-            </div>
             <div class="bg-cell bg-cell-upper">
+                <span class="bg-row-badge bg-row-badge-upper">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"/></svg>
+                    Upper
+                </span>
                 ${slot(1, 'M1')}${slot(2, 'M2')}${slot(3, 'M3')}${slot(4, 'M4')}
             </div>
             <div class="bg-cell bg-cell-upper">
@@ -2346,11 +2351,12 @@ function renderBracketTree() {
             </div>
 
             <!-- ── Lower bracket row ─────────────── -->
-            <div class="bg-side-label bg-lower-label">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
-                Lower
+            <div class="bg-cell bg-cell-lower bg-cell-empty">
+                <span class="bg-row-badge bg-row-badge-lower">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                    Lower
+                </span>
             </div>
-            <div class="bg-cell bg-cell-lower bg-cell-empty"></div>
             <div class="bg-cell bg-cell-lower">
                 ${slot(5, 'M5')}${slot(6, 'M6')}
             </div>
@@ -2647,11 +2653,10 @@ function renderTeamStats(d) {
         </div>`;
     }
 
-    // ── Awards table (exclude blue banners to avoid duplication) ──
-    const BLUE_BANNER_TYPES = new Set([0, 1, 3]);
-    const nonBannerAwards = (d.awards || []).filter(a => !BLUE_BANNER_TYPES.has(a.award_type));
+    // ── Awards table ──
+    const allAwards = d.awards || [];
     let awardsHtml = '';
-    if (nonBannerAwards.length) {
+    if (allAwards.length) {
         awardsHtml = `
         <h3>Awards</h3>
         <table class="data-table compact">
@@ -2659,7 +2664,7 @@ function renderTeamStats(d) {
                 <tr><th>Year</th><th>Award</th><th>Event</th></tr>
             </thead>
             <tbody>
-                ${nonBannerAwards.map(a => `
+                ${allAwards.map(a => `
                 <tr>
                     <td class="stat">${a.year}</td>
                     <td>${a.name}</td>
