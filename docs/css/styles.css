@@ -1370,11 +1370,11 @@ input.input-loading {
 .winner-text { color: var(--green); font-weight: 700; }
 
 /* ═══ BRACKET GRID ═════════════════════════════════════════ */
-/*  6 columns: R1 | R2 | R3 | R4 | R5 | Finals
+/*  7 columns: label | R1 | R2 | R3 | R4 | R5 | Finals
     3 rows:    header | upper | lower                        */
 .bracket-grid {
     display: grid;
-    grid-template-columns: repeat(6, 280px);
+    grid-template-columns: 20px repeat(6, 280px);
     grid-template-rows: auto 1fr 1fr;
     gap: 0;
     overflow-x: auto;
@@ -1383,6 +1383,12 @@ input.input-loading {
 }
 
 /* ── Round header cells (row 1) ─────────────────────────── */
+.bg-corner {
+    grid-row: 1; grid-column: 1;
+    background: var(--card);
+    border-bottom: 2px solid var(--border);
+    border-right: 1px solid var(--border);
+}
 .bg-rnd-hdr {
     display: flex;
     align-items: center;
@@ -1403,26 +1409,32 @@ input.input-loading {
     background: rgba(16, 185, 129, .04);
 }
 
-/* ── Row badges (inline Upper / Lower labels) ──────────── */
-.bg-row-badge {
-    display: inline-flex;
+/* ── Side labels (col 1) ────────────────────────────────── */
+.bg-side-label {
+    writing-mode: vertical-lr;
+    transform: rotate(180deg);
+    display: flex;
     align-items: center;
-    gap: .2rem;
+    justify-content: center;
+    gap: .25rem;
     font-size: .58rem;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: .08em;
-    padding: .15rem .45rem;
-    border-radius: 3px;
-    margin-bottom: .35rem;
+    padding: .3rem .1rem;
+    border-right: 1px solid var(--border);
 }
-.bg-row-badge-upper {
+.bg-side-label svg { transform: rotate(90deg); }
+.bg-upper-label {
+    grid-row: 2; grid-column: 1;
     color: #818cf8;
-    background: rgba(99, 102, 241, .10);
+    background: rgba(99, 102, 241, .04);
+    border-bottom: 1px solid var(--border);
 }
-.bg-row-badge-lower {
+.bg-lower-label {
+    grid-row: 3; grid-column: 1;
     color: #fbbf24;
-    background: rgba(245, 158, 11, .10);
+    background: rgba(245, 158, 11, .04);
 }
 
 /* ── Grid cells (match containers) ──────────────────────── */
@@ -1443,7 +1455,7 @@ input.input-loading {
 
 /* ── Finals cell (spans upper + lower rows) ──────────────── */
 .bg-cell-final {
-    grid-column: 6;
+    grid-column: 7;
     grid-row: 2 / 4;
     display: flex;
     flex-direction: column;

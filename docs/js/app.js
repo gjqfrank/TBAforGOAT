@@ -2320,6 +2320,7 @@ function renderBracketTree() {
     $('playoff-bracket').innerHTML = `
         <div class="bracket-grid">
             <!-- ── Round headers ─────────────────── -->
+            <div class="bg-corner"></div>
             <div class="bg-rnd-hdr">Round 1</div>
             <div class="bg-rnd-hdr">Round 2</div>
             <div class="bg-rnd-hdr">Round 3</div>
@@ -2331,11 +2332,11 @@ function renderBracketTree() {
             </div>
 
             <!-- ── Upper bracket row ─────────────── -->
+            <div class="bg-side-label bg-upper-label">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"/></svg>
+                Upper
+            </div>
             <div class="bg-cell bg-cell-upper">
-                <span class="bg-row-badge bg-row-badge-upper">
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"/></svg>
-                    Upper
-                </span>
                 ${slot(1, 'M1')}${slot(2, 'M2')}${slot(3, 'M3')}${slot(4, 'M4')}
             </div>
             <div class="bg-cell bg-cell-upper">
@@ -2351,12 +2352,11 @@ function renderBracketTree() {
             </div>
 
             <!-- ── Lower bracket row ─────────────── -->
-            <div class="bg-cell bg-cell-lower bg-cell-empty">
-                <span class="bg-row-badge bg-row-badge-lower">
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
-                    Lower
-                </span>
+            <div class="bg-side-label bg-lower-label">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                Lower
             </div>
+            <div class="bg-cell bg-cell-lower bg-cell-empty"></div>
             <div class="bg-cell bg-cell-lower">
                 ${slot(5, 'M5')}${slot(6, 'M6')}
             </div>
