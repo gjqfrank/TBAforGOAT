@@ -1377,15 +1377,20 @@ input.input-loading {
 }
 
 /* Floating arrow to scroll to finals */
-.bracket-scroll-arrow {
+.bracket-scroll-arrow-wrapper {
+    display: flex;
+    justify-content: flex-end;
     position: sticky;
-    left: calc(100% - 110px);
-    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    padding: .5rem 0 0;
+}
+.bracket-scroll-arrow {
     display: inline-flex;
     align-items: center;
     gap: .35rem;
-    padding: .45rem 1rem .45rem 1.1rem;
-    margin-top: .5rem;
+    padding: .5rem 1.1rem .5rem 1.2rem;
     background: var(--accent);
     color: #fff;
     border: none;
@@ -1393,16 +1398,16 @@ input.input-loading {
     font-size: .82rem;
     font-weight: 600;
     cursor: pointer;
-    box-shadow: var(--shadow-md);
-    transition: opacity .2s, transform .2s, background .15s;
-    z-index: 5;
-    float: right;
+    box-shadow: 0 2px 8px rgba(0,0,0,.3);
+    transition: transform .2s, background .15s;
+    z-index: 10;
 }
 .bracket-scroll-arrow:hover {
     background: var(--accent-hover);
     transform: translateX(2px);
 }
 .bracket-scroll-arrow.hidden { display: none; }
+.bracket-scroll-arrow-wrapper.hidden { display: none; }
 
 /*  7 columns: label | R1 | R2 | R3 | R4 | R5 | Finals
     3 rows:    header | upper | lower                        */
