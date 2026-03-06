@@ -103,10 +103,14 @@ async def get_season_events(year: int, include_offseason: bool = False) -> list[
             "event_type": etype,
             "event_type_string": ev.get("event_type_string", ""),
             "district": ev.get("district"),
-            "region": _resolve_region(
-                ev.get("country", ""),
-                ev.get("state_prov", ""),
-                ev.get("district"),
+            "region": (
+                "FIRST Championship"
+                if etype in {3, 4, 6}
+                else _resolve_region(
+                    ev.get("country", ""),
+                    ev.get("state_prov", ""),
+                    ev.get("district"),
+                )
             ),
         })
 

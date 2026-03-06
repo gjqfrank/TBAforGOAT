@@ -55,6 +55,10 @@ _COUNTRY_LABELS = (
 
 _EXCLUDE_TYPES = {99, 100, -1}
 
+# Championship-level event types are located in a host city but do NOT belong
+# to that city's local region.  They are analysed separately for CMP stats.
+_CHAMPIONSHIP_TYPES = {3, 4, 6}  # CMP Division, CMP Finals, Festival of Champions
+
 # Pre-district regions that transitioned to a district system.
 _REGION_MERGE = {
     "Israel": "FIRST Israel",
@@ -127,6 +131,10 @@ async def generate():
     print("\nPhase 2: Grouping events by region...")
     region_events: dict[str, list[dict]] = defaultdict(list)
     for ev in all_events:
+        # Championship events are located in a host city but don't belong to
+        # that city's local region — they are analysed separately in Phase 4.
+        if ev.get("event_type") in _CHAMPIONSHIP_TYPES:
+            continue
         region_events[_resolve_event_region(ev)].append(ev)
     print(f"  Found {len(region_events)} distinct regions")
 
@@ -159,6 +167,10 @@ async def generate():
         )
         for ev, teams in zip(evs, results):
             if not teams:
+                continue
+            # Skip championship events — attendees of CMP aren't visitors
+            # to the host city's local region.
+            if ev.get("event_type") in _CHAMPIONSHIP_TYPES:
                 continue
             region = _resolve_event_region(ev)
             ev_country = _norm(ev.get("country", "") or "")
