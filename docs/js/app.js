@@ -3048,8 +3048,8 @@ function renderPbpMatch() {
         _injectPbpAwards(allTeams, pbpIndex);
     }
 
-    // Footer: quals high score + compare button
-    const qs = pbpData.quals_high_score;
+    // Footer: event high score + compare button
+    const qs = pbpData.event_high_score;
     $('pbp-footer').innerHTML = `
         <button class="pbp-compare-btn" onclick="compareCurrentMatch()" title="Compare all 6 teams side by side">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
@@ -3057,7 +3057,7 @@ function renderPbpMatch() {
         </button>
         ${qs && qs.score > 0
             ? `<span class="pbp-footer-text">
-                   Quals High Score: <span class="pbp-footer-score">${qs.score}</span>
+                   Event High Score: <span class="pbp-footer-score">${qs.score}</span>
                    in ${qs.match} (${qs.teams.join(', ')})
                </span>`
             : ''}
@@ -3459,9 +3459,9 @@ async function pbpAutoRefresh() {
             newMatchesAdded = true;
         }
 
-        // Check quals high score change
-        const oldQHS = pbpData.quals_high_score;
-        const newQHS = fresh.quals_high_score;
+        // Check event high score change
+        const oldQHS = pbpData.event_high_score;
+        const newQHS = fresh.event_high_score;
         if (oldQHS?.score !== newQHS?.score) scoresChanged = true;
 
         // Update global data

@@ -103,17 +103,25 @@ async def get_all_matches(event_key: str):
                 for tk in m["alliances"][color].get("team_keys", []):
                     team_matches.setdefault(tk, []).append(score)
 
-        # Quals high score
-        quals_high = {"score": 0, "match": "", "teams": []}
+        # Event high score (across all matches)
+        event_high = {"score": 0, "match": "", "teams": []}
         for m in matches_raw:
-            if m.get("comp_level") != "qm":
-                continue
+            cl = m.get("comp_level", "qm")
+            mn = m.get("match_number", 0)
+            sn = m.get("set_number", 0)
+            if cl == "qm":
+                match_label = f"Qualification {mn}"
+            elif cl == "f":
+                match_label = f"Final {mn}"
+            else:
+                level_name = COMP_LEVEL_LABELS.get(cl, cl)
+                match_label = f"{level_name} {sn}" + (f" (Match {mn})" if mn > 1 else "")
             for color in ("red", "blue"):
                 s = m["alliances"][color].get("score", 0)
-                if s > quals_high["score"]:
-                    quals_high = {
+                if s > event_high["score"]:
+                    event_high = {
                         "score": s,
-                        "match": f"Qualification {m.get('match_number', '?')}",
+                        "match": match_label,
                         "teams": [int(tk.replace('frc', '')) for tk in m["alliances"][color].get("team_keys", [])],
                     }
 
@@ -274,7 +282,7 @@ async def get_all_matches(event_key: str):
         return {
             "event_key": event_key,
             "matches": result,
-            "quals_high_score": quals_high,
+            "event_high_score": event_high,
             "total_matches": len(result),
         }
 
