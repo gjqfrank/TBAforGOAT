@@ -367,6 +367,31 @@ tr.foreign-team-row {
     background: var(--yellow);
 }
 
+/* ═══ ROOKIE TEAM HIGHLIGHT ═══════════════════════════════ */
+.team-badge.rookie-team,
+.team-num.rookie-team {
+    outline: 2px solid #22c55e;
+    outline-offset: 1px;
+    border-radius: 4px;
+}
+tr.rookie-team-row {
+    background: rgba(34, 197, 94, .10) !important;
+    box-shadow: inset 3px 0 0 #22c55e;
+}
+.pbp-team.rookie-team,
+.alliance-team-row.rookie-team-row {
+    background: rgba(34, 197, 94, .10);
+    position: relative;
+}
+.pbp-team.rookie-team::before,
+.alliance-team-row.rookie-team-row::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: #22c55e;
+}
+
 /* ── Dark-mode checkboxes ─────────────────────────────────── */
 input[type="checkbox"] {
     accent-color: var(--primary);
@@ -2967,6 +2992,51 @@ input.input-loading {
 /* ── PBP Awards Row ──────────────────────────────────────── */
 .pbp-awards-slot:empty { display: none; }
 .pbp-awards-slot { margin-top: 0; padding: 0; }
+
+/* ── Playoff-firsts badges ─────────────────────────────────── */
+.pbp-firsts-slot:empty { display: none; }
+.pbp-firsts-slot {
+    display: flex;
+    flex-direction: column;
+    gap: .25rem;
+}
+.pbp-first-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: .25rem;
+    font-size: .68rem;
+    font-weight: 700;
+    padding: .2rem .55rem;
+    border-radius: 999px;
+    white-space: nowrap;
+    letter-spacing: .02em;
+    animation: firstBadgePulse 2s ease-in-out;
+}
+.pbp-first-playoff {
+    background: linear-gradient(135deg, rgba(251, 191, 36, .15), rgba(245, 158, 11, .15));
+    border: 1px solid rgba(251, 191, 36, .4);
+    color: #f59e0b;
+}
+.pbp-first-finals {
+    background: linear-gradient(135deg, rgba(168, 85, 247, .15), rgba(139, 92, 246, .15));
+    border: 1px solid rgba(168, 85, 247, .4);
+    color: #a855f7;
+}
+[data-theme="light"] .pbp-first-playoff {
+    background: linear-gradient(135deg, rgba(180, 140, 0, .1), rgba(180, 140, 0, .06));
+    border-color: rgba(180, 140, 0, .35);
+    color: #92700a;
+}
+[data-theme="light"] .pbp-first-finals {
+    background: linear-gradient(135deg, rgba(126, 34, 206, .1), rgba(126, 34, 206, .06));
+    border-color: rgba(126, 34, 206, .35);
+    color: #7e22ce;
+}
+@keyframes firstBadgePulse {
+    0%   { opacity: 0; transform: scale(.9); }
+    40%  { opacity: 1; transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
 
 .pbp-awards-row {
     display: flex;

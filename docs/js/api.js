@@ -33,6 +33,7 @@ const API = {
     fastScores:     (ek) => API.get(`/matches/${ek}/scores`),
     matchBreakdown: (mk) => API.get(`/matches/match/${mk}/breakdown`),
     teamPerf:       (ek, num) => API.get(`/matches/team-perf/${ek}/${num}`),
+    playoffFirsts:  (ek) => API.get(`/matches/${ek}/playoff-firsts`),
 
     // ── Alliances ───────────────────────────────────────
     alliances: (ek) => API.get(`/alliances/${ek}`),

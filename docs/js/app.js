@@ -150,6 +150,7 @@ let summaryData  = null;   // cached event summary
 let pbpData      = null;   // cached play-by-play data
 let pbpIndex     = 0;      // current match index
 let highlightForeign = false; // settings: highlight international teams
+let highlightRookie = false;   // settings: highlight rookie teams
 let showOffseason = false;     // settings: show offseason events
 let rankingsCompact = false;      // toggle: compressed rankings view
 let rankingsShowSchool = false;   // toggle: show school/org column
@@ -225,6 +226,14 @@ function toggleHighlightForeign(on) {
     highlightForeign = on;
     applyForeignHighlight();
     // Re-render tabs that embed highlight logic at render time
+    if (teamsData) $('event-teams').innerHTML = renderTeamTable(teamsData, teamsSortCol, teamsSortAsc);
+    if (allianceData) renderAlliances(allianceData);
+    if (pbpData) renderPbpMatch();
+}
+
+function toggleHighlightRookie(on) {
+    highlightRookie = on;
+    applyRookieHighlight();
     if (teamsData) $('event-teams').innerHTML = renderTeamTable(teamsData, teamsSortCol, teamsSortAsc);
     if (allianceData) renderAlliances(allianceData);
     if (pbpData) renderPbpMatch();
@@ -313,6 +322,17 @@ function applyForeignHighlight() {
     });
 }
 
+function applyRookieHighlight() {
+    document.querySelectorAll('[data-rookie-year]').forEach(el => {
+        const ry = parseInt(el.dataset.rookieYear, 10);
+        if (highlightRookie && ry && currentEventYear && ry >= currentEventYear) {
+            el.classList.add('rookie-team');
+        } else {
+            el.classList.remove('rookie-team');
+        }
+    });
+}
+
 // ── Tab scroll fade indicators ─────────────────────────────
 (() => {
     const wrap = document.querySelector('.tabs-wrap');
@@ -355,7 +375,7 @@ document.querySelectorAll('.tab').forEach(btn => {
 
         // Auto-load data when switching to dependent tabs
         if (btn.dataset.tab === 'summary' && currentEvent) {
-            if (summaryData) {
+            if (summaryData && summaryData.demographics) {
                 hide('summary-empty');
                 hideSkeleton('summary-loading');
                 renderSummary(summaryData);
@@ -365,6 +385,7 @@ document.querySelectorAll('.tab').forEach(btn => {
                     const _code = currentEvent;
                     API.eventSummary(_code).then(freshData => {
                         if (currentEvent !== _code) return;
+                        if (freshData.error || !freshData.demographics) return;
                         summaryData = freshData;
                         renderSummary(freshData);
                         autoCacheTab('summary', freshData);
@@ -1010,6 +1031,7 @@ async function loadEvent(eventKey) {
     _pbpConnCache = {};
     _pbpConnAllTime = false;
     _pbpAwardsCache = {};
+    _playoffFirstsCache = null;
     _h2hAllTime = false;
     _loadingAwards = false;
     _loadingConnections = false;
@@ -1256,6 +1278,7 @@ async function loadSavedEvent(eventKey) {
     stopBdPolling(); stopBdListRefresh(); stopPbpRefresh(); stopPlayoffRefresh();
     _pbpConnCache = {}; _pbpConnAllTime = false;
     _pbpAwardsCache = {};
+    _playoffFirstsCache = null;
     _h2hAllTime = false;
     _loadingAwards = false;
     _loadingConnections = false;
@@ -1637,8 +1660,9 @@ function renderTeamTable(teams, sortCol, asc) {
                     : `<span class="team-avatar team-avatar-placeholder">${t.team_number}</span>`;
                 const checked = compareSelection.has(t.team_key) ? 'checked' : '';
                 const isIntl = highlightForeign && t.country && eventCountry && t.country !== eventCountry;
+                const isRookie = highlightRookie && t.rookie_year && currentEventYear && t.rookie_year >= currentEventYear;
                 return `
-            <tr class="${isIntl ? 'foreign-team-row' : ''}" data-country="${t.country || ''}">
+            <tr class="${isIntl ? 'foreign-team-row' : ''}${isRookie ? ' rookie-team-row' : ''}" data-country="${t.country || ''}" data-rookie-year="${t.rookie_year || ''}">
                 <td class="compare-td"><input type="checkbox" class="compare-cb" data-team="${t.team_key}" ${checked} onclick="toggleCompareTeam('${t.team_key}')"></td>
                 <td class="rank">${t.rank}</td>
                 <td class="team-avatar-cell">${avatarImg}</td>
@@ -1694,6 +1718,11 @@ async function loadSummary() {
     try {
         setLoadingStatus('summary-loading-status', 'Analysing event data\u2026');
         const data = await API.eventSummary(currentEvent);
+        if (data.error || !data.demographics) {
+            hideSkeleton('summary-loading');
+            showInlineError('summary-error', data.error || 'No summary data available for this event yet.', loadSummary);
+            return;
+        }
         summaryData = data;
         hideSkeleton('summary-loading');
         renderSummary(data);
@@ -1902,6 +1931,9 @@ function renderSummary(data) {
 
     // Demographics
     const d = data.demographics;
+    if (!d) {
+        $('summary-demographics').innerHTML = '<p class="empty">Demographics not available.</p>';
+    } else {
     $('summary-demographics').innerHTML = `
         <div class="summary-stat-card">
             <div class="summary-stat-value">${d.total_teams}</div>
@@ -1925,6 +1957,7 @@ function renderSummary(data) {
             <div class="summary-stat-label">Countries</div>
             <div class="summary-stat-sub">${d.countries.join(', ')}</div>
         </div>`;
+    }
 
     // Hall of Fame
     const hofEl = $('summary-hof');
@@ -2640,13 +2673,14 @@ function renderAlliances(data) {
                         : '';
 
                     const isIntl = highlightForeign && t.country && eventCountry && t.country !== eventCountry;
+                    const isRookie = highlightRookie && t.rookie_year && currentEventYear && t.rookie_year >= currentEventYear;
 
                     const teamEpaHtml = allianceShowEpa
                         ? `<span class="stat-epa">EPA ${t.epa != null ? t.epa : '\u2013'}</span>`
                         : '';
 
                     return `
-                    <div class="alliance-team-row${isIntl ? ' foreign-team-row' : ''}" data-country="${t.country || ''}">
+                    <div class="alliance-team-row${isIntl ? ' foreign-team-row' : ''}${isRookie ? ' rookie-team-row' : ''}" data-country="${t.country || ''}" data-rookie-year="${t.rookie_year || ''}">
                         <span class="team-role">${roleLabels[idx] || ''}</span>
                         ${avatarHtml}
                         <span class="team-num has-tooltip">${t.team_number}${t.nickname ? `<span class="custom-tooltip">${t.nickname}</span>` : ''}</span>
@@ -3145,6 +3179,12 @@ function renderPbpMatch() {
         _injectPbpAwards(allTeams, pbpIndex);
     }
 
+    // Inject playoff-firsts badges for playoff matches
+    if (m.comp_level && m.comp_level !== 'qm') {
+        const allTeams = [...m.red.teams, ...m.blue.teams];
+        _injectPlayoffFirsts(allTeams, pbpIndex, m.comp_level);
+    }
+
     // Footer: event high score + compare button
     const qs = pbpData.event_high_score;
     $('pbp-footer').innerHTML = `
@@ -3331,11 +3371,13 @@ async function togglePbpConnRange(allTime) {
 function renderPbpTeam(t, sideCls) {
     const loc = [t.city, t.state_prov, t.country].filter(Boolean).join(', ');
     const foreignCls = highlightForeign && t.country && eventCountry && t.country !== eventCountry ? 'foreign-team' : '';
+    const rookieCls = highlightRookie && t.rookie_year && currentEventYear && t.rookie_year >= currentEventYear ? 'rookie-team' : '';
 
     return `
-    <div class="pbp-team ${foreignCls}" data-country="${t.country || ''}">
+    <div class="pbp-team ${foreignCls} ${rookieCls}" data-country="${t.country || ''}" data-rookie-year="${t.rookie_year || ''}">
         <div class="pbp-team-top">
             <div class="pbp-team-number">${t.team_number}</div>
+            <div class="pbp-firsts-slot" data-firsts-team="${t.team_number}"></div>
             <div class="pbp-team-identity">
                 <div class="pbp-team-nickname">${t.nickname || 'Team ' + t.team_number}</div>
                 ${t.school_name ? `<div class="pbp-team-school">${t.school_name}</div>` : ''}
@@ -3371,6 +3413,48 @@ function renderPbpTeam(t, sideCls) {
         ${t.high_score > 0 ? `<div class="pbp-team-highscore">Team high score: ${t.high_score}${t.high_score_match ? ' in ' + t.high_score_match : ''}</div>` : ''}
         <div class="pbp-awards-slot" data-team="${t.team_number}"></div>
     </div>`;
+}
+
+// ── PBP Playoff-firsts injection ───────────────────────────
+
+let _playoffFirstsCache = null;  // {team_number: {first_playoff, first_finals, rookie}} or null
+
+async function _injectPlayoffFirsts(teams, matchIdx, compLevel) {
+    // Lazy-load once per event
+    if (_playoffFirstsCache === null) {
+        try {
+            _playoffFirstsCache = await API.playoffFirsts(currentEvent);
+        } catch {
+            _playoffFirstsCache = {};  // mark as loaded but empty
+            return;
+        }
+    }
+
+    // Guard: user may have navigated to a different match
+    if (pbpIndex !== matchIdx) return;
+
+    const isFinals = compLevel === 'f';
+
+    for (const t of teams) {
+        const info = _playoffFirstsCache[t.team_number];
+        if (!info) continue;
+
+        const slot = document.querySelector(`.pbp-firsts-slot[data-firsts-team="${t.team_number}"]`);
+        if (!slot) continue;
+
+        const badges = [];
+        if (info.first_playoff) {
+            badges.push(`<span class="pbp-first-badge pbp-first-playoff" title="First-ever playoff appearance${info.rookie ? ' (Rookie)' : ''}">
+                \u2B50 First Playoffs${info.rookie ? ' (R)' : ''}
+            </span>`);
+        }
+        if (isFinals && info.first_finals && !info.first_playoff) {
+            badges.push(`<span class="pbp-first-badge pbp-first-finals" title="First-ever appearance in Finals">
+                \u{1F31F} First Finals
+            </span>`);
+        }
+        slot.innerHTML = badges.join('');
+    }
 }
 
 // ── PBP Awards injection ───────────────────────────────────

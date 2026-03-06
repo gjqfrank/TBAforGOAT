@@ -247,6 +247,7 @@ async def get_event_teams_with_stats(event_key: str) -> list[dict]:
                 "city": t.get("city", ""),
                 "state_prov": t.get("state_prov", ""),
                 "country": t.get("country", ""),
+                "rookie_year": t.get("rookie_year"),
                 "avatar": avatar_map.get(tk),
                 "rank": r.get("rank", "-"),
                 "wins": rec.get("wins", 0),

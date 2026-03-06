@@ -42,7 +42,7 @@ async def get_all_matches(event_key: str):
             client.get_event_matches(event_key),
             _safe(client.get_event_rankings(event_key)),
             _safe(client.get_event_oprs(event_key)),
-            client.get_event_teams(event_key),
+            client.get_event_teams_full(event_key),
             _safe(frc.get_event_teams(year, event_code)),
             _safe(get_epa_map(event_key)),
             _safe(get_match_predictions(event_key)),
@@ -78,6 +78,7 @@ async def get_all_matches(event_key: str):
                 "city": t.get("city", ""),
                 "state_prov": t.get("state_prov", ""),
                 "country": t.get("country", ""),
+                "rookie_year": t.get("rookie_year"),
                 "school_name": frc_org_map.get(tnum, "") or t.get("school_name", ""),
             }
 
@@ -145,6 +146,7 @@ async def get_all_matches(event_key: str):
                 "city": info.get("city", ""),
                 "state_prov": info.get("state_prov", ""),
                 "country": info.get("country", ""),
+                "rookie_year": info.get("rookie_year"),
                 "rank": rk.get("rank", "-"),
                 "wins": rec.get("wins", 0),
                 "losses": rec.get("losses", 0),
@@ -1083,6 +1085,101 @@ async def get_playoff_matches(event_key: str):
         )
 
         return {"event_key": event_key, "matches": result}
+
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# ── Playoff-firsts: detect first-time playoff / finals teams ──────
+
+_playoff_firsts_cache: dict[str, dict] = {}  # event_key → result dict
+
+
+@router.get("/{event_key}/playoff-firsts")
+async def get_playoff_firsts(event_key: str):
+    """For each team in playoffs, check if this is their first-ever
+    playoff appearance or first-ever finals appearance."""
+    if event_key in _playoff_firsts_cache:
+        return _playoff_firsts_cache[event_key]
+
+    try:
+        client = get_tba_client()
+        year = int(event_key[:4])
+
+        # Get alliances + team info in parallel
+        alliances_raw, teams_raw = await asyncio.gather(
+            _safe(client.get_event_alliances(event_key)),
+            _safe(client.get_event_teams(event_key)),
+        )
+        if not alliances_raw:
+            return {}
+
+        rookie_map: dict[str, int] = {}
+        for t in (teams_raw or []):
+            rookie_map[t["key"]] = t.get("rookie_year") or 0
+
+        playoff_team_keys: list[str] = []
+        for a in alliances_raw:
+            for tk in a.get("picks", []):
+                playoff_team_keys.append(tk)
+
+        sem = asyncio.Semaphore(12)  # limit concurrent TBA calls
+
+        async def _safe_sem(coro):
+            async with sem:
+                return await _safe(coro)
+
+        async def check_team(tk: str) -> tuple[int, dict]:
+            num = int(tk.replace("frc", ""))
+            ry = rookie_map.get(tk, 0)
+
+            # Current-year rookies: automatically first-time everything
+            if ry >= year:
+                return num, {
+                    "first_playoff": True,
+                    "first_finals": True,
+                    "rookie": True,
+                }
+
+            ever_playoff = False
+            ever_finals = False
+
+            # Check last 5 years + current year (other events earlier in season)
+            check_years = list(range(max(ry, year - 5), year + 1))
+            statuses_list = await asyncio.gather(
+                *[_safe_sem(client.get_team_events_statuses(tk, y))
+                  for y in check_years]
+            )
+
+            for yr, statuses in zip(check_years, statuses_list):
+                if not statuses or not isinstance(statuses, dict):
+                    continue
+                for ek, status in statuses.items():
+                    if ek == event_key:
+                        continue  # skip current event
+                    if not isinstance(status, dict):
+                        continue
+                    playoff = status.get("playoff")
+                    if playoff and isinstance(playoff, dict):
+                        ever_playoff = True
+                        level = playoff.get("level", "")
+                        if level == "f":
+                            ever_finals = True
+                    if ever_playoff and ever_finals:
+                        break
+                if ever_playoff and ever_finals:
+                    break
+
+            return num, {
+                "first_playoff": not ever_playoff,
+                "first_finals": not ever_finals,
+                "rookie": ry >= year,
+            }
+
+        results = await asyncio.gather(*[check_team(tk) for tk in playoff_team_keys])
+        out = {num: data for num, data in results}
+        _playoff_firsts_cache[event_key] = out
+        return out
 
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))

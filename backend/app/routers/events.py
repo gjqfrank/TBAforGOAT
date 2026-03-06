@@ -37,7 +37,12 @@ async def event_teams(event_key: str):
 @router.get("/{event_key}/summary")
 async def event_summary(event_key: str):
     try:
-        return await summary_service.get_event_summary(event_key)
+        result = await summary_service.get_event_summary(event_key)
+        if "error" in result:
+            raise HTTPException(status_code=404, detail=result["error"])
+        return result
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
