@@ -1406,20 +1406,18 @@ input.input-loading {
 
 /* Floating arrow to scroll to finals */
 .bracket-scroll-arrow-wrapper {
-    display: flex;
-    justify-content: flex-end;
-    position: sticky;
-    left: 0;
-    right: 0;
-    width: 100%;
-    padding: .5rem 0 0;
+    position: fixed;
+    right: 1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 100;
 }
 .bracket-scroll-arrow {
     display: inline-flex;
     align-items: center;
     gap: .35rem;
     padding: .5rem 1.1rem .5rem 1.2rem;
-    background: var(--accent);
+    background: var(--primary);
     color: #fff;
     border: none;
     border-radius: var(--radius);
@@ -1431,7 +1429,7 @@ input.input-loading {
     z-index: 10;
 }
 .bracket-scroll-arrow:hover {
-    background: var(--accent-hover);
+    background: var(--primary-hover);
     transform: translateX(2px);
 }
 .bracket-scroll-arrow.hidden { display: none; }
