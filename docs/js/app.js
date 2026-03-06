@@ -2406,8 +2406,38 @@ function renderBracketTree() {
             </div>
             <!-- Finals column already spans into this row -->
         </div>
+        <button class="bracket-scroll-arrow" id="bracket-scroll-finals" onclick="scrollBracketToFinals()" title="Scroll to Finals">
+            Finals
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
         ${_buildMobileBracket(slot)}
     `;
+
+    // Set up scroll-based visibility for the arrow
+    _setupBracketScrollArrow();
+}
+
+/* ── Bracket scroll-to-finals arrow ──────────────────────── */
+function scrollBracketToFinals() {
+    const container = $('playoff-bracket');
+    if (!container) return;
+    container.scrollTo({ left: container.scrollWidth, behavior: 'smooth' });
+}
+
+function _setupBracketScrollArrow() {
+    const container = $('playoff-bracket');
+    const arrow = $('bracket-scroll-finals');
+    if (!container || !arrow) return;
+
+    const updateArrow = () => {
+        const atEnd = container.scrollLeft + container.clientWidth >= container.scrollWidth - 20;
+        const needsScroll = container.scrollWidth > container.clientWidth + 20;
+        arrow.classList.toggle('hidden', atEnd || !needsScroll);
+    };
+    updateArrow();
+    container.addEventListener('scroll', updateArrow, { passive: true });
+    // Also update on resize
+    new ResizeObserver(updateArrow).observe(container);
 }
 
 /* ── Mobile bracket: vertical stacked rounds ────────────── */

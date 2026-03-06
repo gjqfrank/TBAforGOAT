@@ -1373,7 +1373,36 @@ input.input-loading {
 /* Scroll wrapper — lives on #playoff-bracket */
 #playoff-bracket {
     overflow-x: auto;
+    position: relative;
 }
+
+/* Floating arrow to scroll to finals */
+.bracket-scroll-arrow {
+    position: sticky;
+    left: calc(100% - 110px);
+    bottom: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    padding: .45rem 1rem .45rem 1.1rem;
+    margin-top: .5rem;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius);
+    font-size: .82rem;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: var(--shadow-md);
+    transition: opacity .2s, transform .2s, background .15s;
+    z-index: 5;
+    float: right;
+}
+.bracket-scroll-arrow:hover {
+    background: var(--accent-hover);
+    transform: translateX(2px);
+}
+.bracket-scroll-arrow.hidden { display: none; }
 
 /*  7 columns: label | R1 | R2 | R3 | R4 | R5 | Finals
     3 rows:    header | upper | lower                        */
@@ -1723,6 +1752,7 @@ input.input-loading {
 
 @media (max-width: 768px) {
     .bracket-grid { display: none !important; }
+    .bracket-scroll-arrow { display: none !important; }
     .bracket-mobile { display: flex; }
 }
 
