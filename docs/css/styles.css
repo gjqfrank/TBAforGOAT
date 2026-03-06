@@ -1370,6 +1370,11 @@ input.input-loading {
 .winner-text { color: var(--green); font-weight: 700; }
 
 /* ═══ BRACKET GRID ═════════════════════════════════════════ */
+/* Scroll wrapper — lives on #playoff-bracket */
+#playoff-bracket {
+    overflow-x: auto;
+}
+
 /*  7 columns: label | R1 | R2 | R3 | R4 | R5 | Finals
     3 rows:    header | upper | lower                        */
 .bracket-grid {
@@ -1377,7 +1382,6 @@ input.input-loading {
     grid-template-columns: 20px repeat(6, 280px);
     grid-template-rows: auto 1fr 1fr;
     gap: 0;
-    overflow-x: auto;
     width: max-content;
     min-width: 100%;
 }
@@ -1388,6 +1392,9 @@ input.input-loading {
     background: var(--card);
     border-bottom: 2px solid var(--border);
     border-right: 1px solid var(--border);
+    position: sticky;
+    left: 0;
+    z-index: 3;
 }
 .bg-rnd-hdr {
     display: flex;
@@ -1423,18 +1430,21 @@ input.input-loading {
     letter-spacing: .08em;
     padding: .3rem .1rem;
     border-right: 1px solid var(--border);
+    position: sticky;
+    left: 0;
+    z-index: 2;
 }
 .bg-side-label svg { transform: rotate(90deg); }
 .bg-upper-label {
     grid-row: 2; grid-column: 1;
     color: #818cf8;
-    background: rgba(99, 102, 241, .04);
+    background: linear-gradient(rgba(99, 102, 241, .04), rgba(99, 102, 241, .04)), var(--card);
     border-bottom: 1px solid var(--border);
 }
 .bg-lower-label {
     grid-row: 3; grid-column: 1;
     color: #fbbf24;
-    background: rgba(245, 158, 11, .04);
+    background: linear-gradient(rgba(245, 158, 11, .04), rgba(245, 158, 11, .04)), var(--card);
 }
 
 /* ── Grid cells (match containers) ──────────────────────── */

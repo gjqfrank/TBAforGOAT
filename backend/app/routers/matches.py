@@ -303,6 +303,20 @@ async def get_fast_scores(event_key: str):
 
         all_frc = (qual_matches or []) + (playoff_matches or [])
 
+        # Identify final matches (by description) to assign correct f1m{N} keys.
+        # FRC matchNumbers for finals are sequential (14, 15, …) but TBA
+        # uses f1m1, f1m2, etc., so we map by order, not by raw matchNumber.
+        final_match_numbers: list[int] = sorted(
+            mr.get("matchNumber", 0)
+            for mr in (playoff_matches or [])
+            if "final" in (mr.get("description") or "").lower()
+            and "semi" not in (mr.get("description") or "").lower()
+        )
+        # matchNumber → 1-based index within finals (f1m1, f1m2, …)
+        final_index_map: dict[int, int] = {
+            mn: idx + 1 for idx, mn in enumerate(final_match_numbers)
+        }
+
         # Map FRC comp levels back to TBA-style match keys
         results = []
         for m in all_frc:
@@ -315,7 +329,8 @@ async def get_fast_scores(event_key: str):
                 # Playoff – use description to infer comp_level, or fall back to sf
                 desc = (m.get("description") or "").lower()
                 if "final" in desc and "semi" not in desc:
-                    match_key = f"{event_key}_f1m{mn}"
+                    fidx = final_index_map.get(mn, mn)
+                    match_key = f"{event_key}_f1m{fidx}"
                 else:
                     # Generic playoff — set_number from FRC
                     sn = m.get("matchNumber", mn)
@@ -412,8 +427,16 @@ async def _breakdown_from_frc(match_key: str, game_year: int) -> dict:
         frc_match_number = first_num
         tba_set_number = 0
         tba_match_number = first_num
+    elif comp_level == "f":
+        # Finals: frc_match_number is NOT first_num (always 1).
+        # The grand final sits after the 13 double-elim sets in the
+        # FRC Events API, so its matchNumber is typically 14+.
+        # We resolve the real matchNumber from the matches list below.
+        frc_match_number = None  # resolved after fetching matches
+        tba_set_number = first_num
+        tba_match_number = second_num or 1
     else:
-        # Playoffs (sf/f/qf/ef): first_num is TBA set_number,
+        # Playoffs (sf/qf/ef): first_num is TBA set_number,
         # which equals FRC matchNumber for double-elim.
         # second_num is match-within-set (replay indicator).
         frc_match_number = first_num
@@ -422,11 +445,33 @@ async def _breakdown_from_frc(match_key: str, game_year: int) -> dict:
 
     frc = get_frc_client()
 
-    # Fetch scores + match results in parallel (bypass cache for live data)
+    # For finals we don't know the FRC matchNumber yet, so fetch all
+    # playoff scores; for everything else we can filter by matchNumber.
     scores_list, matches_list = await asyncio.gather(
-        frc.get_scores(season, event_code, frc_level, match_number=frc_match_number, bypass_cache=True),
+        frc.get_scores(
+            season, event_code, frc_level,
+            match_number=frc_match_number,  # None for finals → fetches all
+            bypass_cache=True,
+        ),
         frc.get_matches(season, event_code, level=frc_level, bypass_cache=True),
     )
+
+    # ── Resolve frc_match_number for finals from match descriptions ──
+    if comp_level == "f":
+        final_matches = sorted(
+            [
+                mr for mr in matches_list
+                if "final" in (mr.get("description") or "").lower()
+                and "semi" not in (mr.get("description") or "").lower()
+            ],
+            key=lambda x: x.get("matchNumber", 0),
+        )
+        # tba_match_number selects which final (1st, 2nd if bracket-reset)
+        final_idx = tba_match_number - 1
+        if final_idx < len(final_matches):
+            frc_match_number = final_matches[final_idx].get("matchNumber")
+        else:
+            return {"match_key": match_key, "available": False}
 
     # Find the specific score entry
     score_entry = None

@@ -4569,6 +4569,10 @@ function closeCompare() {
 
 // Close on Escape
 document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && compareSelection.size > 0) {
+        clearCompareSelection();
+        return;
+    }
     if (e.key === 'Escape' && _spotlightTeam != null) {
         closeSpotlight();
         return;
