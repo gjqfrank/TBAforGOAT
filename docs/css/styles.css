@@ -1501,10 +1501,10 @@ input.input-loading {
     border-color: rgba(99,102,241,.25);
 }
 .bkt-slot.bkt-tbd {
-    opacity: .5;
+    opacity: 1;
 }
 .bkt-slot.bkt-upcoming {
-    opacity: .6;
+    opacity: 1;
 }
 .bkt-slot.bkt-decided {
     border-color: rgba(52,211,153,.2);
@@ -2822,6 +2822,17 @@ input.input-loading {
     display: flex;
     flex-direction: column;
 }
+
+.pbp-alliance-placeholder {
+    padding: 2rem 1.5rem;
+    text-align: center;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    letter-spacing: .02em;
+}
+.pbp-alliance-placeholder.red-side { color: var(--red); }
+.pbp-alliance-placeholder.blue-side { color: var(--blue); }
 
 .pbp-team {
     padding: 1rem 1.3rem;

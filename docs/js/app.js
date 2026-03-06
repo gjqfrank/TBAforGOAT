@@ -176,6 +176,10 @@ const BD_LIST_REFRESH  = 20_000;      // 20s — refresh match list flags
 let pbpRefreshTimer = null;         // setInterval id for PBP live refresh
 const PBP_REFRESH_INTERVAL = 15_000; // 15s — poll for score/match updates
 
+// Playoff auto-refresh
+let playoffRefreshTimer = null;
+const PLAYOFF_REFRESH_INTERVAL = 30_000; // 30s — poll for bracket updates
+
 // Season events
 let seasonEventsRaw = [];          // full list from backend
 let seasonEventsFiltered = [];     // after applying region/week/search
@@ -343,6 +347,9 @@ document.querySelectorAll('.tab').forEach(btn => {
         // Stop PBP live refresh when leaving the PBP tab
         if (btn.dataset.tab !== 'playbyplay') { stopPbpRefresh(); }
 
+        // Stop playoff refresh when leaving the playoff tab
+        if (btn.dataset.tab !== 'playoff') { stopPlayoffRefresh(); }
+
         // Clear compare selection when leaving Rankings tab
         if (btn.dataset.tab !== 'rankings') { clearCompareSelection(); }
 
@@ -373,20 +380,23 @@ document.querySelectorAll('.tab').forEach(btn => {
         }
 
         // Lightweight tabs: render from preloaded cache, or fetch if missing
-        if (btn.dataset.tab === 'playoff' && currentEvent && !renderedTabs.playoff) {
-            if (playoffData?.length) {
-                hide('playoff-empty');
-                hideSkeleton('playoff-loading');
-                renderBracketTree();
-                fadeIn('playoff-bracket');
-                renderedTabs.playoff = true;
-            } else {
-                // Optimistic skeleton
-                hide('playoff-empty');
-                hideInlineError('playoff-error');
-                showSkeleton('playoff-loading', 'playoff-loading-status', 'Loading playoff bracket\u2026');
-                loadPlayoffs();
+        if (btn.dataset.tab === 'playoff' && currentEvent) {
+            if (!renderedTabs.playoff) {
+                if (playoffData?.length) {
+                    hide('playoff-empty');
+                    hideSkeleton('playoff-loading');
+                    renderBracketTree();
+                    fadeIn('playoff-bracket');
+                    renderedTabs.playoff = true;
+                } else {
+                    // Optimistic skeleton
+                    hide('playoff-empty');
+                    hideInlineError('playoff-error');
+                    showSkeleton('playoff-loading', 'playoff-loading-status', 'Loading playoff bracket\u2026');
+                    loadPlayoffs();
+                }
             }
+            startPlayoffRefresh();
         }
         if (btn.dataset.tab === 'alliance' && currentEvent && !renderedTabs.alliance) {
             if (allianceData?.length) {
@@ -923,6 +933,7 @@ function clearActiveEvent() {
     localStorage.removeItem('selectedEvent');
     stopRankingsPolling();
     stopPbpRefresh();
+    stopPlayoffRefresh();
     hide('active-event-banner');
     const badge = $('event-badge');
     badge.classList.remove('status-ongoing', 'status-upcoming', 'status-completed');
@@ -1242,7 +1253,7 @@ async function loadSavedEvent(eventKey) {
     playoffData = null; allianceData = null; summaryData = null; eventInfoData = null;
     pbpData = null; pbpIndex = 0; bdData = null; bdIndex = 0; bdCache = {};
     historyData = null; regionData = null;
-    stopBdPolling(); stopBdListRefresh(); stopPbpRefresh();
+    stopBdPolling(); stopBdListRefresh(); stopPbpRefresh(); stopPlayoffRefresh();
     _pbpConnCache = {}; _pbpConnAllTime = false;
     _pbpAwardsCache = {};
     _h2hAllTime = false;
@@ -2231,6 +2242,30 @@ async function loadPlayoffs() {
     }
 }
 
+// ── Playoff auto-refresh ──────────────────────────────────
+function startPlayoffRefresh() {
+    stopPlayoffRefresh();
+    if (currentEventStatus !== 'ongoing') return;
+    playoffRefreshTimer = setInterval(playoffAutoRefresh, PLAYOFF_REFRESH_INTERVAL);
+}
+
+function stopPlayoffRefresh() {
+    if (playoffRefreshTimer) {
+        clearInterval(playoffRefreshTimer);
+        playoffRefreshTimer = null;
+    }
+}
+
+async function playoffAutoRefresh() {
+    if (!currentEvent) { stopPlayoffRefresh(); return; }
+    try {
+        const data = await API.playoffMatches(currentEvent);
+        if (!data?.matches?.length || currentEvent !== data.event_key) return;
+        playoffData = data.matches;
+        if (renderedTabs.playoff) renderBracketTree();
+    } catch (_) { /* silently ignore */ }
+}
+
 /* ── FRC Double-Elimination Bracket Tree ─────────────────── */
 
 // Upper bracket structure: sets that merge
@@ -3013,10 +3048,24 @@ function renderPbpMatch() {
         }
     }
 
+    // Alliance titles (include alliance # for playoff matches)
+    const redAllianceNum = m.red.alliance_number;
+    const blueAllianceNum = m.blue.alliance_number;
+    const redTitle = 'Red Alliance' + (redAllianceNum ? ` #${redAllianceNum}` : '');
+    const blueTitle = 'Blue Alliance' + (blueAllianceNum ? ` #${blueAllianceNum}` : '');
+
+    // Render team cards or alliance placeholder when teams aren't assigned yet
+    const redTeamCards = m.red.teams.length
+        ? m.red.teams.map(t => renderPbpTeam(t, 'red-side')).join('')
+        : (redAllianceNum ? `<div class="pbp-alliance-placeholder red-side">Alliance #${redAllianceNum} — Teams TBD</div>` : '<div class="pbp-alliance-placeholder">Teams TBD</div>');
+    const blueTeamCards = m.blue.teams.length
+        ? m.blue.teams.map(t => renderPbpTeam(t, 'blue-side')).join('')
+        : (blueAllianceNum ? `<div class="pbp-alliance-placeholder blue-side">Alliance #${blueAllianceNum} — Teams TBD</div>` : '<div class="pbp-alliance-placeholder">Teams TBD</div>');
+
     $('pbp-arena').innerHTML = `
         <div class="pbp-alliance red-side ${redWon ? 'pbp-alliance-won' : ''}">
             <div class="pbp-alliance-header">
-                <span class="pbp-alliance-title">Red Alliance</span>
+                <span class="pbp-alliance-title">${redTitle}</span>
                 <span class="pbp-alliance-opr">Σ OPR ${m.red.total_opr}</span>
                 <div class="pbp-score-group">
                     ${redWon ? '<span class="pbp-winner-label">WINNER</span>' : ''}
@@ -3024,7 +3073,7 @@ function renderPbpMatch() {
                 </div>
             </div>
             <div class="pbp-team-cards">
-                ${m.red.teams.map(t => renderPbpTeam(t, 'red-side')).join('')}
+                ${redTeamCards}
             </div>
         </div>
         <div class="pbp-alliance blue-side ${blueWon ? 'pbp-alliance-won' : ''}">
@@ -3034,10 +3083,10 @@ function renderPbpMatch() {
                     ${blueWon ? '<span class="pbp-winner-label">WINNER</span>' : ''}
                 </div>
                 <span class="pbp-alliance-opr">Σ OPR ${m.blue.total_opr}</span>
-                <span class="pbp-alliance-title">Blue Alliance</span>
+                <span class="pbp-alliance-title">${blueTitle}</span>
             </div>
             <div class="pbp-team-cards">
-                ${m.blue.teams.map(t => renderPbpTeam(t, 'blue-side')).join('')}
+                ${blueTeamCards}
             </div>
         </div>
     ` + predHtml;
