@@ -1664,7 +1664,7 @@ function renderTeamTable(teams, sortCol, asc) {
                 return `
             <tr class="${isIntl ? 'foreign-team-row' : ''}${isRookie ? ' rookie-team-row' : ''}" data-country="${t.country || ''}" data-rookie-year="${t.rookie_year || ''}">
                 <td class="compare-td"><input type="checkbox" class="compare-cb" data-team="${t.team_key}" ${checked} onclick="toggleCompareTeam('${t.team_key}')"></td>
-                <td class="rank${t.rank >= 1 && t.rank <= 8 ? ' rank-top8' : ''}">${t.rank}</td>
+                <td class="rank${Number(t.rank) >= 1 && Number(t.rank) <= 8 ? ' rank-top8' : ''}">${t.rank}</td>
                 <td class="team-avatar-cell">${avatarImg}</td>
                 <td class="team-num">${t.team_number}</td>
                 <td>${name}</td>
@@ -2686,7 +2686,7 @@ function renderAlliances(data) {
                         <span class="team-num has-tooltip">${t.team_number}${t.nickname ? `<span class="custom-tooltip">${t.nickname}</span>` : ''}</span>
                         ${allianceShowNames ? `<span class="team-nick">${t.nickname || ''}</span>` : ''}
                         <div class="team-stats-mini">
-                            <span>Rank ${t.rank}</span>
+                            <span${Number(t.rank) >= 1 && Number(t.rank) <= 8 ? ' class="rank-top8"' : ''}>Rank ${t.rank}</span>
                             <span>${t.wins}-${t.losses}-${t.ties}</span>
                             <span class="stat-opr">OPR ${t.opr}</span>
                             ${teamEpaHtml}
@@ -3387,7 +3387,7 @@ function renderPbpTeam(t, sideCls) {
         <div class="pbp-team-stats">
             <div class="pbp-stat">
                 <div class="pbp-stat-label">Rank</div>
-                <div class="pbp-stat-value${t.rank >= 1 && t.rank <= 8 ? ' rank-top8' : ''}">${t.rank}</div>
+                <div class="pbp-stat-value${Number(t.rank) >= 1 && Number(t.rank) <= 8 ? ' rank-top8' : ''}">${t.rank}</div>
             </div>
             <div class="pbp-stat">
                 <div class="pbp-stat-label">Qual Avg</div>
@@ -3443,14 +3443,13 @@ async function _injectPlayoffFirsts(teams, matchIdx, compLevel) {
         if (!slot) continue;
 
         const badges = [];
-        if (info.first_playoff) {
-            badges.push(`<span class="pbp-first-badge pbp-first-playoff" title="First-ever playoff appearance${info.rookie ? ' (Rookie)' : ''}">
-                \u2B50 First Playoffs${info.rookie ? ' (R)' : ''}
-            </span>`);
-        }
-        if (isFinals && info.first_finals && !info.first_playoff) {
+        if (info.first_finals) {
             badges.push(`<span class="pbp-first-badge pbp-first-finals" title="First-ever appearance in Finals">
-                \u{1F31F} First Finals
+                First Finals
+            </span>`);
+        } else if (info.first_playoff) {
+            badges.push(`<span class="pbp-first-badge pbp-first-playoff" title="First-ever playoff appearance${info.rookie ? ' (Rookie)' : ''}">
+                First Playoffs${info.rookie ? ' (R)' : ''}
             </span>`);
         }
         slot.innerHTML = badges.join('');

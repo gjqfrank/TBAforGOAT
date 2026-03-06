@@ -1329,7 +1329,7 @@ input.input-loading {
     font-family: var(--mono);
 }
 .data-table .rank.rank-top8 {
-    color: #f59e0b;
+    color: #f59e0b !important;
 }
 
 .data-table .team-num {
@@ -2984,7 +2984,8 @@ input.input-loading {
 
 .pbp-stat-value.opr-val { color: var(--green); }
 .pbp-stat-value.epa-val { color: var(--primary-hover); }
-.pbp-stat-value.rank-top8 { color: #f59e0b; }
+.pbp-stat-value.rank-top8 { color: #f59e0b !important; }
+.rank-top8 { color: #f59e0b !important; }
 
 .pbp-team-highscore {
     font-size: .72rem;

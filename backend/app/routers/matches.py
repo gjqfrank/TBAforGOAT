@@ -24,7 +24,7 @@ ROUND_LABELS = {1: "Round 1", 2: "Round 2", 3: "Round 3", 4: "Round 4", 5: "Roun
 
 
 COMP_LEVEL_ORDER = {"qm": 0, "ef": 1, "qf": 2, "sf": 3, "f": 4}
-COMP_LEVEL_LABELS = {"qm": "Qualification", "ef": "Eighths", "qf": "Quarterfinal", "sf": "Semifinal", "f": "Final"}
+COMP_LEVEL_LABELS = {"qm": "Qualification", "ef": "Eighths", "qf": "Quarterfinal", "sf": "Match", "f": "Final"}
 
 
 @router.get("/{event_key}/all")
@@ -251,7 +251,7 @@ async def get_all_matches(event_key: str):
                         "comp_level": "sf",
                         "match_number": 1,
                         "set_number": sn,
-                        "label": f"Semifinal {sn}",
+                        "label": f"Match {sn}",
                         "sort_key": (COMP_LEVEL_ORDER["sf"], sn, 1),
                         "time": None,
                         "has_breakdown": False,
