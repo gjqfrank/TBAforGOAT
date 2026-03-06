@@ -1612,9 +1612,9 @@ function renderTeamTable(teams, sortCol, asc) {
                 ${compact ? '' : th('location', 'Location')}
                 ${school ? th('school_name', 'School / Org') : ''}
                 ${th('record', 'Record')}
-                ${th('ranking_points', 'RP')}
                 ${th('opr', 'OPR')}
                 ${compact ? '' : th('epa', 'EPA')}
+                ${th('ranking_points', 'RP')}
             </tr>
         </thead>
         <tbody>
@@ -1636,9 +1636,9 @@ function renderTeamTable(teams, sortCol, asc) {
                 ${compact ? '' : `<td class="location">${loc}</td>`}
                 ${school ? `<td class="location">${t.school_name || ''}</td>` : ''}
                 <td class="stat">${t.wins}-${t.losses}-${t.ties}</td>
-                <td class="stat">${t.ranking_points != null ? t.ranking_points : '\u2013'}</td>
                 <td class="stat stat-opr">${t.opr}</td>
                 ${compact ? '' : `<td class="stat stat-epa">${t.epa != null ? t.epa : '\u2013'}</td>`}
+                <td class="stat">${t.ranking_points != null ? t.ranking_points : '\u2013'}</td>
             </tr>`;
             }).join('')}
         </tbody>
