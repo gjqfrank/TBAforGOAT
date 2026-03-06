@@ -1783,19 +1783,32 @@ function _champBadge(entries, cls, icon, label) {
     const frontText = `${icon} ${label}: ${years}`;
     const hasPick = entries.some(y => typeof y === 'object' && y.pick);
     if (!hasPick) return `<span class="past-champ-badge ${cls}">${frontText}</span>`;
-    const backText = entries.map(y => {
+    const detailRows = entries.map(y => {
         if (typeof y === 'object' && y.pick) {
-            const a = y.alliance ? `A${y.alliance}` : '';
-            return `${a} ${y.pick}`.trim();
+            const a = y.alliance ? `<span class="pick-detail-alliance">A${y.alliance}</span>` : '';
+            return `<div class="pick-detail-row">`
+                 + `<span class="pick-detail-year">${y.year}</span>`
+                 + `${a}<span class="pick-detail-pick">${y.pick}</span>`
+                 + `</div>`;
         }
         return '';
-    }).filter(Boolean).join(' \u00b7 ');
-    return `<span class="past-champ-badge ${cls} pick-flip" onclick="this.classList.toggle('flipped')">`
-         + `<span class="pick-flip-inner">`
-         + `<span class="pick-flip-front">${frontText}</span>`
-         + `<span class="pick-flip-back">${backText}</span>`
-         + `</span></span>`;
+    }).filter(Boolean).join('');
+    return `<span class="past-champ-badge ${cls} has-pick-detail" onclick="togglePickDetail(event, this)">`
+         + frontText
+         + `<svg class="pick-detail-chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="6 9 12 15 18 9"/></svg>`
+         + `<div class="pick-detail-popover">${detailRows}</div>`
+         + `</span>`;
 }
+
+function togglePickDetail(event, el) {
+    event.stopPropagation();
+    const wasOpen = el.classList.contains('open');
+    document.querySelectorAll('.has-pick-detail.open').forEach(e => e.classList.remove('open'));
+    if (!wasOpen) el.classList.add('open');
+}
+document.addEventListener('click', () => {
+    document.querySelectorAll('.has-pick-detail.open').forEach(e => e.classList.remove('open'));
+});
 
 function renderPastEventChampions(champions) {
     $('summary-past-champs-list').innerHTML = champions.map(t => {

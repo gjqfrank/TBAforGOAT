@@ -5135,6 +5135,9 @@ tr:hover .compare-cb,
     opacity: 1;
     margin-top: .6rem;
 }
+.summary-collapse-body:not(.collapsed) {
+    overflow: visible;
+}
 .summary-collapse-body.collapsed {
     max-height: 0;
     opacity: 0;
@@ -6394,6 +6397,65 @@ span.pick-flip:not(.past-champ-badge):not(.past-award-chip) {
 .past-award-chip .pick-flip-back { font-size: inherit; color: inherit; }
 /* Inside table cells */
 td .pick-flip-back { font-size: inherit; }
+
+/* ── Pick-detail popover (replaces flip for multi-year badges) ── */
+.has-pick-detail {
+    position: relative;
+    cursor: pointer;
+}
+.pick-detail-chevron {
+    margin-left: .25rem;
+    transition: transform .2s;
+    vertical-align: middle;
+    opacity: .6;
+}
+.has-pick-detail.open .pick-detail-chevron {
+    transform: rotate(180deg);
+    opacity: 1;
+}
+.pick-detail-popover {
+    display: none;
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: .45rem .7rem;
+    box-shadow: var(--shadow-lg);
+    z-index: 50;
+    white-space: nowrap;
+    font-size: .74rem;
+    min-width: max-content;
+}
+.has-pick-detail.open .pick-detail-popover {
+    display: block;
+}
+.pick-detail-row {
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+    padding: .15rem 0;
+}
+.pick-detail-row + .pick-detail-row {
+    border-top: 1px solid var(--border);
+    padding-top: .25rem;
+    margin-top: .1rem;
+}
+.pick-detail-year {
+    font-weight: 800;
+    color: var(--accent);
+    min-width: 2.2rem;
+}
+.pick-detail-alliance {
+    font-weight: 700;
+    color: var(--muted);
+    font-size: .68rem;
+}
+.pick-detail-pick {
+    font-weight: 600;
+    color: var(--text);
+}
 
 /* ═══════════════════════════════════════════════════════════
    UX ENHANCEMENTS — Toast / Back-to-top / Presentation /
