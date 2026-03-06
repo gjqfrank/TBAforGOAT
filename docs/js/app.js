@@ -1664,7 +1664,7 @@ function renderTeamTable(teams, sortCol, asc) {
                 return `
             <tr class="${isIntl ? 'foreign-team-row' : ''}${isRookie ? ' rookie-team-row' : ''}" data-country="${t.country || ''}" data-rookie-year="${t.rookie_year || ''}">
                 <td class="compare-td"><input type="checkbox" class="compare-cb" data-team="${t.team_key}" ${checked} onclick="toggleCompareTeam('${t.team_key}')"></td>
-                <td class="rank">${t.rank}</td>
+                <td class="rank${t.rank >= 1 && t.rank <= 8 ? ' rank-top8' : ''}">${t.rank}</td>
                 <td class="team-avatar-cell">${avatarImg}</td>
                 <td class="team-num">${t.team_number}</td>
                 <td>${name}</td>
@@ -3387,7 +3387,7 @@ function renderPbpTeam(t, sideCls) {
         <div class="pbp-team-stats">
             <div class="pbp-stat">
                 <div class="pbp-stat-label">Rank</div>
-                <div class="pbp-stat-value">${t.rank}</div>
+                <div class="pbp-stat-value${t.rank >= 1 && t.rank <= 8 ? ' rank-top8' : ''}">${t.rank}</div>
             </div>
             <div class="pbp-stat">
                 <div class="pbp-stat-label">Qual Avg</div>

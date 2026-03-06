@@ -1328,6 +1328,9 @@ input.input-loading {
     color: var(--primary-hover);
     font-family: var(--mono);
 }
+.data-table .rank.rank-top8 {
+    color: #f59e0b;
+}
 
 .data-table .team-num {
     font-weight: 700;
@@ -2981,6 +2984,7 @@ input.input-loading {
 
 .pbp-stat-value.opr-val { color: var(--green); }
 .pbp-stat-value.epa-val { color: var(--primary-hover); }
+.pbp-stat-value.rank-top8 { color: #f59e0b; }
 
 .pbp-team-highscore {
     font-size: .72rem;
