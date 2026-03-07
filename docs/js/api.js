@@ -26,6 +26,7 @@ const API = {
     },
     clearCache:         (ek) => API.get(`/events/${ek}/clear-cache`),
     refreshRankings:    (ek) => API.get(`/events/${ek}/refresh-rankings`),
+    fastRankings:       (ek) => API.get(`/events/${ek}/fast-rankings`),
 
     // ── Matches ─────────────────────────────────────────
     playoffMatches: (ek) => API.get(`/matches/${ek}/playoffs`),

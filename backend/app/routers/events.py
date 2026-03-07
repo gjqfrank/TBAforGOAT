@@ -97,6 +97,19 @@ async def refresh_rankings(event_key: str):
     return await event_service.get_event_teams_with_stats(event_key)
 
 
+@router.get("/{event_key}/fast-rankings")
+async def fast_rankings(event_key: str):
+    """Lightweight rankings from FRC Events API — rank, W-L-T, RP only.
+
+    Much faster than /refresh-rankings because it skips avatars/OPRs/EPA
+    and uses the FRC API (real-time from FIRST) instead of TBA.
+    """
+    try:
+        return await event_service.get_fast_rankings(event_key)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @router.get("/{event_key}/compare")
 async def compare_teams(
     event_key: str,

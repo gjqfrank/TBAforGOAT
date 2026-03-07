@@ -977,7 +977,7 @@ function clearActiveEvent() {
 }
 
 // ── Auto-refresh rankings polling ─────────────────────────
-const RANKINGS_POLL_INTERVAL = 30_000; // 30 seconds
+const RANKINGS_POLL_INTERVAL = 10_000; // 10 seconds — uses FRC API for near-instant updates
 
 function startRankingsPolling() {
     stopRankingsPolling();
@@ -996,11 +996,107 @@ async function refreshRankings() {
     if (!currentEvent) { stopRankingsPolling(); return; }
     try {
         const oldMap = snapshotRankings();
+        // Use fast FRC-API rankings (lightweight: rank, W-L-T, RP only)
+        const fastData = await API.fastRankings(currentEvent);
+        if (fastData && fastData.length) {
+            applyFastRankings(fastData, oldMap);
+            return;
+        }
+        // Fallback: full refresh from TBA
         const teams = await API.refreshRankings(currentEvent);
         $('event-teams').innerHTML = buildTeamTable(teams);
         applyRankChangeIndicators(oldMap);
     } catch (err) {
         console.warn('[Rankings refresh]', err);
+    }
+}
+
+/** Merge lightweight FRC-API ranking data into the existing table in-place. */
+function applyFastRankings(fastData, oldMap) {
+    const table = $('event-teams');
+    if (!table) return;
+    const fastMap = new Map();
+    for (const t of fastData) fastMap.set(t.team_key, t);
+
+    // ── 1. Patch the in-memory PbP/BD data so re-renders show fresh stats ──
+    if (pbpData && pbpData.matches) {
+        for (const m of pbpData.matches) {
+            for (const side of [m.red, m.blue]) {
+                if (!side || !side.teams) continue;
+                for (const t of side.teams) {
+                    const f = fastMap.get(t.team_key);
+                    if (!f) continue;
+                    t.rank = f.rank;
+                    t.wins = f.wins;
+                    t.losses = f.losses;
+                    t.ties = f.ties;
+                    if (f.ranking_points != null) {
+                        const mp = f.wins + f.losses + f.ties;
+                        t.avg_rp = mp > 0 ? +(f.ranking_points / mp).toFixed(2) : 0;
+                    }
+                }
+            }
+        }
+        // Re-render the current PbP match if the PbP tab is visible
+        const pbpTab = document.querySelector('.tab-btn[data-tab="playbyplay"].active');
+        if (pbpTab) renderPbpMatch();
+    }
+
+    // ── 2. Update rankings table rows in-place ──
+    const rows = table.querySelectorAll('tr[data-team-key]');
+    for (const row of rows) {
+        const tk = row.dataset.teamKey;
+        const f = fastMap.get(tk);
+        if (!f) continue;
+        const rankCell = row.querySelector('.rank');
+        if (rankCell) rankCell.textContent = f.rank;
+        const recordCell = row.querySelector('.record');
+        if (recordCell) recordCell.textContent = `${f.wins}-${f.losses}-${f.ties}`;
+        const rpCell = row.querySelector('.rp');
+        if (rpCell) rpCell.textContent = f.ranking_points != null ? f.ranking_points : '-';
+    }
+
+    // Re-order rows by rank
+    const sortedRows = [...rows].sort((a, b) => {
+        const ra = fastMap.get(a.dataset.teamKey)?.rank ?? 999;
+        const rb = fastMap.get(b.dataset.teamKey)?.rank ?? 999;
+        return ra - rb;
+    });
+    const tbody = rows[0]?.parentElement;
+    if (tbody) {
+        for (const row of sortedRows) tbody.appendChild(row);
+    }
+
+    // Apply rank-change indicators using the snapshot
+    if (!oldMap) return;
+    let anyChange = false;
+    for (const row of rows) {
+        const tk = row.dataset.teamKey;
+        const f = fastMap.get(tk);
+        const old = oldMap.get(tk);
+        if (!f || !old) continue;
+        const rankDelta = old.rank - f.rank;
+        const recordChanged = old.wins !== f.wins || old.losses !== f.losses || old.ties !== f.ties;
+        if (rankDelta > 0) {
+            row.classList.add('rank-up');
+            const rc = row.querySelector('.rank');
+            if (rc) { const b = document.createElement('span'); b.className = 'rank-delta rank-delta-up'; b.textContent = `\u2191${rankDelta}`; rc.appendChild(b); }
+            anyChange = true;
+        } else if (rankDelta < 0) {
+            row.classList.add('rank-down');
+            const rc = row.querySelector('.rank');
+            if (rc) { const b = document.createElement('span'); b.className = 'rank-delta rank-delta-down'; b.textContent = `\u2193${Math.abs(rankDelta)}`; rc.appendChild(b); }
+            anyChange = true;
+        } else if (recordChanged) {
+            row.classList.add('rank-updated');
+            anyChange = true;
+        }
+    }
+    if (anyChange) {
+        setTimeout(() => {
+            table.querySelectorAll('.rank-up, .rank-down, .rank-updated').forEach(el => el.classList.remove('rank-up', 'rank-down', 'rank-updated'));
+            table.querySelectorAll('.rank-delta').forEach(el => el.remove());
+        }, 6000);
     }
 }
 

@@ -32,11 +32,13 @@ class FRCClient:
             )
         return self._http
 
-    async def get(self, endpoint: str, *, bypass_cache: bool = False) -> Any:
+    async def get(self, endpoint: str, *, bypass_cache: bool = False,
+                  ttl_override: float | None = None) -> Any:
         now = time.time()
+        ttl = ttl_override if ttl_override is not None else CACHE_TTL
         if not bypass_cache and endpoint in self._cache:
             ts, data = self._cache[endpoint]
-            if now - ts < CACHE_TTL:
+            if now - ts < ttl:
                 return data
 
         resp = await self._client().get(endpoint)
@@ -79,6 +81,23 @@ class FRCClient:
             url += "?" + "&".join(params)
         data = await self.get(url, bypass_cache=bypass_cache)
         return data.get("Matches", [])
+
+    # ── Rankings ─────────────────────────────────────────
+    RANKINGS_TTL = 15  # seconds — short TTL for near-instant ranking updates
+
+    async def get_rankings(
+        self, season: int, event_code: str,
+    ) -> list[dict]:
+        """Return Rankings array from the FRC Events API (real-time from FIRST).
+
+        Uses a 15s cache TTL (vs 120s default) so rankings feel near-instant
+        without hammering the API on every poll.
+        """
+        data = await self.get(
+            f"/{season}/rankings/{event_code}",
+            ttl_override=self.RANKINGS_TTL,
+        )
+        return data.get("Rankings", [])
 
     # ── Events ───────────────────────────────────────────
     async def get_events(self, season: int) -> list[dict]:

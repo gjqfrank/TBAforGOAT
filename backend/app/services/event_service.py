@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 from datetime import date
 from .tba_client import get_tba_client
+from .frc_client import get_frc_client
 from .statbotics_client import get_epa_map
 
 # TBA event types to exclude from the season dropdown (off-season, preseason, unlabeled)
@@ -276,6 +277,86 @@ async def get_event_teams_with_stats(event_key: str) -> list[dict]:
                 "epa_endgame": epa.get("epa_endgame", None),
             }
         )
+
+    result.sort(key=lambda x: x["rank"] if isinstance(x["rank"], int) else 999)
+    return result
+
+
+async def get_fast_rankings(event_key: str) -> list[dict]:
+    """Return lightweight rank/record/RP data from the FRC Events API (real-time).
+
+    This is much faster than a full refresh because it:
+    1. Hits the FRC API (120s cache, ~instant from FIRST) instead of TBA (300s, 20-30s lag).
+    2. Skips avatars, OPRs, and EPA — those don't change between matches.
+    3. Returns only the fields that actually change: rank, W-L-T, RP, qual_average.
+
+    The frontend merges this lightweight payload into the existing team table.
+    """
+    year = int(event_key[:4]) if event_key[:4].isdigit() else date.today().year
+    event_code = event_key[4:]
+    frc = get_frc_client()
+
+    try:
+        frc_rankings = await frc.get_rankings(year, event_code)
+    except Exception:
+        frc_rankings = None
+
+    if not frc_rankings:
+        # Fallback: clear TBA cache and fetch from TBA
+        tba = get_tba_client()
+        tba.clear_cache_for(f"/event/{event_key}/rankings")
+        tba_rankings = await _safe(tba.get_event_rankings(event_key))
+        if not tba_rankings or not tba_rankings.get("rankings"):
+            return []
+        result = []
+        for r in tba_rankings["rankings"]:
+            rec = r.get("record", {})
+            extra = r.get("extra_stats", [])
+            sort_orders = r.get("sort_orders", [])
+            if extra and isinstance(extra[0], (int, float)):
+                ranking_points = round(extra[0], 1)
+            elif sort_orders and isinstance(sort_orders[0], (int, float)):
+                mp = r.get("matches_played", 0)
+                ranking_points = round(sort_orders[0] * mp, 1) if mp else None
+            else:
+                ranking_points = None
+            result.append({
+                "team_key": r["team_key"],
+                "rank": r.get("rank", "-"),
+                "wins": rec.get("wins", 0),
+                "losses": rec.get("losses", 0),
+                "ties": rec.get("ties", 0),
+                "qual_average": r.get("qual_average", 0),
+                "ranking_points": ranking_points,
+            })
+        result.sort(key=lambda x: x["rank"] if isinstance(x["rank"], int) else 999)
+        return result
+
+    # Map FRC API rankings to our lightweight format
+    result = []
+    for r in frc_rankings:
+        team_num = r.get("teamNumber")
+        tk = f"frc{team_num}"
+        wins = r.get("wins", 0)
+        losses = r.get("losses", 0)
+        ties = r.get("ties", 0)
+        matches_played = r.get("matchesPlayed", 0)
+        qual_average = r.get("qualAverage", 0)
+
+        # FRC API sort orders: sortOrder1 is usually avg RP
+        # Total RP = avg RP * matches_played
+        sort1 = r.get("sortOrder1", 0) or 0
+        ranking_points = round(sort1 * matches_played, 1) if matches_played else None
+
+        result.append({
+            "team_key": tk,
+            "rank": r.get("rank", "-"),
+            "wins": wins,
+            "losses": losses,
+            "ties": ties,
+            "qual_average": round(qual_average, 2) if qual_average else 0,
+            "ranking_points": ranking_points,
+        })
 
     result.sort(key=lambda x: x["rank"] if isinstance(x["rank"], int) else 999)
     return result
