@@ -501,6 +501,8 @@ document.querySelectorAll('.tab').forEach(btn => {
         if (btn.dataset.tab === 'playbyplay' && renderedTabs.playbyplay && pbpData) {
             renderPbpMatch();  // re-render with any scores updated while away
             startPbpRefresh();
+            // Fetch fresh data immediately instead of waiting for next interval
+            if (currentEventStatus === 'ongoing') pbpAutoRefresh();
         }
 
         // Re-entering breakdown tab after it was already loaded — resume timers
