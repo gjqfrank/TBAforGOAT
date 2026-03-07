@@ -687,11 +687,15 @@ function hideSkeleton(loadingId) {
 // Breathing indicator on the banner dot instead of fullscreen overlay
 function loading(on) {
     const dot = document.querySelector('.aeb-dot');
+    const badge = $('event-badge');
     if (on) {
-        // Add the breathing/loading class to the dot
         if (dot) dot.classList.add('aeb-dot-loading');
+        if (badge && !badge.classList.contains('loading')) {
+            badge.classList.add('loading');
+        }
     } else {
         if (dot) dot.classList.remove('aeb-dot-loading');
+        if (badge) badge.classList.remove('loading');
     }
 }
 
@@ -873,9 +877,6 @@ function confirmSeasonLoad() {
     const bar = $('season-selected-bar');
     const btn = $('ssb-load-btn');
     if (btn) { btn.disabled = true; btn.textContent = 'Loading…'; btn.classList.add('btn-loading'); }
-    // Show loading indicator in header
-    const lb = $('season-loading-btn');
-    if (lb) { lb.classList.remove('hidden'); lb.classList.add('btn-loading'); }
     loadEvent(ev.key).finally(() => {
         if (btn) { btn.disabled = false; btn.textContent = 'Load Event'; btn.classList.remove('btn-loading'); }
         if (bar) bar.classList.add('hidden');
@@ -998,8 +999,8 @@ async function refreshRankings() {
         const teams = await API.refreshRankings(currentEvent);
         $('event-teams').innerHTML = buildTeamTable(teams);
         applyRankChangeIndicators(oldMap);
-    } catch (_) {
-        // Silently ignore — network hiccups shouldn't disrupt the UI
+    } catch (err) {
+        console.warn('[Rankings refresh]', err);
     }
 }
 
@@ -1021,6 +1022,12 @@ async function loadEvent(eventKey) {
     // Show inline loading indicator on the manual button (only for manual entry)
     const btn = fromSeason ? null : $('btn-load-event');
     if (btn) { btn.disabled = true; btn.dataset.origText = btn.textContent; btn.textContent = 'Loading…'; btn.classList.add('btn-loading'); }
+
+    // Show breathing "Please wait..." pill in header
+    const badge = $('event-badge');
+    badge.textContent = 'Please wait\u2026';
+    badge.className = 'loading';   // clear status classes, add loading
+    show('event-badge');
 
     // Reset state
     playoffData = null;
@@ -1071,8 +1078,6 @@ async function loadEvent(eventKey) {
         // Restore the load button and season search
         if (btn) { btn.disabled = false; btn.textContent = btn.dataset.origText || 'Load Event'; btn.classList.remove('btn-loading'); }
         $('season-search')?.classList.remove('input-loading');
-        const _lb = $('season-loading-btn');
-        if (_lb) { _lb.classList.add('hidden'); _lb.classList.remove('btn-loading'); }
 
         currentEvent = code;
         currentEventYear = parseInt(year, 10);
@@ -1088,11 +1093,11 @@ async function loadEvent(eventKey) {
             $('season-search').value = matchedSeason.name;
         }
 
-        // Badge
-        const badge = $('event-badge');
+        // Badge — show event name in status color, keep breathing until Phase 2 finishes
         badge.textContent = `${info.name} (${info.year})`;
         badge.classList.remove('status-ongoing', 'status-upcoming', 'status-completed');
         if (info.status) badge.classList.add(`status-${info.status}`);
+        // Keep 'loading' class for breathing — Phase 2 will clear it via loading(false)
         currentEventStatus = info.status || null;
         eventCountry = info.country || '';
         eventRegion = info.region || '';
@@ -1217,8 +1222,9 @@ async function loadEvent(eventKey) {
     } catch (err) {
         if (btn) { btn.disabled = false; btn.textContent = btn.dataset.origText || 'Load Event'; btn.classList.remove('btn-loading'); }
         $('season-search')?.classList.remove('input-loading');
-        const _lb2 = $('season-loading-btn');
-        if (_lb2) { _lb2.classList.add('hidden'); _lb2.classList.remove('btn-loading'); }
+        // On error, hide the loading badge
+        badge.classList.remove('loading');
+        hide('event-badge');
         showInlineError('summary-error', `Error loading event: ${err.message}`, () => loadEvent(code));
         loading(false);
     }

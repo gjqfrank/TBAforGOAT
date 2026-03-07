@@ -225,7 +225,7 @@ header h1 {
     letter-spacing: .01em;
     box-shadow: 0 2px 12px var(--primary-glow);
     animation: badge-in .4s ease-out;
-    transition: background .4s ease, box-shadow .4s ease;
+    transition: background .6s ease, box-shadow .6s ease, opacity .4s ease, transform .4s ease;
 }
 #event-badge.status-ongoing {
     background: linear-gradient(135deg, #10b981 0%, #34d399 100%);
@@ -243,6 +243,13 @@ header h1 {
 @keyframes badge-in {
     from { opacity: 0; transform: translateY(-6px) scale(.9); }
     to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes badge-breathe {
+    0%, 100% { opacity: .55; transform: scale(.97); }
+    50%      { opacity: 1;   transform: scale(1); }
+}
+#event-badge.loading {
+    animation: badge-breathe 2s ease-in-out infinite;
 }
 
 /* ═══ HEADER RIGHT / SETTINGS ══════════════════════════════ */
@@ -1021,35 +1028,6 @@ input.input-loading {
     animation: spin .8s linear infinite;
 }
 
-/* Season card loading indicator — now unified with btn-loading */
-.season-loading-indicator {
-    background: var(--primary);
-    color: #fff;
-    border: none;
-    font-size: .68rem;
-    font-weight: 600;
-    padding: .2rem .7rem;
-    border-radius: 999px;
-    cursor: default;
-    position: relative;
-    min-width: 72px;
-    height: 24px;
-}
-.season-loading-indicator.btn-loading {
-    color: transparent !important;
-    pointer-events: none;
-}
-.season-loading-indicator.btn-loading::after {
-    content: '';
-    position: absolute;
-    top: 50%; left: 50%;
-    width: 14px; height: 14px;
-    margin: -7px 0 0 -7px;
-    border: 2px solid rgba(255,255,255,.3);
-    border-top-color: #fff;
-    border-radius: 50%;
-    animation: spin .6s linear infinite;
-}
 @keyframes spin {
     to { transform: rotate(360deg); }
 }
