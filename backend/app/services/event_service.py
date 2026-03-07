@@ -11,28 +11,42 @@ _EXCLUDE_TYPES = {99, 100, -1}
 
 # Region groupings for FRC events
 _REGION_MAP = {
-    # US regions
+    # US regions (split per district where applicable)
     "New England": {"NH", "MA", "CT", "RI", "VT", "ME"},
-    "Mid-Atlantic": {"NY", "NJ", "PA", "DE", "MD", "DC"},
-    "Southeast": {"VA", "NC", "SC", "GA", "FL", "AL", "MS", "TN", "KY", "WV", "LA", "AR"},
-    "Midwest": {"OH", "IN", "IL", "MI", "WI", "MN", "IA", "MO", "ND", "SD", "NE", "KS"},
+    "New York": {"NY"},
+    "Mid-Atlantic": {"NJ", "PA", "DE"},
+    "Chesapeake": {"VA", "MD", "DC"},
+    "North Carolina": {"NC"},
+    "South Carolina": {"SC"},
+    "Georgia": {"GA"},
+    "Southeast": {"FL", "AL", "MS", "TN", "KY", "WV", "LA", "AR"},
+    "Indiana": {"IN"},
+    "Michigan": {"MI"},
+    "Midwest": {"OH", "IL", "MN", "IA", "MO", "ND", "SD", "NE", "KS"},
+    "Wisconsin": {"WI"},
     "Texas": {"TX"},
     "Mountain": {"MT", "WY", "CO", "NM", "AZ", "UT", "ID", "NV"},
-    "Pacific": {"WA", "OR", "CA", "HI", "AK"},
-    # International
-    "Türkiye": set(),
-    "Israel": set(),
-    "China": set(),
-    "Australia": set(),
-    "International": set(),  # catch-all
+    "California": {"CA"},
+    "Pacific Northwest": {"WA", "OR"},
+    "Pacific": {"HI", "AK"},
 }
 
 
 # Pre-district regions that transitioned to a district system.
-# Maps the old region name to the current district name.
+# Maps the old region name to the current district name so that
+# the region resolves to a key that exists in region_stats.json.
 _REGION_MERGE = {
     "Israel": "FIRST Israel",
     "Texas": "FIRST In Texas",
+    "California": "FIRST California",
+    "Wisconsin": "FIRST Wisconsin",
+    "Indiana": "FIRST Indiana Robotics",
+    "Michigan": "FIRST in Michigan",
+    "North Carolina": "FIRST North Carolina",
+    "South Carolina": "FIRST South Carolina",
+    "Georgia": "Peachtree",
+    "Chesapeake": "FIRST Chesapeake",
+    "Mid-Atlantic": "FIRST Mid-Atlantic",
 }
 
 # Canadian province codes → district (where one exists).

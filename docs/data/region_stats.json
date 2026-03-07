@@ -163,9 +163,19 @@
     "top_international_visitors": []
   },
   "Canada": {
-    "first_event_year": 2012,
-    "first_event_name": "Festival de Robotique FRC a Montreal Regional",
+    "first_event_year": 2002,
+    "first_event_name": "Canadian Regional",
     "active_years": [
+      2002,
+      2003,
+      2004,
+      2005,
+      2006,
+      2007,
+      2008,
+      2009,
+      2010,
+      2011,
       2012,
       2013,
       2014,
@@ -175,18 +185,27 @@
       2018,
       2019,
       2020,
+      2021,
       2022,
       2023,
       2024,
       2025,
       2026
     ],
-    "total_events": 34,
-    "team_count": 98,
-    "current_season_teams": 68,
+    "total_events": 178,
+    "team_count": 267,
+    "current_season_teams": 188,
     "active_year": 2026,
-    "hof_teams": [],
-    "hof_count": 0,
+    "hof_teams": [
+      {
+        "team_number": 1114,
+        "nickname": "Simbotics",
+        "years": [
+          2012
+        ]
+      }
+    ],
+    "hof_count": 1,
     "impact_finalists": [
       {
         "team_number": 3990,
@@ -194,25 +213,214 @@
         "years": [
           2024
         ]
+      },
+      {
+        "team_number": 5672,
+        "nickname": "First Nations-STEM",
+        "years": [
+          2019
+        ]
+      },
+      {
+        "team_number": 6865,
+        "nickname": "Manitoulin Metal",
+        "years": [
+          2023
+        ]
       }
     ],
-    "impact_count": 1,
+    "impact_count": 3,
     "einstein_winners": [
       {
         "team_number": 296,
         "nickname": "Northern Knights",
         "years": [
           2006
+        ],
+        "wins": [
+          {
+            "year": 2006,
+            "division": "Archimedes"
+          }
+        ]
+      },
+      {
+        "team_number": 610,
+        "nickname": "Crescent Coyotes",
+        "years": [
+          2013
+        ],
+        "wins": [
+          {
+            "year": 2013,
+            "division": "Galileo"
+          }
+        ]
+      },
+      {
+        "team_number": 1114,
+        "nickname": "Simbotics",
+        "years": [
+          2008
+        ],
+        "wins": [
+          {
+            "year": 2008,
+            "division": "Galileo"
+          }
+        ]
+      },
+      {
+        "team_number": 1241,
+        "nickname": "THEORY6",
+        "years": [
+          2013
+        ],
+        "wins": [
+          {
+            "year": 2013,
+            "division": "Galileo"
+          }
+        ]
+      },
+      {
+        "team_number": 2609,
+        "nickname": "Beaverworx",
+        "years": [
+          2023
+        ],
+        "wins": [
+          {
+            "year": 2023,
+            "division": "Hopper"
+          }
+        ]
+      },
+      {
+        "team_number": 2708,
+        "nickname": "Lake Effect Robotics",
+        "years": [
+          2018
+        ],
+        "wins": [
+          {
+            "year": 2018,
+            "division": "Daly"
+          }
         ]
       }
     ],
-    "einstein_winner_count": 1,
+    "einstein_winner_count": 6,
     "einstein_teams": [
+      {
+        "team_number": 2056,
+        "nickname": "OP Robotics",
+        "years": [
+          2010,
+          2012,
+          2015,
+          2016,
+          2017,
+          2018,
+          2024,
+          2025
+        ]
+      },
+      {
+        "team_number": 1114,
+        "nickname": "Simbotics",
+        "years": [
+          2008,
+          2010,
+          2012,
+          2014,
+          2015
+        ]
+      },
+      {
+        "team_number": 1241,
+        "nickname": "THEORY6",
+        "years": [
+          2013,
+          2017,
+          2018
+        ]
+      },
+      {
+        "team_number": 188,
+        "nickname": "Blizzard",
+        "years": [
+          2016
+        ]
+      },
       {
         "team_number": 296,
         "nickname": "Northern Knights",
         "years": [
           2006
+        ]
+      },
+      {
+        "team_number": 610,
+        "nickname": "Crescent Coyotes",
+        "years": [
+          2013
+        ]
+      },
+      {
+        "team_number": 781,
+        "nickname": "Kinetic Knights",
+        "years": [
+          2011
+        ]
+      },
+      {
+        "team_number": 865,
+        "nickname": "WARP7",
+        "years": [
+          2018
+        ]
+      },
+      {
+        "team_number": 1310,
+        "nickname": "Runnymede Robotics",
+        "years": [
+          2019
+        ]
+      },
+      {
+        "team_number": 1325,
+        "nickname": "Inverse Paradox",
+        "years": [
+          2015
+        ]
+      },
+      {
+        "team_number": 1503,
+        "nickname": "Spartonics",
+        "years": [
+          2011
+        ]
+      },
+      {
+        "team_number": 2609,
+        "nickname": "Beaverworx",
+        "years": [
+          2023
+        ]
+      },
+      {
+        "team_number": 2708,
+        "nickname": "Lake Effect Robotics",
+        "years": [
+          2018
+        ]
+      },
+      {
+        "team_number": 3683,
+        "nickname": "Team DAVE",
+        "years": [
+          2017
         ]
       },
       {
@@ -230,10 +438,52 @@
         ]
       },
       {
+        "team_number": 4476,
+        "nickname": "W.A.F.F.L.E.S.",
+        "years": [
+          2024
+        ]
+      },
+      {
+        "team_number": 4678,
+        "nickname": "CyberCavs",
+        "years": [
+          2016
+        ]
+      },
+      {
+        "team_number": 4917,
+        "nickname": "Sir Lancerbot",
+        "years": [
+          2018
+        ]
+      },
+      {
+        "team_number": 4946,
+        "nickname": "The Alpha Dogs",
+        "years": [
+          2025
+        ]
+      },
+      {
+        "team_number": 5406,
+        "nickname": "Celt-X",
+        "years": [
+          2019
+        ]
+      },
+      {
         "team_number": 6485,
         "nickname": "Mecha Mustangs",
         "years": [
           2019
+        ]
+      },
+      {
+        "team_number": 7558,
+        "nickname": "ALT-F4",
+        "years": [
+          2024
         ]
       },
       {
@@ -244,31 +494,31 @@
         ]
       }
     ],
-    "einstein_count": 5,
+    "einstein_count": 24,
     "top_international_visitors": [
       {
         "team_number": 244,
         "nickname": "RoboDawgs 3D",
         "country": "USA",
-        "appearances": 4
+        "appearances": 7
+      },
+      {
+        "team_number": 216,
+        "nickname": "More RoboDawgs",
+        "country": "USA",
+        "appearances": 6
+      },
+      {
+        "team_number": 288,
+        "nickname": "The RoboDawgs",
+        "country": "USA",
+        "appearances": 6
       },
       {
         "team_number": 359,
         "nickname": "Hawaiian Kids",
         "country": "USA",
         "appearances": 4
-      },
-      {
-        "team_number": 216,
-        "nickname": "More RoboDawgs",
-        "country": "USA",
-        "appearances": 3
-      },
-      {
-        "team_number": 288,
-        "nickname": "The RoboDawgs",
-        "country": "USA",
-        "appearances": 3
       },
       {
         "team_number": 1622,
@@ -280,12 +530,6 @@
         "team_number": 4253,
         "nickname": "Raid Zero",
         "country": "Chinese Taipei",
-        "appearances": 3
-      },
-      {
-        "team_number": 9102,
-        "nickname": "CyborgBulls",
-        "country": "France",
         "appearances": 3
       },
       {
@@ -301,21 +545,15 @@
         "appearances": 3
       },
       {
-        "team_number": 9999,
-        "nickname": "Off-Season Demo Team 9999",
-        "country": "USA",
-        "appearances": 2
-      },
-      {
-        "team_number": 8790,
-        "nickname": "Departure",
-        "country": "Chinese Taipei",
-        "appearances": 2
-      },
-      {
-        "team_number": 9220,
-        "nickname": "Geekos",
+        "team_number": 9102,
+        "nickname": "CyborgBulls",
         "country": "France",
+        "appearances": 3
+      },
+      {
+        "team_number": 5460,
+        "nickname": "Strike Zone",
+        "country": "USA",
         "appearances": 2
       },
       {
@@ -334,6 +572,24 @@
         "team_number": 8503,
         "nickname": "Raid One",
         "country": "Chinese Taipei",
+        "appearances": 2
+      },
+      {
+        "team_number": 8790,
+        "nickname": "Departure",
+        "country": "Chinese Taipei",
+        "appearances": 2
+      },
+      {
+        "team_number": 9220,
+        "nickname": "Geekos",
+        "country": "France",
+        "appearances": 2
+      },
+      {
+        "team_number": 9999,
+        "nickname": "Off-Season Demo Team 9999",
+        "country": "USA",
         "appearances": 2
       }
     ]
@@ -489,6 +745,28 @@
           2017,
           2018,
           2022
+        ],
+        "wins": [
+          {
+            "year": 2011,
+            "division": "Galileo"
+          },
+          {
+            "year": 2014,
+            "division": "Curie"
+          },
+          {
+            "year": 2017,
+            "division": "Daly"
+          },
+          {
+            "year": 2018,
+            "division": "Hopper"
+          },
+          {
+            "year": 2022,
+            "division": "Galileo"
+          }
         ]
       },
       {
@@ -498,6 +776,20 @@
           2011,
           2017,
           2019
+        ],
+        "wins": [
+          {
+            "year": 2011,
+            "division": "Galileo"
+          },
+          {
+            "year": 2017,
+            "division": "Roebling"
+          },
+          {
+            "year": 2019,
+            "division": "Newton"
+          }
         ]
       },
       {
@@ -507,6 +799,20 @@
           2019,
           2023,
           2025
+        ],
+        "wins": [
+          {
+            "year": 2019,
+            "division": "Newton"
+          },
+          {
+            "year": 2023,
+            "division": "Hopper"
+          },
+          {
+            "year": 2025,
+            "division": "Newton"
+          }
         ]
       },
       {
@@ -515,6 +821,16 @@
         "years": [
           2001,
           2010
+        ],
+        "wins": [
+          {
+            "year": 2001,
+            "division": "Newton"
+          },
+          {
+            "year": 2010,
+            "division": "Newton"
+          }
         ]
       },
       {
@@ -523,6 +839,16 @@
         "years": [
           2019,
           2025
+        ],
+        "wins": [
+          {
+            "year": 2019,
+            "division": "Newton"
+          },
+          {
+            "year": 2025,
+            "division": "Newton"
+          }
         ]
       },
       {
@@ -530,6 +856,12 @@
         "nickname": "The Wildhats",
         "years": [
           1995
+        ],
+        "wins": [
+          {
+            "year": 1995,
+            "division": ""
+          }
         ]
       },
       {
@@ -537,6 +869,12 @@
         "nickname": "Team 232",
         "years": [
           2000
+        ],
+        "wins": [
+          {
+            "year": 2000,
+            "division": ""
+          }
         ]
       },
       {
@@ -544,6 +882,12 @@
         "nickname": "Team 255",
         "years": [
           2000
+        ],
+        "wins": [
+          {
+            "year": 2000,
+            "division": ""
+          }
         ]
       },
       {
@@ -551,6 +895,12 @@
         "nickname": "Spartan Robotics",
         "years": [
           2009
+        ],
+        "wins": [
+          {
+            "year": 2009,
+            "division": "Galileo"
+          }
         ]
       },
       {
@@ -558,6 +908,12 @@
         "nickname": "Buchanan Bird Brains",
         "years": [
           2015
+        ],
+        "wins": [
+          {
+            "year": 2015,
+            "division": "Newton"
+          }
         ]
       },
       {
@@ -565,6 +921,12 @@
         "nickname": "Citrus Circuits",
         "years": [
           2015
+        ],
+        "wins": [
+          {
+            "year": 2015,
+            "division": "Newton"
+          }
         ]
       },
       {
@@ -572,6 +934,12 @@
         "nickname": "The Vitruvian Bots",
         "years": [
           2019
+        ],
+        "wins": [
+          {
+            "year": 2019,
+            "division": "Newton"
+          }
         ]
       },
       {
@@ -579,6 +947,12 @@
         "nickname": "HighTide",
         "years": [
           2023
+        ],
+        "wins": [
+          {
+            "year": 2023,
+            "division": "Hopper"
+          }
         ]
       },
       {
@@ -586,6 +960,12 @@
         "nickname": "Gryffingear",
         "years": [
           2015
+        ],
+        "wins": [
+          {
+            "year": 2015,
+            "division": "Newton"
+          }
         ]
       },
       {
@@ -593,6 +973,12 @@
         "nickname": "Bearium",
         "years": [
           2017
+        ],
+        "wins": [
+          {
+            "year": 2017,
+            "division": "Roebling"
+          }
         ]
       }
     ],
@@ -1014,6 +1400,12 @@
         "nickname": "Crescent Coyotes",
         "years": [
           2013
+        ],
+        "wins": [
+          {
+            "year": 2013,
+            "division": "Galileo"
+          }
         ]
       },
       {
@@ -1021,6 +1413,12 @@
         "nickname": "Simbotics",
         "years": [
           2008
+        ],
+        "wins": [
+          {
+            "year": 2008,
+            "division": "Galileo"
+          }
         ]
       },
       {
@@ -1028,6 +1426,12 @@
         "nickname": "THEORY6",
         "years": [
           2013
+        ],
+        "wins": [
+          {
+            "year": 2013,
+            "division": "Galileo"
+          }
         ]
       },
       {
@@ -1035,6 +1439,12 @@
         "nickname": "Beaverworx",
         "years": [
           2023
+        ],
+        "wins": [
+          {
+            "year": 2023,
+            "division": "Hopper"
+          }
         ]
       },
       {
@@ -1042,6 +1452,12 @@
         "nickname": "Lake Effect Robotics",
         "years": [
           2018
+        ],
+        "wins": [
+          {
+            "year": 2018,
+            "division": "Daly"
+          }
         ]
       }
     ],
@@ -1293,6 +1709,12 @@
         "nickname": "Blue Cheese",
         "years": [
           2016
+        ],
+        "wins": [
+          {
+            "year": 2016,
+            "division": "Carver"
+          }
         ]
       }
     ],
@@ -1426,6 +1848,20 @@
           1993,
           2008,
           2018
+        ],
+        "wins": [
+          {
+            "year": 1993,
+            "division": ""
+          },
+          {
+            "year": 2008,
+            "division": "Galileo"
+          },
+          {
+            "year": 2018,
+            "division": "Hopper"
+          }
         ]
       },
       {
@@ -1433,6 +1869,12 @@
         "nickname": "Robonauts",
         "years": [
           2015
+        ],
+        "wins": [
+          {
+            "year": 2015,
+            "division": "Newton"
+          }
         ]
       },
       {
@@ -1440,6 +1882,12 @@
         "nickname": "Texas Torque",
         "years": [
           2013
+        ],
+        "wins": [
+          {
+            "year": 2013,
+            "division": "Galileo"
+          }
         ]
       },
       {
@@ -1447,6 +1895,12 @@
         "nickname": "Rangers",
         "years": [
           2014
+        ],
+        "wins": [
+          {
+            "year": 2014,
+            "division": "Curie"
+          }
         ]
       },
       {
@@ -1454,6 +1908,12 @@
         "nickname": "Fusion Corps",
         "years": [
           2022
+        ],
+        "wins": [
+          {
+            "year": 2022,
+            "division": "Galileo"
+          }
         ]
       }
     ],
@@ -1623,6 +2083,24 @@
           2001,
           2002,
           2004
+        ],
+        "wins": [
+          {
+            "year": 1997,
+            "division": ""
+          },
+          {
+            "year": 2001,
+            "division": "Newton"
+          },
+          {
+            "year": 2002,
+            "division": "Newton"
+          },
+          {
+            "year": 2004,
+            "division": "Archimedes"
+          }
         ]
       },
       {
@@ -1630,6 +2108,12 @@
         "nickname": "TechnoKats Robotics Team",
         "years": [
           1998
+        ],
+        "wins": [
+          {
+            "year": 1998,
+            "division": ""
+          }
         ]
       },
       {
@@ -1637,6 +2121,12 @@
         "nickname": "Maverick Robotics",
         "years": [
           2025
+        ],
+        "wins": [
+          {
+            "year": 2025,
+            "division": "Newton"
+          }
         ]
       }
     ],
@@ -1770,6 +2260,12 @@
         "nickname": "Orbit",
         "years": [
           2024
+        ],
+        "wins": [
+          {
+            "year": 2024,
+            "division": "Daly"
+          }
         ]
       },
       {
@@ -1777,6 +2273,12 @@
         "nickname": "Ha-Dream Team",
         "years": [
           2018
+        ],
+        "wins": [
+          {
+            "year": 2018,
+            "division": "Hopper"
+          }
         ]
       }
     ],
@@ -1955,6 +2457,16 @@
         "years": [
           2000,
           2012
+        ],
+        "wins": [
+          {
+            "year": 2000,
+            "division": ""
+          },
+          {
+            "year": 2012,
+            "division": "Galileo"
+          }
         ]
       },
       {
@@ -1962,6 +2474,12 @@
         "nickname": "RoboLancers",
         "years": [
           2024
+        ],
+        "wins": [
+          {
+            "year": 2024,
+            "division": "Daly"
+          }
         ]
       },
       {
@@ -1969,6 +2487,12 @@
         "nickname": "Miracle Workerz",
         "years": [
           2001
+        ],
+        "wins": [
+          {
+            "year": 2001,
+            "division": "Newton"
+          }
         ]
       },
       {
@@ -1976,6 +2500,12 @@
         "nickname": "SCH Robotics",
         "years": [
           2019
+        ],
+        "wins": [
+          {
+            "year": 2019,
+            "division": "Darwin"
+          }
         ]
       },
       {
@@ -1983,6 +2513,12 @@
         "nickname": "The Pascack PI-oneers",
         "years": [
           2017
+        ],
+        "wins": [
+          {
+            "year": 2017,
+            "division": "Daly"
+          }
         ]
       },
       {
@@ -1990,6 +2526,12 @@
         "nickname": "Centre Punch",
         "years": [
           2018
+        ],
+        "wins": [
+          {
+            "year": 2018,
+            "division": "Daly"
+          }
         ]
       }
     ],
@@ -2194,6 +2736,12 @@
         "nickname": "Robodogs",
         "years": [
           2004
+        ],
+        "wins": [
+          {
+            "year": 2004,
+            "division": "Archimedes"
+          }
         ]
       }
     ],
@@ -2444,6 +2992,20 @@
           2005,
           2009,
           2010
+        ],
+        "wins": [
+          {
+            "year": 2005,
+            "division": "Newton"
+          },
+          {
+            "year": 2009,
+            "division": "Galileo"
+          },
+          {
+            "year": 2010,
+            "division": "Newton"
+          }
         ]
       },
       {
@@ -2453,6 +3015,20 @@
           2006,
           2008,
           2019
+        ],
+        "wins": [
+          {
+            "year": 2006,
+            "division": "Archimedes"
+          },
+          {
+            "year": 2008,
+            "division": "Galileo"
+          },
+          {
+            "year": 2019,
+            "division": "Darwin"
+          }
         ]
       },
       {
@@ -2461,6 +3037,16 @@
         "years": [
           2003,
           2014
+        ],
+        "wins": [
+          {
+            "year": 2003,
+            "division": "Archimedes"
+          },
+          {
+            "year": 2014,
+            "division": "Curie"
+          }
         ]
       },
       {
@@ -2469,6 +3055,16 @@
         "years": [
           2017,
           2018
+        ],
+        "wins": [
+          {
+            "year": 2017,
+            "division": "Daly"
+          },
+          {
+            "year": 2018,
+            "division": "Daly"
+          }
         ]
       },
       {
@@ -2476,6 +3072,12 @@
         "nickname": "The Juggernauts",
         "years": [
           1999
+        ],
+        "wins": [
+          {
+            "year": 1999,
+            "division": ""
+          }
         ]
       },
       {
@@ -2483,6 +3085,12 @@
         "nickname": "Team RUSH",
         "years": [
           2018
+        ],
+        "wins": [
+          {
+            "year": 2018,
+            "division": "Daly"
+          }
         ]
       },
       {
@@ -2490,6 +3098,12 @@
         "nickname": "The Huskie Brigade",
         "years": [
           2003
+        ],
+        "wins": [
+          {
+            "year": 2003,
+            "division": "Archimedes"
+          }
         ]
       },
       {
@@ -2497,6 +3111,12 @@
         "nickname": "Grizzly Robotics",
         "years": [
           2002
+        ],
+        "wins": [
+          {
+            "year": 2002,
+            "division": "Newton"
+          }
         ]
       },
       {
@@ -2504,6 +3124,12 @@
         "nickname": "Team CHAOS",
         "years": [
           2014
+        ],
+        "wins": [
+          {
+            "year": 2014,
+            "division": "Curie"
+          }
         ]
       },
       {
@@ -2511,6 +3137,12 @@
         "nickname": "Martians",
         "years": [
           2004
+        ],
+        "wins": [
+          {
+            "year": 2004,
+            "division": "Archimedes"
+          }
         ]
       },
       {
@@ -2518,6 +3150,12 @@
         "nickname": "Frog Force",
         "years": [
           2005
+        ],
+        "wins": [
+          {
+            "year": 2005,
+            "division": "Newton"
+          }
         ]
       },
       {
@@ -2525,6 +3163,12 @@
         "nickname": "Lightning Robotics",
         "years": [
           2017
+        ],
+        "wins": [
+          {
+            "year": 2017,
+            "division": "Daly"
+          }
         ]
       },
       {
@@ -2532,6 +3176,12 @@
         "nickname": "Knight Vision",
         "years": [
           2022
+        ],
+        "wins": [
+          {
+            "year": 2022,
+            "division": "Galileo"
+          }
         ]
       },
       {
@@ -2539,6 +3189,12 @@
         "nickname": "TechnoDogs",
         "years": [
           2019
+        ],
+        "wins": [
+          {
+            "year": 2019,
+            "division": "Darwin"
+          }
         ]
       }
     ],
@@ -2918,6 +3574,20 @@
           2003,
           2009,
           2011
+        ],
+        "wins": [
+          {
+            "year": 2003,
+            "division": "Archimedes"
+          },
+          {
+            "year": 2009,
+            "division": "Galileo"
+          },
+          {
+            "year": 2011,
+            "division": "Galileo"
+          }
         ]
       },
       {
@@ -2925,6 +3595,12 @@
         "nickname": "Team E.L.I.T.E.",
         "years": [
           1999
+        ],
+        "wins": [
+          {
+            "year": 1999,
+            "division": ""
+          }
         ]
       },
       {
@@ -2932,6 +3608,12 @@
         "nickname": "Youth Tech Academy Red Dragons",
         "years": [
           2016
+        ],
+        "wins": [
+          {
+            "year": 2016,
+            "division": "Carver"
+          }
         ]
       },
       {
@@ -2939,6 +3621,12 @@
         "nickname": "Operation Orange",
         "years": [
           1994
+        ],
+        "wins": [
+          {
+            "year": 1994,
+            "division": ""
+          }
         ]
       },
       {
@@ -2946,6 +3634,12 @@
         "nickname": "Roboteers",
         "years": [
           2016
+        ],
+        "wins": [
+          {
+            "year": 2016,
+            "division": "Carver"
+          }
         ]
       },
       {
@@ -2953,6 +3647,12 @@
         "nickname": "Ctrl-Z",
         "years": [
           2023
+        ],
+        "wins": [
+          {
+            "year": 2023,
+            "division": "Hopper"
+          }
         ]
       },
       {
@@ -2960,6 +3660,12 @@
         "nickname": "Team SCREAM",
         "years": [
           2024
+        ],
+        "wins": [
+          {
+            "year": 2024,
+            "division": "Daly"
+          }
         ]
       }
     ],
@@ -3200,12 +3906,6 @@
         "appearances": 2
       },
       {
-        "team_number": 6024,
-        "nickname": "R Factor",
-        "country": "India",
-        "appearances": 2
-      },
-      {
         "team_number": 8020,
         "nickname": "CyberpunK",
         "country": "Chinese Taipei",
@@ -3285,6 +3985,12 @@
         "nickname": "HIGHROLLERS",
         "years": [
           2007
+        ],
+        "wins": [
+          {
+            "year": 2007,
+            "division": "Newton"
+          }
         ]
       },
       {
@@ -3292,6 +3998,12 @@
         "nickname": "CRUSH",
         "years": [
           2017
+        ],
+        "wins": [
+          {
+            "year": 2017,
+            "division": "Roebling"
+          }
         ]
       },
       {
@@ -3299,6 +4011,12 @@
         "nickname": "Up-A-Creek Robotics",
         "years": [
           2022
+        ],
+        "wins": [
+          {
+            "year": 2022,
+            "division": "Galileo"
+          }
         ]
       },
       {
@@ -3306,6 +4024,12 @@
         "nickname": "Team 8-Bit",
         "years": [
           2024
+        ],
+        "wins": [
+          {
+            "year": 2024,
+            "division": "Daly"
+          }
         ]
       }
     ],
@@ -3573,7 +4297,7 @@
       2026
     ],
     "total_events": 365,
-    "team_count": 227,
+    "team_count": 226,
     "current_season_teams": 200,
     "active_year": 2026,
     "hof_teams": [
@@ -3609,6 +4333,16 @@
         "years": [
           2007,
           2010
+        ],
+        "wins": [
+          {
+            "year": 2007,
+            "division": "Newton"
+          },
+          {
+            "year": 2010,
+            "division": "Newton"
+          }
         ]
       },
       {
@@ -3616,6 +4350,12 @@
         "nickname": "NUTRONs",
         "years": [
           2001
+        ],
+        "wins": [
+          {
+            "year": 2001,
+            "division": "Newton"
+          }
         ]
       },
       {
@@ -3623,6 +4363,12 @@
         "nickname": "Gael Force",
         "years": [
           1992
+        ],
+        "wins": [
+          {
+            "year": 1992,
+            "division": ""
+          }
         ]
       },
       {
@@ -3630,6 +4376,12 @@
         "nickname": "RAGE Robotics ⚙️",
         "years": [
           2002
+        ],
+        "wins": [
+          {
+            "year": 2002,
+            "division": "Newton"
+          }
         ]
       },
       {
@@ -3637,6 +4389,12 @@
         "nickname": "Aces High",
         "years": [
           1999
+        ],
+        "wins": [
+          {
+            "year": 1999,
+            "division": ""
+          }
         ]
       },
       {
@@ -3644,6 +4402,12 @@
         "nickname": "Gompei and the HERD",
         "years": [
           2007
+        ],
+        "wins": [
+          {
+            "year": 2007,
+            "division": "Newton"
+          }
         ]
       }
     ],
@@ -3877,7 +4641,7 @@
       2026
     ],
     "total_events": 100,
-    "team_count": 191,
+    "team_count": 192,
     "current_season_teams": 170,
     "active_year": 2026,
     "hof_teams": [
@@ -4000,6 +4764,12 @@
     "einstein_count": 13,
     "top_international_visitors": [
       {
+        "team_number": 6024,
+        "nickname": "R Factor",
+        "country": "India",
+        "appearances": 5
+      },
+      {
         "team_number": 8595,
         "nickname": "This Is How We Play",
         "country": "Chinese Taipei",
@@ -4010,12 +4780,6 @@
         "nickname": "Ultime",
         "country": "Canada",
         "appearances": 4
-      },
-      {
-        "team_number": 6024,
-        "nickname": "R Factor",
-        "country": "India",
-        "appearances": 3
       },
       {
         "team_number": 7636,
@@ -4138,12 +4902,6 @@
         "appearances": 2
       },
       {
-        "team_number": 10399,
-        "nickname": "Burman Bush",
-        "country": "South Africa",
-        "appearances": 2
-      },
-      {
         "team_number": 10922,
         "nickname": "Amped",
         "country": "Chinese Taipei",
@@ -4206,6 +4964,16 @@
         "years": [
           2005,
           2016
+        ],
+        "wins": [
+          {
+            "year": 2005,
+            "division": "Newton"
+          },
+          {
+            "year": 2016,
+            "division": "Carver"
+          }
         ]
       },
       {
@@ -4213,6 +4981,12 @@
         "nickname": "The Illumination",
         "years": [
           1996
+        ],
+        "wins": [
+          {
+            "year": 1996,
+            "division": ""
+          }
         ]
       },
       {
@@ -4220,6 +4994,12 @@
         "nickname": "Tech Fusion",
         "years": [
           2001
+        ],
+        "wins": [
+          {
+            "year": 2001,
+            "division": "Newton"
+          }
         ]
       },
       {
@@ -4227,6 +5007,12 @@
         "nickname": "ROBO WIZARDS",
         "years": [
           2006
+        ],
+        "wins": [
+          {
+            "year": 2006,
+            "division": "Archimedes"
+          }
         ]
       }
     ],
@@ -4477,6 +5263,12 @@
         "nickname": "Jack in the Bot",
         "years": [
           2025
+        ],
+        "wins": [
+          {
+            "year": 2025,
+            "division": "Newton"
+          }
         ]
       },
       {
@@ -4484,6 +5276,12 @@
         "nickname": "Viking Robotics",
         "years": [
           2017
+        ],
+        "wins": [
+          {
+            "year": 2017,
+            "division": "Roebling"
+          }
         ]
       },
       {
@@ -4491,6 +5289,12 @@
         "nickname": "The Spartabots",
         "years": [
           2018
+        ],
+        "wins": [
+          {
+            "year": 2018,
+            "division": "Hopper"
+          }
         ]
       }
     ],
@@ -4762,7 +5566,7 @@
     ],
     "total_events": 108,
     "team_count": 294,
-    "current_season_teams": 220,
+    "current_season_teams": 219,
     "active_year": 2026,
     "hof_teams": [
       {
@@ -4798,6 +5602,12 @@
         "nickname": "Bomb Squad",
         "years": [
           2012
+        ],
+        "wins": [
+          {
+            "year": 2012,
+            "division": "Galileo"
+          }
         ]
       },
       {
@@ -4805,6 +5615,12 @@
         "nickname": "S.P.A.M.",
         "years": [
           2012
+        ],
+        "wins": [
+          {
+            "year": 2012,
+            "division": "Galileo"
+          }
         ]
       }
     ],
@@ -5079,8 +5895,8 @@
       2026
     ],
     "total_events": 29,
-    "team_count": 309,
-    "current_season_teams": 223,
+    "team_count": 308,
+    "current_season_teams": 222,
     "active_year": 2026,
     "hof_teams": [],
     "hof_count": 0,

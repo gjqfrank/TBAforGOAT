@@ -1812,6 +1812,19 @@ function _champBadge(entries, cls, icon, label) {
     const frontText = `${icon} ${label}: ${years}`;
     const hasPick = entries.some(y => typeof y === 'object' && y.pick);
     if (!hasPick) return `<span class="past-champ-badge ${cls}">${frontText}</span>`;
+
+    // Single entry with pick → use flip interaction (consistent with award chips)
+    if (entries.length === 1) {
+        const y = entries[0];
+        const alLabel = y.alliance ? `A${y.alliance} ` : '';
+        return `<span class="past-champ-badge ${cls} pick-flip" onclick="this.classList.toggle('flipped')">`
+             + `<span class="pick-flip-inner">`
+             + `<span class="pick-flip-front">${frontText}</span>`
+             + `<span class="pick-flip-back">${alLabel}${y.pick}</span>`
+             + `</span></span>`;
+    }
+
+    // Multiple entries with picks → dropdown popover
     const detailRows = entries.map(y => {
         if (typeof y === 'object' && y.pick) {
             const a = y.alliance ? `<span class="pick-detail-alliance">A${y.alliance}</span>` : '';
@@ -5157,7 +5170,7 @@ function renderComparison(data, opts) {
         let sideCls = '';
         if (redKeys.has(t.team_key)) sideCls = 'comp-red';
         else if (blueKeys.has(t.team_key)) sideCls = 'comp-blue';
-        const loc = [t.city, t.state_prov].filter(Boolean).join(', ');
+        const loc = [t.state_prov, t.country].filter(Boolean).join(', ');
         html += `
         <div class="comp-header ${sideCls}">
             <div class="comp-team-num">${t.team_number}</div>

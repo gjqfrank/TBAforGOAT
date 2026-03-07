@@ -302,6 +302,31 @@ async def generate():
                     if tk:
                         einstein_winner_by_team[tk].append(yr)
 
+    # ── Phase 4b: Resolve CMP division for each Einstein winner ─
+    # Build a map of (team_key, year) → division short name from CMP Division
+    # event rosters (event_type=3).
+    print("  Resolving Einstein winners' CMP divisions...")
+    div_events = [e for e in all_events if e.get("event_type") == 3]
+    # Only fetch rosters for years where we have Einstein winners
+    winner_years = set()
+    for yrs in einstein_winner_by_team.values():
+        winner_years.update(yrs)
+    div_events_needed = [e for e in div_events if int(e["key"][:4]) in winner_years]
+    div_roster_results = await asyncio.gather(
+        *[_safe(client.get(f"/event/{e['key']}/teams/keys")) for e in div_events_needed]
+    )
+    team_year_division: dict[tuple[str, int], str] = {}  # (team_key, year) → division
+    for ev, roster in zip(div_events_needed, div_roster_results):
+        if not roster:
+            continue
+        yr = int(ev["key"][:4])
+        # Extract short division name: "Archimedes Division" → "Archimedes"
+        div_name = (ev.get("name") or ev["key"]).replace(" Division", "")
+        for tk in roster:
+            if isinstance(tk, str):
+                team_year_division[(tk, yr)] = div_name
+    print(f"  Division mappings: {len(team_year_division)}")
+
     einstein_by_team: dict[str, list[int]] = defaultdict(list)
     print("  Fetching Einstein match data (robot appearances only)...")
     results = await asyncio.gather(
@@ -422,10 +447,15 @@ async def generate():
     for tk, yrs in einstein_winner_by_team.items():
         reg = _true_home(tk)
         inf = team_info.get(tk, {})
+        wins = []
+        for y in sorted(set(yrs)):
+            div = team_year_division.get((tk, y), "")
+            wins.append({"year": y, "division": div})
         r_ein_win[reg].append({
             "team_number": inf.get("team_number", int(tk[3:])),
             "nickname": inf.get("nickname", ""),
             "years": sorted(set(yrs)),
+            "wins": wins,
         })
 
     # ── Phase 7: International visitors ───────────────────────
@@ -548,7 +578,27 @@ async def generate():
                                              lambda x: x.get("team_number", 0))
         d["impact_count"] = len(d["impact_finalists"])
 
-        d["einstein_winners"] = _merge_list(
+        # Merge einstein_winners with wins[] sub-lists
+        def _merge_winners(dst_list, src_list, sort_key):
+            seen = {t["team_number"]: t for t in dst_list}
+            for t in src_list:
+                tn = t["team_number"]
+                if tn not in seen:
+                    dst_list.append(t)
+                    seen[tn] = t
+                else:
+                    existing = seen[tn]
+                    existing["years"] = sorted(set(existing.get("years", [])
+                                                   + t.get("years", [])))
+                    # Merge wins lists, dedup by year
+                    ew = {w["year"]: w for w in existing.get("wins", [])}
+                    for w in t.get("wins", []):
+                        if w["year"] not in ew:
+                            ew[w["year"]] = w
+                    existing["wins"] = sorted(ew.values(), key=lambda w: w["year"])
+            return sorted(dst_list, key=sort_key)
+
+        d["einstein_winners"] = _merge_winners(
             list(d.get("einstein_winners", [])), s.get("einstein_winners", []),
             lambda x: (-len(x.get("years", [])), x.get("team_number", 0)))
         d["einstein_winner_count"] = len(d["einstein_winners"])
@@ -578,6 +628,79 @@ async def generate():
 
     for drop in _DROP:
         output.pop(drop, None)
+
+    # ── Phase 8c: Inclusive country stats ─────────────────────
+    # Some countries have a district coexisting with regionals.
+    # The "Canada" entry should include Ontario history so that a
+    # caster at a BC or QC regional sees all of Canada's FRC history.
+    _INCLUSIVE = {
+        "Canada": "FIRST Canada - Ontario",
+    }
+    for parent, child in _INCLUSIVE.items():
+        if parent not in output or child not in output:
+            continue
+        p, c = output[parent], output[child]
+        print(f"  Including '{child}' stats in '{parent}'")
+
+        if (c["first_event_year"] or 9999) < (p["first_event_year"] or 9999):
+            p["first_event_year"] = c["first_event_year"]
+            p["first_event_name"] = c["first_event_name"]
+
+        p["active_years"] = sorted(set(p["active_years"]) | set(c["active_years"]))
+        p["total_events"] += c["total_events"]
+        p["team_count"] += c["team_count"]
+        p["current_season_teams"] = p.get("current_season_teams", 0) + c.get("current_season_teams", 0)
+
+        def _copy_merge(dst_list, src_list, sort_key):
+            """Merge src into dst (copies, no mutation of src), dedup by team_number."""
+            import copy
+            dst_list = [copy.deepcopy(t) for t in dst_list]
+            seen = {t["team_number"]: t for t in dst_list}
+            for t in src_list:
+                tn = t["team_number"]
+                if tn not in seen:
+                    dst_list.append(copy.deepcopy(t))
+                    seen[tn] = dst_list[-1]
+                else:
+                    existing = seen[tn]
+                    existing["years"] = sorted(set(existing.get("years", []) + t.get("years", [])))
+                    if "wins" in t:
+                        ew = {w["year"]: w for w in existing.get("wins", [])}
+                        for w in t.get("wins", []):
+                            if w["year"] not in ew:
+                                ew[w["year"]] = w
+                        existing["wins"] = sorted(ew.values(), key=lambda w: w["year"])
+            return sorted(dst_list, key=sort_key)
+
+        p["hof_teams"] = _copy_merge(p["hof_teams"], c["hof_teams"],
+                                      lambda x: x.get("team_number", 0))
+        p["hof_count"] = len(p["hof_teams"])
+
+        p["impact_finalists"] = _copy_merge(p["impact_finalists"], c["impact_finalists"],
+                                             lambda x: x.get("team_number", 0))
+        p["impact_count"] = len(p["impact_finalists"])
+
+        p["einstein_winners"] = _copy_merge(
+            p.get("einstein_winners", []), c.get("einstein_winners", []),
+            lambda x: (-len(x.get("years", [])), x.get("team_number", 0)))
+        p["einstein_winner_count"] = len(p["einstein_winners"])
+
+        all_ein = _copy_merge(
+            p.get("einstein_teams", []), c.get("einstein_teams", []),
+            lambda x: (-len(x.get("years", [])), x.get("team_number", 0)))
+        p["einstein_teams"] = all_ein[:25]
+        p["einstein_count"] = max(p.get("einstein_count", 0), len(all_ein))
+
+        # Merge visitors
+        by_num = {v["team_number"]: dict(v) for v in p.get("top_international_visitors", [])}
+        for v in c.get("top_international_visitors", []):
+            tn = v["team_number"]
+            if tn in by_num:
+                by_num[tn]["appearances"] += v["appearances"]
+            else:
+                by_num[tn] = dict(v)
+        merged_vis = sorted(by_num.values(), key=lambda x: (-x["appearances"], x["team_number"]))
+        p["top_international_visitors"] = [v for v in merged_vis if v["appearances"] > 1]
 
     print(f"  Final regions: {len(output)}")
 
