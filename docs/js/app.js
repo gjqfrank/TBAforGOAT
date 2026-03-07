@@ -513,6 +513,11 @@ document.querySelectorAll('.tab').forEach(btn => {
             if (cm && !cm.has_breakdown) startBdPolling();
         }
 
+        // Re-entering Rankings tab — immediate refresh for ongoing events
+        if (btn.dataset.tab === 'rankings' && currentEvent && currentEventStatus === 'ongoing') {
+            refreshRankings();
+        }
+
         // ── History tab ──
         if (btn.dataset.tab === 'history' && currentEvent && !renderedTabs.history) {
             hide('history-empty');
@@ -971,7 +976,7 @@ function clearActiveEvent() {
 }
 
 // ── Auto-refresh rankings polling ─────────────────────────
-const RANKINGS_POLL_INTERVAL = 60_000; // 60 seconds
+const RANKINGS_POLL_INTERVAL = 30_000; // 30 seconds
 
 function startRankingsPolling() {
     stopRankingsPolling();
@@ -989,8 +994,10 @@ function stopRankingsPolling() {
 async function refreshRankings() {
     if (!currentEvent) { stopRankingsPolling(); return; }
     try {
+        const oldMap = snapshotRankings();
         const teams = await API.refreshRankings(currentEvent);
         $('event-teams').innerHTML = buildTeamTable(teams);
+        applyRankChangeIndicators(oldMap);
     } catch (_) {
         // Silently ignore — network hiccups shouldn't disrupt the UI
     }
@@ -1558,6 +1565,62 @@ let teamsData = null;      // cached teams list for sorting
 let teamsSortCol = 'rank';  // current sort column
 let teamsSortAsc = true;    // sort direction
 
+function snapshotRankings() {
+    if (!teamsData) return null;
+    const map = new Map();
+    for (const t of teamsData) {
+        map.set(t.team_key, { rank: t.rank, wins: t.wins, losses: t.losses, ties: t.ties, ranking_points: t.ranking_points });
+    }
+    return map;
+}
+
+function applyRankChangeIndicators(oldMap) {
+    if (!oldMap || !teamsData) return;
+    let anyChange = false;
+    for (const t of teamsData) {
+        const old = oldMap.get(t.team_key);
+        if (!old) continue;
+        const tr = document.querySelector(`#event-teams tr[data-team-key="${t.team_key}"]`);
+        if (!tr) continue;
+
+        const rankDelta = old.rank - t.rank; // positive = moved up
+        const recordChanged = old.wins !== t.wins || old.losses !== t.losses || old.ties !== t.ties;
+
+        if (rankDelta > 0) {
+            tr.classList.add('rank-up');
+            const rankCell = tr.querySelector('.rank');
+            if (rankCell) {
+                const badge = document.createElement('span');
+                badge.className = 'rank-delta rank-delta-up';
+                badge.textContent = `\u2191${rankDelta}`;
+                rankCell.appendChild(badge);
+            }
+            anyChange = true;
+        } else if (rankDelta < 0) {
+            tr.classList.add('rank-down');
+            const rankCell = tr.querySelector('.rank');
+            if (rankCell) {
+                const badge = document.createElement('span');
+                badge.className = 'rank-delta rank-delta-down';
+                badge.textContent = `\u2193${Math.abs(rankDelta)}`;
+                rankCell.appendChild(badge);
+            }
+            anyChange = true;
+        } else if (recordChanged) {
+            tr.classList.add('rank-updated');
+            anyChange = true;
+        }
+    }
+    if (!anyChange) return;
+    // Remove indicators after animation completes
+    setTimeout(() => {
+        document.querySelectorAll('#event-teams .rank-up, #event-teams .rank-down, #event-teams .rank-updated').forEach(el => {
+            el.classList.remove('rank-up', 'rank-down', 'rank-updated');
+        });
+        document.querySelectorAll('#event-teams .rank-delta').forEach(el => el.remove());
+    }, 6000);
+}
+
 function buildTeamTable(teams) {
     teamsData = teams;
     // Apply the current sort so upcoming events (sorted by team_number) render correctly
@@ -1664,7 +1727,7 @@ function renderTeamTable(teams, sortCol, asc) {
                 const isIntl = highlightForeign && t.country && eventCountry && t.country !== eventCountry;
                 const isRookie = highlightRookie && t.rookie_year && currentEventYear && t.rookie_year >= currentEventYear;
                 return `
-            <tr class="${isIntl ? 'foreign-team-row' : ''}${isRookie ? ' rookie-team-row' : ''}" data-country="${t.country || ''}" data-rookie-year="${t.rookie_year || ''}">
+            <tr class="${isIntl ? 'foreign-team-row' : ''}${isRookie ? ' rookie-team-row' : ''}" data-team-key="${t.team_key}" data-country="${t.country || ''}" data-rookie-year="${t.rookie_year || ''}">
                 <td class="compare-td"><input type="checkbox" class="compare-cb" data-team="${t.team_key}" ${checked} onclick="toggleCompareTeam('${t.team_key}')"></td>
                 <td class="rank${Number(t.rank) >= 1 && Number(t.rank) <= 8 ? ' rank-top8' : ''}">${t.rank}</td>
                 <td class="team-avatar-cell">${avatarImg}</td>
