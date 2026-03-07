@@ -5343,7 +5343,9 @@ function renderRegionFacts(data) {
     let html = '<div class="history-stats-row">';
     html += _statCard('First Event', `${data.first_event_year || '–'}`, data.first_event_name || '');
     html += _statCard('Total Events', `${data.total_events}`, `${(data.active_years || []).length} seasons`);
-    html += _statCard('Active Teams', `${data.current_season_teams || data.team_count}`, `${data.active_year || new Date().getFullYear()} season`);
+    const teamCount = data.official_team_count || data.current_season_teams || data.team_count;
+    const teamSrc = data.official_team_count ? 'FIRST official' : 'TBA registrations';
+    html += _statCard('Active Teams', `${teamCount}`, `${data.active_year || new Date().getFullYear()} season`, `${teamCount} teams (${teamSrc})`);
     html += _statCard('Hall of Fame', `${data.hof_count}`, data.hof_count ? data.hof_teams.map(t => t.team_number).join(', ') : 'none yet');
     html += _statCard('Einstein Teams', `${data.einstein_count}`, data.einstein_count ? `top: ${data.einstein_teams.slice(0,3).map(t => t.team_number).join(', ')}` : 'none yet');
     html += '</div>';
@@ -5362,7 +5364,7 @@ function renderRegionFacts(data) {
     // Einstein Winners
     if (data.einstein_winners && data.einstein_winners.length) {
         html += '<div class="history-detail-section">';
-        html += '<h4>\u{1F3C6} Einstein Winners</h4>';
+        html += '<h4>Einstein Winners</h4>';
         html += '<div class="history-team-chips">';
         for (const t of data.einstein_winners) {
             html += `<span class="history-chip einstein-win-chip">${t.team_number} <span class="chip-name">${_esc(t.nickname)}</span> <span class="chip-years">${t.years.join(', ')}</span></span>`;
@@ -5478,8 +5480,9 @@ function renderEventHistory(data) {
 
 
 // ── Helpers ────────────────────────────────────────────────
-function _statCard(label, value, sub) {
-    return `<div class="history-stat-card"><div class="hsc-value">${value}</div><div class="hsc-label">${label}</div>${sub ? `<div class="hsc-sub">${sub}</div>` : ''}</div>`;
+function _statCard(label, value, sub, tooltip) {
+    const tip = tooltip ? ` title="${tooltip}"` : '';
+    return `<div class="history-stat-card"${tip}><div class="hsc-value">${value}</div><div class="hsc-label">${label}</div>${sub ? `<div class="hsc-sub">${sub}</div>` : ''}</div>`;
 }
 function _esc(s) { return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 

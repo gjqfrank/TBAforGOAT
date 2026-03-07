@@ -23,16 +23,27 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from backend.app.services.tba_client import get_tba_client
+from backend.app.services.frc_client import get_frc_client
 
 # ── Same region resolution as event_service.py ──────────────
 _REGION_MAP = {
     "New England": {"NH", "MA", "CT", "RI", "VT", "ME"},
-    "Mid-Atlantic": {"NY", "NJ", "PA", "DE", "MD", "DC"},
-    "Southeast": {"VA", "NC", "SC", "GA", "FL", "AL", "MS", "TN", "KY", "WV", "LA", "AR"},
-    "Midwest": {"OH", "IN", "IL", "MI", "WI", "MN", "IA", "MO", "ND", "SD", "NE", "KS"},
+    "New York": {"NY"},
+    "Mid-Atlantic": {"NJ", "PA", "DE"},
+    "Chesapeake": {"VA", "MD", "DC"},
+    "North Carolina": {"NC"},
+    "South Carolina": {"SC"},
+    "Georgia": {"GA"},
+    "Southeast": {"FL", "AL", "MS", "TN", "KY", "WV", "LA", "AR"},
+    "Indiana": {"IN"},
+    "Michigan": {"MI"},
+    "Midwest": {"OH", "IL", "MN", "IA", "MO", "ND", "SD", "NE", "KS"},
+    "Wisconsin": {"WI"},
     "Texas": {"TX"},
     "Mountain": {"MT", "WY", "CO", "NM", "AZ", "UT", "ID", "NV"},
-    "Pacific": {"WA", "OR", "CA", "HI", "AK"},
+    "California": {"CA"},
+    "Pacific Northwest": {"WA", "OR"},
+    "Pacific": {"HI", "AK"},
 }
 
 _COUNTRY_LABELS = (
@@ -63,6 +74,15 @@ _CHAMPIONSHIP_TYPES = {3, 4, 6}  # CMP Division, CMP Finals, Festival of Champio
 _REGION_MERGE = {
     "Israel": "FIRST Israel",
     "Texas": "FIRST In Texas",
+    "California": "FIRST California",
+    "Wisconsin": "FIRST Wisconsin",
+    "Indiana": "FIRST Indiana Robotics",
+    "Michigan": "FIRST in Michigan",
+    "North Carolina": "FIRST North Carolina",
+    "South Carolina": "FIRST South Carolina",
+    "Georgia": "Peachtree",
+    "Chesapeake": "FIRST Chesapeake",
+    "Mid-Atlantic": "FIRST Mid-Atlantic",
 }
 
 _COUNTRY_NORMALIZE = {
@@ -214,6 +234,22 @@ async def generate():
           f"active teams: {len(active_team_keys)}")
 
     print(f"  Unique teams (5yr sample): {len(team_info)}")
+
+    # ── Phase 3c: Official FIRST district team counts ─────────
+    print(f"\nPhase 3c: Fetching official FIRST district team counts...")
+    official_team_counts: dict[str, int] = {}  # district display_name → count
+    try:
+        frc = get_frc_client()
+        districts = await frc.get(f"/{ACTIVE_YEAR}/districts")
+        for d in districts.get("districts", []):
+            code = d["code"]
+            name = d["name"]
+            teams_data = await _safe(frc.get(f"/{ACTIVE_YEAR}/teams?districtCode={code}&page=1"))
+            if teams_data and "teamCountTotal" in teams_data:
+                official_team_counts[name] = teams_data["teamCountTotal"]
+                print(f"  {name}: {teams_data['teamCountTotal']} teams (official)")
+    except Exception as e:
+        print(f"  Warning: Could not fetch FIRST district counts: {e}")
 
     # ── Phase 4: Championship analysis ────────────────────────
     print("\nPhase 4: Championship awards & Einstein...")
@@ -450,13 +486,24 @@ async def generate():
             "einstein_count": len(ein),
             "top_international_visitors": r_vis.get(rn, []),
         }
+        if rn in official_team_counts:
+            output[rn]["official_team_count"] = official_team_counts[rn]
 
     # ── Phase 8b: Merge pre-district regions into districts ───
     # Regions that transitioned from regionals to a district system
     # get their pre-district event history folded into the district entry.
     _MERGE_INTO = {
-        "Israel": "FIRST Israel",      # Israel regionals 2005-2016 → FIS district 2017+
-        "Texas": "FIRST In Texas",     # Texas regionals 1998-2018 → FIT district 2019+
+        "Israel": "FIRST Israel",
+        "Texas": "FIRST In Texas",
+        "California": "FIRST California",
+        "Wisconsin": "FIRST Wisconsin",
+        "Indiana": "FIRST Indiana Robotics",
+        "Michigan": "FIRST in Michigan",
+        "North Carolina": "FIRST North Carolina",
+        "South Carolina": "FIRST South Carolina",
+        "Georgia": "Peachtree",
+        "Chesapeake": "FIRST Chesapeake",
+        "Mid-Atlantic": "FIRST Mid-Atlantic",
     }
     _DROP = {"San Jose"}  # one-off region with 0 teams
 
