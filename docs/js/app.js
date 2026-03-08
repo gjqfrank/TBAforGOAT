@@ -1720,7 +1720,7 @@ function applyRankChangeIndicators(oldMap) {
             el.classList.remove('rank-up', 'rank-down', 'rank-updated');
         });
         document.querySelectorAll('#event-teams .rank-delta').forEach(el => el.remove());
-    }, 6000);
+    }, 8000);
 }
 
 function buildTeamTable(teams) {

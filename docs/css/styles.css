@@ -1313,33 +1313,33 @@ input.input-loading {
 /* ── Rankings change indicators ────────────────────────── */
 @keyframes rankUpFlash {
     0%   { background: rgba(34, 197, 94, .22); }
-    70%  { background: rgba(34, 197, 94, .08); }
+    40%  { background: rgba(34, 197, 94, .18); }
     100% { background: transparent; }
 }
 @keyframes rankDownFlash {
     0%   { background: rgba(239, 68, 68, .22); }
-    70%  { background: rgba(239, 68, 68, .08); }
+    40%  { background: rgba(239, 68, 68, .18); }
     100% { background: transparent; }
 }
 @keyframes rankUpdatedFlash {
     0%   { background: rgba(250, 204, 21, .16); }
-    70%  { background: rgba(250, 204, 21, .06); }
+    40%  { background: rgba(250, 204, 21, .12); }
     100% { background: transparent; }
 }
 @keyframes rankDeltaFade {
     0%   { opacity: 1; }
-    80%  { opacity: .6; }
+    50%  { opacity: 1; }
     100% { opacity: 0; }
 }
 
 .data-table tbody tr.rank-up {
-    animation: rankUpFlash 6s ease-out forwards;
+    animation: rankUpFlash 8s cubic-bezier(.4, 0, .2, 1) forwards;
 }
 .data-table tbody tr.rank-down {
-    animation: rankDownFlash 6s ease-out forwards;
+    animation: rankDownFlash 8s cubic-bezier(.4, 0, .2, 1) forwards;
 }
 .data-table tbody tr.rank-updated {
-    animation: rankUpdatedFlash 6s ease-out forwards;
+    animation: rankUpdatedFlash 8s cubic-bezier(.4, 0, .2, 1) forwards;
 }
 
 .rank-delta {
@@ -1350,7 +1350,7 @@ input.input-loading {
     border-radius: 3px;
     padding: 0 .2rem;
     vertical-align: middle;
-    animation: rankDeltaFade 6s ease-out forwards;
+    animation: rankDeltaFade 8s cubic-bezier(.4, 0, .2, 1) forwards;
 }
 .rank-delta-up  { color: #22c55e; }
 .rank-delta-down { color: #ef4444; }
