@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException
 from ..services.tba_client import get_tba_client
 from ..services.frc_client import get_frc_client
 from ..services.statbotics_client import get_epa_map, get_match_predictions
+from ..services import world_record_service
 
 router = APIRouter()
 
@@ -281,10 +282,21 @@ async def get_all_matches(event_key: str):
         for r in result:
             del r["sort_key"]
 
+        # Check if this event's high score is a new world record
+        event_name = event_key
+        try:
+            ev_info = await client.get_event(event_key)
+            if ev_info:
+                event_name = ev_info.get("short_name") or ev_info.get("name") or event_key
+        except Exception:
+            pass
+        is_world_record = world_record_service.check_event_high(event_key, event_name, event_high)
+
         return {
             "event_key": event_key,
             "matches": result,
             "event_high_score": event_high,
+            "is_world_record": is_world_record,
             "total_matches": len(result),
         }
 

@@ -725,6 +725,81 @@ async function checkApiStatus() {
 checkApiStatus();
 setInterval(checkApiStatus, 60000);
 
+// ── World Record in footer ────────────────────────────────
+let _worldRecord = null;
+
+async function fetchWorldRecord() {
+    try {
+        const rec = await API.worldRecord();
+        if (rec && rec.score > 0) {
+            _worldRecord = rec;
+            renderWorldRecord(rec, false);
+        }
+    } catch { /* non-critical */ }
+}
+
+let _showWorldRecord = localStorage.getItem('showWorldRecord') !== 'false'; // on by default
+
+function toggleWorldRecord(on) {
+    _showWorldRecord = on;
+    localStorage.setItem('showWorldRecord', on ? 'true' : 'false');
+    const el = $('footer-world-record');
+    if (!el) return;
+    if (on && _worldRecord && _worldRecord.score > 0) {
+        el.classList.remove('hidden');
+    } else {
+        el.classList.add('hidden');
+    }
+}
+
+// Restore saved preference on load
+(function initWorldRecord() {
+    const saved = localStorage.getItem('showWorldRecord');
+    if (saved === 'false') {
+        _showWorldRecord = false;
+        const cb = document.getElementById('toggle-world-record');
+        if (cb) cb.checked = false;
+    }
+})();
+
+function renderWorldRecord(rec, isNew) {
+    const el = $('footer-world-record');
+    if (!el || !rec || rec.score <= 0) return;
+    $('footer-wr-score').textContent = rec.score;
+    const eventLabel = rec.event_name || rec.event_key || '';
+    const matchLabel = rec.match || '';
+    const teamsStr = (rec.teams || []).join(', ');
+    let detail = '';
+    if (matchLabel) detail += matchLabel;
+    if (eventLabel) detail += (detail ? ' · ' : '') + eventLabel;
+    if (teamsStr) detail += ` (${teamsStr})`;
+    $('footer-wr-detail').textContent = detail;
+    if (_showWorldRecord) el.classList.remove('hidden');
+    if (isNew) {
+        el.classList.add('wr-new');
+        setTimeout(() => el.classList.remove('wr-new'), 5000);
+    }
+}
+
+/** Called after PbP data loads; checks if this event set a new world record. */
+function checkWorldRecordFromPbp(data) {
+    if (!data) return;
+    if (data.is_world_record && data.event_high_score?.score > 0) {
+        const eName = (eventInfoData && (eventInfoData.short_name || eventInfoData.name)) || data.event_key;
+        const rec = {
+            score: data.event_high_score.score,
+            event_key: data.event_key,
+            event_name: eName,
+            match: data.event_high_score.match,
+            teams: data.event_high_score.teams,
+        };
+        _worldRecord = rec;
+        renderWorldRecord(rec, true);
+    }
+}
+
+fetchWorldRecord();
+
 // Load saved events list on startup
 loadSavedEventsList();
 
@@ -3231,6 +3306,7 @@ async function loadPlayByPlay() {
         setLoadingStatus('pbp-loading-status', 'Fetching match schedule\u2026');
         const data = await API.allMatches(currentEvent);
         pbpData = data;
+        checkWorldRecordFromPbp(data);
         pbpIndex = findLatestScoredMatch(data?.matches || []);
         hideSkeleton('pbp-loading');
         if (!data?.matches?.length) {
@@ -3636,7 +3712,7 @@ async function _injectPlayoffFirsts(teams, matchIdx, compLevel) {
         if (!slot) continue;
 
         const badges = [];
-        if (info.first_finals) {
+        if (isFinals && info.first_finals) {
             badges.push(`<span class="pbp-first-badge pbp-first-finals" title="First-ever appearance in Finals">
                 First Finals
             </span>`);
@@ -3840,6 +3916,7 @@ async function pbpAutoRefresh() {
         // Update global data
         pbpData = fresh;
         bdData = fresh;  // Shared data source for breakdown tab
+        checkWorldRecordFromPbp(fresh);
 
         // If nothing changed, skip re-render
         if (!scoresChanged && !newMatchesAdded) return;

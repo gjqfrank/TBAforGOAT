@@ -4,10 +4,21 @@ from typing import List
 from ..services import event_service
 from ..services import summary_service
 from ..services import region_service
+from ..services import world_record_service
 from ..services.tba_client import get_tba_client
 from ..services.alliance_service import get_alliances_with_stats
 
 router = APIRouter()
+
+
+@router.get("/world-record")
+async def world_record():
+    """Return the season world high score (highest single-alliance match score)."""
+    await world_record_service.seed_from_tba()
+    rec = world_record_service.get_world_record()
+    if not rec:
+        return {"score": 0}
+    return rec
 
 
 @router.get("/season/{year}")

@@ -53,4 +53,7 @@ const API = {
     regionFacts:  (name) => API.get(`/events/region/${encodeURIComponent(name)}/facts`),
     regionsList:  ()     => API.get('/events/regions/list'),
     eventHistory: (ek)   => API.get(`/events/${ek}/history`),
+
+    // ── Season ──────────────────────────────────────────
+    worldRecord:  ()     => API.get('/events/world-record'),
 };

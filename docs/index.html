@@ -62,6 +62,11 @@
                         <span class="toggle-slider"></span>
                         <span class="toggle-label">Show Win Predictions (Statbotics)</span>
                     </label>
+                    <label class="settings-toggle">
+                        <input type="checkbox" id="toggle-world-record" onchange="toggleWorldRecord(this.checked)" checked>
+                        <span class="toggle-slider"></span>
+                        <span class="toggle-label">Show Season High Score</span>
+                    </label>
                 </div>
             </div>
         </div>
@@ -655,6 +660,12 @@
     <!-- Presentation mode exit hint -->
     <div id="presentation-exit" class="presentation-exit hidden" onclick="togglePresentation()">
         Press <kbd>Esc</kbd> or click to exit presentation mode
+    </div>
+
+    <div id="footer-world-record" class="footer-world-record hidden">
+        <span class="footer-wr-label">Season High Score</span>
+        <span class="footer-wr-score" id="footer-wr-score"></span>
+        <span class="footer-wr-detail" id="footer-wr-detail"></span>
     </div>
 
     <footer class="site-footer">
