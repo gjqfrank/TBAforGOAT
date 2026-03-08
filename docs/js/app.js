@@ -1067,6 +1067,19 @@ function applyFastRankings(fastData, oldMap) {
         for (const row of sortedRows) tbody.appendChild(row);
     }
 
+    // Update the in-memory teamsData so the next snapshot reflects current values
+    if (teamsData) {
+        for (const t of teamsData) {
+            const f = fastMap.get(t.team_key);
+            if (!f) continue;
+            t.rank = f.rank;
+            t.wins = f.wins;
+            t.losses = f.losses;
+            t.ties = f.ties;
+            if (f.ranking_points != null) t.ranking_points = f.ranking_points;
+        }
+    }
+
     // Apply rank-change indicators using the snapshot
     if (!oldMap) return;
     let anyChange = false;
@@ -1096,7 +1109,7 @@ function applyFastRankings(fastData, oldMap) {
         setTimeout(() => {
             table.querySelectorAll('.rank-up, .rank-down, .rank-updated').forEach(el => el.classList.remove('rank-up', 'rank-down', 'rank-updated'));
             table.querySelectorAll('.rank-delta').forEach(el => el.remove());
-        }, 6000);
+        }, 8000);
     }
 }
 
