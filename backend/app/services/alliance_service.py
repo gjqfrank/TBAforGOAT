@@ -49,11 +49,13 @@ async def get_alliances_with_stats(event_key: str) -> dict:
     name_map: dict[str, str] = {}
     country_map: dict[str, str] = {}
     school_map: dict[str, str] = {}
+    rookie_year_map: dict[str, int | None] = {}
     if teams_list:
         for t in teams_list:
             name_map[t["key"]] = t.get("nickname", "")
             country_map[t["key"]] = t.get("country", "")
             school_map[t["key"]] = t.get("school_name", "")
+            rookie_year_map[t["key"]] = t.get("rookie_year")
 
     # FRC Events API school/org names (preferred)
     frc_org_map: dict[int, str] = {}
@@ -106,6 +108,7 @@ async def get_alliances_with_stats(event_key: str) -> dict:
     alliances = []
     for idx, alliance in enumerate(alliances_raw):
         picks = alliance.get("picks", [])
+        backup_in = (alliance.get("backup") or {}).get("in")
         team_details = []
         for pick_idx, tk in enumerate(picks):
             r = rank_map.get(tk, {})
@@ -113,7 +116,10 @@ async def get_alliances_with_stats(event_key: str) -> dict:
             o = opr_map.get(tk, {"opr": 0, "epa": None, "epa_auto": None, "epa_teleop": None, "epa_endgame": None})
             tnum = int(tk.replace("frc", ""))
 
-            pick_label = _pick_labels[pick_idx] if pick_idx < len(_pick_labels) else ''
+            if tk == backup_in:
+                pick_label = 'Backup'
+            else:
+                pick_label = _pick_labels[pick_idx] if pick_idx < len(_pick_labels) else ''
 
             team_details.append(
                 {
@@ -122,6 +128,7 @@ async def get_alliances_with_stats(event_key: str) -> dict:
                     "nickname": name_map.get(tk, ""),
                     "country": country_map.get(tk, ""),
                     "school_name": frc_org_map.get(tnum, "") or school_map.get(tk, ""),
+                    "rookie_year": rookie_year_map.get(tk),
                     "avatar": avatar_map.get(tk),
                     "pick_label": pick_label,
                     "rank": r.get("rank", "-"),

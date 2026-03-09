@@ -233,9 +233,11 @@ def _extract_past_event_champions(
         if alliances_raw:
             for al in alliances_raw:
                 al_num = al.get("number") or al.get("name", "").split()[-1]
+                backup_in = (al.get("backup") or {}).get("in")
                 for idx, tk in enumerate(al.get("picks", [])):
                     if idx < len(_PICK_LABELS):
-                        pick_map[tk] = {"pick": _PICK_LABELS[idx], "alliance": al_num}
+                        label = "Backup" if tk == backup_in else _PICK_LABELS[idx]
+                        pick_map[tk] = {"pick": label, "alliance": al_num}
 
         for w in yr_data.get("winners", []):
             num = w["team_number"]
@@ -330,9 +332,11 @@ async def _build_past_season_awards(
         pm: dict[str, dict] = {}
         for al in alliances:
             al_num = al.get("number") or al.get("name", "").split()[-1]
+            backup_in = (al.get("backup") or {}).get("in")
             for idx, tk in enumerate(al.get("picks", [])):
                 if idx < len(_PICK_LABELS):
-                    pm[tk] = {"pick": _PICK_LABELS[idx], "alliance": al_num}
+                    label = "Backup" if tk == backup_in else _PICK_LABELS[idx]
+                    pm[tk] = {"pick": label, "alliance": al_num}
         pick_maps[ek] = pm
 
     result = []

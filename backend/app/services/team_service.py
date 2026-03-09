@@ -157,7 +157,10 @@ async def get_team_stats(team_number: int, year: Optional[int] = None) -> dict:
         if alliance_info:
             pick_idx = alliance_info.get("pick")
             alliance_number = alliance_info.get("number")
-            if pick_idx is not None and pick_idx < len(_PICK_LABELS):
+            backup_info = alliance_info.get("backup") or {}
+            if backup_info.get("in") == team_key:
+                alliance_pick = "Backup"
+            elif pick_idx is not None and pick_idx < len(_PICK_LABELS):
                 alliance_pick = _PICK_LABELS[pick_idx]
 
         # Determine if this event is upcoming (hasn't started yet)
