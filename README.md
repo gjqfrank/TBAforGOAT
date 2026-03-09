@@ -156,7 +156,9 @@ All endpoints return JSON. The backend serves both the API and the static fronte
 | Method | Path | Params | Description |
 |--------|------|--------|-------------|
 | `GET` | `/{event_key}/all` | — | All matches with per-team stats (play-by-play) |
+| `GET` | `/{event_key}/scores` | — | Lightweight score-only fetch via FRC Events API (for live score merging) |
 | `GET` | `/{event_key}/playoffs` | — | Playoff matches with double-elimination bracket mapping |
+| `GET` | `/{event_key}/playoff-firsts` | — | Detect first-ever playoff / finals appearances for teams at an event |
 | `GET` | `/match/{match_key}/breakdown` | — | Parsed score breakdown for a single match |
 | `GET` | `/team-perf/{event_key}/{team_number}` | — | Per-match robot performance stats (FRC Events API) |
 
@@ -199,7 +201,7 @@ casters-tool/
 │   ├── index.html                  # Single-page app shell
 │   ├── css/styles.css              # Full stylesheet (dark/light themes)
 │   ├── js/
-│   │   ├── app.js                  # UI controller (~4,000 lines)
+│   │   ├── app.js                  # UI controller (~5,800 lines)
 │   │   ├── api.js                  # Backend API wrapper
 │   │   └── cache.js                # IndexedDB event cache
 │   └── data/
@@ -222,8 +224,10 @@ casters-tool/
 Rebuilds `docs/data/region_stats.json` by scanning **all FRC events from 1992 to the current year** via TBA. Tracks:
 
 - Total teams, rookies, HoF inductees, Impact/Chairman's Award finalists per region
-- Einstein appearances per region
+- Einstein appearances per region (detected via division winning alliance picks + match data, correctly including backup robots)
+- Einstein winners with division attribution
 - International visitor patterns
+- Official FIRST district team counts
 
 Run manually when you need to refresh historical data:
 

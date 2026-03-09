@@ -328,15 +328,46 @@ async def generate():
     print(f"  Division mappings: {len(team_year_division)}")
 
     einstein_by_team: dict[str, list[int]] = defaultdict(list)
-    print("  Fetching Einstein match data (robot appearances only)...")
-    results = await asyncio.gather(
+    print("  Collecting Einstein teams from division winning alliances + match data...")
+    # Einstein alliances have 3-4 teams but only 3 play per match.  The 4th
+    # member (backup) never appears in match data.  Meanwhile, the Einstein
+    # *roster* on TBA also includes award-only recipients (Impact, Dean's List)
+    # who were never part of a playing alliance.
+    #
+    # Correct approach: union of
+    #   1) Division winning alliance picks (event_type=3, status=="won") — all
+    #      members, including backups who didn't play.
+    #   2) Einstein match data — catches any edge cases and older years where
+    #      alliance data may be missing.
+    #   3) Einstein roster fallback — for very old events with neither.
+
+    # 1) Division winning alliances → team→year
+    print("    Fetching division winning alliances...")
+    div_alliance_results = await asyncio.gather(
+        *[_safe(client.get(f"/event/{e['key']}/alliances")) for e in div_events]
+    )
+    for ev, alliances in zip(div_events, div_alliance_results):
+        if not alliances:
+            continue
+        yr = int(ev["key"][:4])
+        if yr < 2001:
+            continue  # pre-division era
+        for a in alliances:
+            if a.get("status", {}).get("status") == "won":
+                for tk in a.get("picks", []):
+                    if isinstance(tk, str):
+                        einstein_by_team[tk].append(yr)
+
+    # 2) Einstein match data — supplement with any teams that played
+    print("    Fetching Einstein match data...")
+    match_results = await asyncio.gather(
         *[_safe(client.get(f"/event/{ek}/matches/simple")) for ek in einstein_keys]
     )
-    # Also fetch rosters as fallback for years without match data
+    # Also fetch rosters as fallback for years without match or alliance data
     roster_results = await asyncio.gather(
         *[_safe(client.get(f"/event/{ek}/teams/simple")) for ek in einstein_keys]
     )
-    for ek, matches, roster in zip(einstein_keys, results, roster_results):
+    for ek, matches, roster in zip(einstein_keys, match_results, roster_results):
         yr = int(ek[:4])
         teams_in_matches: set[str] = set()
         if matches:
@@ -346,13 +377,16 @@ async def generate():
                         m.get("alliances", {}).get(color, {}).get("team_keys", [])
                     )
         if teams_in_matches:
-            # Use match data — only teams whose robots competed
             for tk in teams_in_matches:
                 einstein_by_team[tk].append(yr)
-        elif roster:
-            # Fallback for older events without match data
+        elif not any(yr in yrs for yrs in einstein_by_team.values()) and roster:
+            # 3) Fallback for older events with no match data AND no alliance data
             for t in roster:
                 einstein_by_team[t["key"]].append(yr)
+
+    # Deduplicate years per team
+    for tk in einstein_by_team:
+        einstein_by_team[tk] = sorted(set(einstein_by_team[tk]))
 
     print(f"  HoF: {len(hof_by_team)}, Impact fin: {len(impact_fin_by_team)}, "
           f"Einstein winners: {len(einstein_winner_by_team)}, Einstein: {len(einstein_by_team)}")

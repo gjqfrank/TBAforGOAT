@@ -2317,8 +2317,11 @@ input.input-loading {
     background: var(--blue);
 }
 .banner-icon {
-    font-size: 1rem;
-    vertical-align: -1px;
+    width: 1rem;
+    height: 1rem;
+    color: #3b82f6;
+    vertical-align: -2px;
+    display: inline-block;
 }
 
 /* ── Banner chips ──────────────────────────────────────── */
@@ -2344,7 +2347,12 @@ input.input-loading {
     background: rgba(59, 130, 246, .12);
 }
 .banner-chip-icon {
-    font-size: .85rem;
+    display: inline-flex;
+    align-items: center;
+}
+.banner-chip-icon .banner-icon {
+    width: .85rem;
+    height: .85rem;
 }
 .banner-chip-text {
     font-weight: 600;

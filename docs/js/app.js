@@ -2620,7 +2620,12 @@ function renderBracketTree() {
             if (!bySet[s] || m.match_number > bySet[s].match_number) bySet[s] = m;
         }
     });
-    const gf = finals.length ? finals.reduce((a, b) => b.match_number > a.match_number ? b : a) : null;
+    // Index finals by match_number so we can render all of them
+    const finalsByNum = {};
+    finals.forEach(m => { finalsByNum[m.match_number] = m; });
+    // If no finals exist yet, ensure a placeholder slot for Final 1
+    const finalNums = Object.keys(finalsByNum).map(Number).sort((a, b) => a - b);
+    if (!finalNums.length) finalNums.push(1);
 
     // Build team_number -> nickname map from loaded teamsData
     const _nickMap = {};
@@ -2635,7 +2640,12 @@ function renderBracketTree() {
 
     // Render helpers
     const slot = (setNum, label) => {
-        const m = setNum === 'f' ? gf : bySet[setNum];
+        let m;
+        if (typeof setNum === 'string' && setNum.startsWith('f')) {
+            m = finalsByNum[parseInt(setNum.substring(1), 10)];
+        } else {
+            m = bySet[setNum];
+        }
         const desc = SET_DESCRIPTIONS[setNum] || '';
         if (!m) {
             return `<div class="bkt-slot bkt-tbd">
@@ -2697,7 +2707,7 @@ function renderBracketTree() {
             </div>
             <div class="bg-cell bg-cell-upper bg-cell-empty"></div>
             <div class="bg-cell bg-cell-final">
-                ${slot('f', 'Final')}
+                ${finalNums.map(n => slot('f' + n, 'Final ' + n)).join('')}
             </div>
 
             <!-- ── Lower bracket row ─────────────── -->
@@ -2796,7 +2806,7 @@ function _buildMobileBracket(slot) {
         {
             label: 'Finals',
             tag: 'final',
-            matches: [['f','Final']],
+            matches: finalNums.map(n => ['f' + n, 'Final ' + n]),
             isFinal: true,
         },
     ];
@@ -3012,7 +3022,7 @@ function renderTeamStats(d) {
         <div class="highlight-card${bannerCount > 0 ? ' highlight-banner' : ''}">
             <div class="highlight-label">Blue Banners (All Time)</div>
             <div class="highlight-value">${bannerCount > 0
-                ? '<span class="banner-icon">🏆</span> ' + bannerCount
+                ? '<svg class="banner-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M5 2h14l-3 7 3 7H5V2z"/></svg> ' + bannerCount
                 : '0'}</div>
         </div>`;
 
@@ -3025,7 +3035,7 @@ function renderTeamStats(d) {
         const hidden = sorted.slice(VISIBLE);
         const chipHtml = (b) => `
             <div class="banner-chip">
-                <span class="banner-chip-icon">🏆</span>
+                <span class="banner-chip-icon"><svg class="banner-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M5 2h14l-3 7 3 7H5V2z"/></svg></span>
                 <span class="banner-chip-text">${b.name}</span>
                 <span class="banner-chip-meta">${b.event_name || b.event_key} · ${b.year}</span>
             </div>`;
