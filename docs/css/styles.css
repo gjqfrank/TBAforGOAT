@@ -2432,6 +2432,32 @@ input.input-loading {
     background: linear-gradient(90deg, #f59e0b, #fbbf24, #a855f7, #8b5cf6);
 }
 
+/* ── Upcoming events in team lookup ──────────────────── */
+.upcoming-events-list {
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+}
+.upcoming-event-card {
+    display: flex;
+    flex-direction: column;
+    gap: .15rem;
+    padding: .65rem .85rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--blue);
+    border-radius: .45rem;
+}
+.upcoming-event-name {
+    font-weight: 600;
+    font-size: .88rem;
+    color: var(--text);
+}
+.upcoming-event-meta {
+    font-size: .78rem;
+    color: var(--muted);
+}
+
 /* ═══ HEAD TO HEAD ═════════════════════════════════════════ */
 .h2h-section {
     margin-top: 2.5rem;

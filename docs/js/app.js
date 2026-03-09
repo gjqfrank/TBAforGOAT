@@ -420,7 +420,7 @@ document.querySelectorAll('.tab').forEach(btn => {
             startPlayoffRefresh();
         }
         if (btn.dataset.tab === 'alliance' && currentEvent && !renderedTabs.alliance) {
-            if (allianceData?.length) {
+            if (allianceData?.alliances?.length) {
                 hide('alliance-empty');
                 hideSkeleton('alliance-loading');
                 renderAlliances(allianceData);
@@ -3109,42 +3109,66 @@ function renderTeamStats(d) {
             ${bannerCard}
         </div>
 
-        <h3>Event Results · ${d.year}</h3>
-        ${eventsThisYear.length ? `
-        <table class="data-table compact">
-            <thead>
-                <tr>
-                    <th>Event</th><th>Type</th><th>Qual Rank</th><th>Qual Record</th>
-                    <th>Alliance</th><th>Playoff Result</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${eventsThisYear.map(e => {
+        ${(() => {
+            const pastEvents = eventsThisYear.filter(e => !e.is_upcoming);
+            const upcomingEvents = eventsThisYear.filter(e => e.is_upcoming);
+            let html = '';
+
+            // Past / current events table
+            html += '<h3>Event Results \u00b7 ' + d.year + '</h3>';
+            if (pastEvents.length) {
+                html += '<table class="data-table compact"><thead><tr>' +
+                    '<th>Event</th><th>Type</th><th>Qual Rank</th><th>Qual Record</th>' +
+                    '<th>Alliance</th><th>Playoff Result</th></tr></thead><tbody>';
+                pastEvents.forEach(e => {
                     const allianceCell = e.alliance_pick
-                        ? `A${e.alliance_number || '?'} ${e.alliance_pick}`
-                        : (e.playoff_level === 'Qualifications' ? '\u2013' : '\u2013');
+                        ? 'A' + (e.alliance_number || '?') + ' ' + e.alliance_pick
+                        : '\u2013';
                     let resultCell;
                     if (e.playoff_status === 'won') {
                         resultCell = '<span class="winner-text">Won</span>';
                     } else if (e.playoff_status === 'playing') {
-                        resultCell = `<span class="playing-text">Playing (${e.playoff_level})</span>`;
+                        resultCell = '<span class="playing-text">Playing (' + e.playoff_level + ')</span>';
                     } else if (e.playoff_level && e.playoff_level !== 'Qualifications' && e.playoff_status && e.playoff_status !== '-') {
-                        resultCell = `Eliminated (${e.playoff_level})`;
+                        resultCell = 'Eliminated (' + e.playoff_level + ')';
                     } else {
                         resultCell = '\u2013';
                     }
-                    return `
-                <tr>
-                    <td>${e.event_name}</td>
-                    <td class="muted">${e.event_type}</td>
-                    <td class="rank">${e.qual_rank}</td>
-                    <td class="stat">${e.qual_record}</td>
-                    <td>${allianceCell}</td>
-                    <td>${resultCell}</td>
-                </tr>`;
-                }).join('')}
-            </tbody>
-        </table>` : '<p class="empty">No events yet this year.</p>'}
+                    html += '<tr>' +
+                        '<td>' + e.event_name + '</td>' +
+                        '<td class="muted">' + e.event_type + '</td>' +
+                        '<td class="rank">' + e.qual_rank + '</td>' +
+                        '<td class="stat">' + e.qual_record + '</td>' +
+                        '<td>' + allianceCell + '</td>' +
+                        '<td>' + resultCell + '</td>' +
+                        '</tr>';
+                });
+                html += '</tbody></table>';
+            } else if (!upcomingEvents.length) {
+                html += '<p class="empty">No events yet this year.</p>';
+            }
+
+            // Upcoming events section
+            if (upcomingEvents.length) {
+                html += '<h3>Upcoming Events</h3>';
+                html += '<div class="upcoming-events-list">';
+                upcomingEvents.forEach(e => {
+                    const loc = [e.city, e.state_prov].filter(Boolean).join(', ');
+                    const dateStr = e.start_date && e.end_date
+                        ? _fmtDate(e.start_date) + ' \u2192 ' + _fmtDate(e.end_date)
+                        : e.start_date ? _fmtDate(e.start_date) : '';
+                    html += '<div class="upcoming-event-card">' +
+                        '<span class="upcoming-event-name">' + e.event_name + '</span>' +
+                        '<span class="upcoming-event-meta">' + e.event_type +
+                            (loc ? ' \u00b7 ' + loc : '') +
+                            (dateStr ? ' \u00b7 ' + dateStr : '') +
+                        '</span></div>';
+                });
+                html += '</div>';
+            }
+
+            return html;
+        })()}
 
         ${bannerHtml}
 

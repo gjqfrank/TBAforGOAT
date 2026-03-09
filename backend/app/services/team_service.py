@@ -160,10 +160,25 @@ async def get_team_stats(team_number: int, year: Optional[int] = None) -> dict:
             if pick_idx is not None and pick_idx < len(_PICK_LABELS):
                 alliance_pick = _PICK_LABELS[pick_idx]
 
+        # Determine if this event is upcoming (hasn't started yet)
+        ev_start = ev.get("start_date", "")
+        ev_end = ev.get("end_date", "")
+        is_upcoming = False
+        if ev_start:
+            try:
+                is_upcoming = date.fromisoformat(ev_start) > date.today()
+            except (ValueError, TypeError):
+                pass
+
         event_results.append({
             "event_key": ek,
             "event_name": ev.get("name", ek),
             "event_type": EVENT_TYPE_LABELS.get(et, "Other"),
+            "start_date": ev_start,
+            "end_date": ev_end,
+            "city": ev.get("city", ""),
+            "state_prov": ev.get("state_prov", ""),
+            "is_upcoming": is_upcoming,
             "qual_rank": qual_ranking.get("rank", "-"),
             "qual_record": f'{qual_record.get("wins", 0)}-{qual_record.get("losses", 0)}-{qual_record.get("ties", 0)}',
             "playoff_level": COMP_LEVEL_LABELS.get(ev_comp_level, ev_comp_level)
