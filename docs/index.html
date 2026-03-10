@@ -181,10 +181,10 @@
             </div>
 
             <!-- Manual event code entry (collapsed by default) -->
-            <div class="event-section-card event-section-alt">
-                <div class="event-section-header clickable" onclick="toggleManualEntry()">
+            <div class="event-section-card">
+                <div class="event-section-header clickable collapsed-header" onclick="toggleManualEntry()">
                     <h3 class="event-section-title">Search by Event Code</h3>
-                    <span id="manual-toggle-icon" class="collapse-icon">▼</span>
+                    <span id="manual-toggle-icon" class="collapse-toggle"><span class="collapse-toggle-label">Show</span><span class="collapse-toggle-arrow">▼</span></span>
                 </div>
                 <div id="manual-entry-body" class="manual-entry-body collapsed">
                     <p class="event-section-desc">Load any event from any year using its event code.</p>
@@ -207,6 +207,31 @@
                     </h3>
                 </div>
                 <div id="saved-events-list" class="saved-events-list"></div>
+            </div>
+
+            <!-- Regional Advancement Pool -->
+            <div id="regional-pool-card" class="event-section-card regional-pool-card hidden">
+                <div class="event-section-header clickable" onclick="toggleRegionalPool()">
+                    <h3 class="event-section-title">Regional Advancement Pool</h3>
+                    <div class="season-header-right">
+                        <span id="regional-pool-badge" class="season-count-badge"></span>
+                        <span id="regional-pool-toggle" class="collapse-toggle"><span class="collapse-toggle-label">Hide</span><span class="collapse-toggle-arrow">▼</span></span>
+                    </div>
+                </div>
+                <div id="regional-pool-body">
+                    <p class="event-section-desc">Global Championship invitation rankings for regional teams. <a href="https://frc-events.firstinspires.org/ra/" target="_blank" rel="noopener" style="color:var(--primary);font-weight:600">FIRST source ↗</a></p>
+                    <div class="regional-pool-controls">
+                        <input type="text" id="regional-pool-search"
+                               placeholder="Search by team # or name…"
+                               autocomplete="off"
+                               oninput="filterRegionalPool()" />
+                        <label class="rp-filter-label">
+                            <input type="checkbox" id="regional-pool-qualified-only" onchange="filterRegionalPool()" />
+                            Qualified only
+                        </label>
+                    </div>
+                    <div id="regional-pool-content"></div>
+                </div>
             </div>
         </section>
 
@@ -238,6 +263,17 @@
                 <!-- Demographics row -->
                 <div class="summary-stats-row" id="summary-demographics"></div>
 
+                <!-- Advancement (shown at top for completed events) -->
+                <div id="summary-advancement" class="summary-card hidden">
+                    <div class="summary-card-header" onclick="toggleAdvancement()">
+                        <h3>Advancement</h3>
+                        <span id="advancement-toggle-icon" class="collapse-toggle"><span class="collapse-toggle-label">Hide</span><span class="collapse-toggle-arrow">▼</span></span>
+                    </div>
+                    <div id="summary-advancement-body" class="summary-collapse-body">
+                        <div id="summary-advancement-content"></div>
+                    </div>
+                </div>
+
                 <!-- Hall of Fame & Impact Award -->
                 <div id="summary-prestige-row" class="team-highlights hidden">
                     <div id="summary-hof" class="highlight-card highlight-hof hidden">
@@ -250,33 +286,43 @@
                     </div>
                 </div>
 
-                <!-- Returning event champions & finalists -->
-                <div id="summary-past-champs" class="summary-card hidden">
-                    <div class="summary-card-header" onclick="toggleSummarySection('past-champs')">
-                        <h3>Returning Event Champions &amp; Finalists</h3>
-                        <span id="past-champs-toggle-icon" class="collapse-icon">▲</span>
+                <!-- Top scorers + High scores side-by-side (most caster-relevant) -->
+                <div class="summary-dual-row">
+                    <div id="summary-top-scorers" class="summary-card hidden">
+                        <h3>Top Score Contributors</h3>
+                        <div id="summary-top-list"></div>
                     </div>
-                    <div id="summary-past-champs-body" class="summary-collapse-body">
-                        <p class="summary-card-desc">Teams at this event who have previously won or reached the finals here.</p>
-                        <div id="summary-past-champs-list"></div>
+                    <div id="summary-high-scores" class="summary-card hidden">
+                        <h3>Highest Match Scores</h3>
+                        <div id="summary-high-list"></div>
                     </div>
                 </div>
 
-                <!-- Past season award winners -->
-                <div id="summary-past-awards" class="summary-card hidden">
-                    <div class="summary-card-header" onclick="toggleSummarySection('past-awards')">
-                        <h3 id="summary-past-awards-title">Past Season Award Winners</h3>
-                        <span id="past-awards-toggle-icon" class="collapse-icon">▲</span>
-                    </div>
-                    <div id="summary-past-awards-body" class="summary-collapse-body">
-                        <p class="summary-card-desc">Participating teams that earned Regional/District Impact, Winner or Finalist awards last season.</p>
-                        <div class="past-awards-filter-bar">
-                            <button class="past-awards-filter-btn active" data-award-filter="all" onclick="event.stopPropagation(); filterPastAwards('all', this)">All</button>
-                            <button class="past-awards-filter-btn" data-award-filter="impact" onclick="event.stopPropagation(); filterPastAwards('impact', this)">Impact</button>
-                            <button class="past-awards-filter-btn" data-award-filter="winner" onclick="event.stopPropagation(); filterPastAwards('winner', this)">Winner</button>
-                            <button class="past-awards-filter-btn" data-award-filter="finalist" onclick="event.stopPropagation(); filterPastAwards('finalist', this)">Finalist</button>
+                <!-- Past Champs + Past Awards side-by-side -->
+                <div class="summary-pair-row">
+                    <div id="summary-past-champs" class="summary-card hidden">
+                        <div class="summary-card-header" onclick="toggleSummarySection('past-champs')">
+                            <h3>Returning Champions &amp; Finalists</h3>
+                            <span id="past-champs-toggle-icon" class="collapse-toggle"><span class="collapse-toggle-label">Hide</span><span class="collapse-toggle-arrow">▼</span></span>
                         </div>
-                        <div id="summary-past-awards-list"></div>
+                        <div id="summary-past-champs-body" class="summary-collapse-body">
+                            <div id="summary-past-champs-list"></div>
+                        </div>
+                    </div>
+                    <div id="summary-past-awards" class="summary-card hidden">
+                        <div class="summary-card-header" onclick="toggleSummarySection('past-awards')">
+                            <h3 id="summary-past-awards-title">Past Season Award Winners</h3>
+                            <span id="past-awards-toggle-icon" class="collapse-toggle"><span class="collapse-toggle-label">Hide</span><span class="collapse-toggle-arrow">▼</span></span>
+                        </div>
+                        <div id="summary-past-awards-body" class="summary-collapse-body">
+                            <div class="past-awards-filter-bar">
+                                <button class="past-awards-filter-btn active" data-award-filter="all" onclick="event.stopPropagation(); filterPastAwards('all', this)">All</button>
+                                <button class="past-awards-filter-btn" data-award-filter="impact" onclick="event.stopPropagation(); filterPastAwards('impact', this)">Impact</button>
+                                <button class="past-awards-filter-btn" data-award-filter="winner" onclick="event.stopPropagation(); filterPastAwards('winner', this)">Winner</button>
+                                <button class="past-awards-filter-btn" data-award-filter="finalist" onclick="event.stopPropagation(); filterPastAwards('finalist', this)">Finalist</button>
+                            </div>
+                            <div id="summary-past-awards-list"></div>
+                        </div>
                     </div>
                 </div>
 
@@ -284,10 +330,9 @@
                 <div id="summary-history" class="summary-card hidden">
                     <div class="summary-card-header" onclick="toggleConnections()">
                         <h3>Prior Playoff Connections</h3>
-                        <span id="conn-toggle-icon" class="collapse-icon">▲</span>
+                        <span id="conn-toggle-icon" class="collapse-toggle"><span class="collapse-toggle-label">Hide</span><span class="collapse-toggle-arrow">▼</span></span>
                     </div>
                     <div id="summary-history-body">
-                        <p class="summary-card-desc">Teams at this event who have partnered or competed against each other in past playoff matches.</p>
                         <div class="conn-toolbar">
                             <input type="text" id="conn-team-search" class="conn-search-input" placeholder="Filter by team #…" oninput="applyConnFilters()">
                             <div class="conn-filter-bar">
@@ -298,36 +343,19 @@
                                 <button class="conn-filter-btn" data-conn-filter="winners" onclick="event.stopPropagation(); filterConnections('winners', this)">Winners</button>
                                 <button class="conn-filter-btn" data-conn-filter="finalists" onclick="event.stopPropagation(); filterConnections('finalists', this)">Finalists</button>
                             </div>
-                        </div>
-                        <div class="conn-toolbar conn-toolbar-secondary">
                             <label class="conn-range-toggle" onclick="event.stopPropagation()">
-                                <span class="conn-range-side active">Past 3 seasons</span>
+                                <span class="conn-range-side active">3 yrs</span>
                                 <input type="checkbox" id="conn-alltime-toggle" onchange="toggleConnRange(this.checked)">
                                 <span class="conn-toggle-slider"></span>
-                                <span class="conn-range-side">All time</span>
+                                <span class="conn-range-side">All</span>
                             </label>
                             <div class="conn-sort-bar" onclick="event.stopPropagation()">
-                                <span class="conn-sort-label">Sort:</span>
-                                <button class="conn-sort-btn active" data-conn-sort="most" onclick="setConnSort('most', this)">Most connections</button>
-                                <button class="conn-sort-btn" data-conn-sort="recent" onclick="setConnSort('recent', this)">Most recent</button>
-                                <button class="conn-sort-btn" data-conn-sort="oldest" onclick="setConnSort('oldest', this)">Oldest</button>
+                                <button class="conn-sort-btn active" data-conn-sort="most" onclick="setConnSort('most', this)" title="Most connections">Most</button>
+                                <button class="conn-sort-btn" data-conn-sort="recent" onclick="setConnSort('recent', this)" title="Most recent">Recent</button>
+                                <button class="conn-sort-btn" data-conn-sort="oldest" onclick="setConnSort('oldest', this)" title="Oldest first">Oldest</button>
                             </div>
                         </div>
                         <div id="summary-history-list"></div>
-                    </div>
-                </div>
-
-                <!-- Top scorers + High scores side-by-side -->
-                <div class="summary-dual-row">
-                    <div id="summary-top-scorers" class="summary-card hidden">
-                        <h3>Top Score Contributors</h3>
-                        <p class="summary-card-desc">Highest individual OPR (score contribution) at this event so far.</p>
-                        <div id="summary-top-list"></div>
-                    </div>
-                    <div id="summary-high-scores" class="summary-card hidden">
-                        <h3>Highest Match Scores</h3>
-                        <p class="summary-card-desc">Top single-alliance scores across all matches at this event.</p>
-                        <div id="summary-high-list"></div>
                     </div>
                 </div>
             </div>

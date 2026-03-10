@@ -196,6 +196,417 @@ async def get_event_summary_awards(event_key: str) -> dict:
     }
 
 
+# ── Advancement data ────────────────────────────────────────
+
+_ADVANCEMENT_AWARD_TYPES = {
+    0: "Impact Award",
+    9: "Engineering Inspiration",
+    10: "Rookie All-Star",
+}
+
+
+async def get_event_advancement(event_key: str) -> dict:
+    """Build advancement data — event-level point standings, awards, winners,
+    and (for district events) the overall district rankings."""
+    client = get_tba_client()
+
+    # Parallel fetch: event info, teams, district points, awards, alliances
+    event_info, teams, dp_raw, awards_raw, alliances = await asyncio.gather(
+        _safe(client.get_event(event_key)),
+        client.get_event_teams_full(event_key),
+        _safe(client.get(f"/event/{event_key}/district_points")),
+        _safe(client.get(f"/event/{event_key}/awards")),
+        _safe(client.get_event_alliances(event_key)),
+    )
+
+    if not teams:
+        return {}
+
+    ev = event_info or {}
+    event_type_num = ev.get("event_type", -1)
+    district_info = ev.get("district")
+    is_district = event_type_num in (1, 2, 5)
+    year = int(event_key[:4])
+
+    name_map = {f"frc{t['team_number']}": t.get("nickname", "") for t in teams}
+    team_nums = {t["team_number"] for t in teams}
+
+    # ── All awards by team (for display) ────────────────────
+    all_awards_by_team: dict[int, list[str]] = {}
+    # Use TBA's award name directly — hardcoded mappings are unreliable
+    # because TBA award_type numbers vary by event type (Regional vs District).
+    if awards_raw and isinstance(awards_raw, list):
+        for a in awards_raw:
+            aname = a.get("name", f"Award #{a.get('award_type', '?')}")
+            # Strip "Regional " / "District " prefix for cleaner display
+            for prefix in ("Regional ", "District ", "Division "):
+                if aname.startswith(prefix):
+                    aname = aname[len(prefix):]
+                    break
+            for r in a.get("recipient_list", []):
+                tk = r.get("team_key")
+                if tk:
+                    num = int(tk.replace("frc", ""))
+                    all_awards_by_team.setdefault(num, []).append(aname)
+
+    # ── For 2026+ regionals, use FRC v3.2 eventdetail (authoritative) ──
+    if not is_district and year >= 2026:
+        return await _build_regional_advancement(
+            event_key, year, teams, name_map, team_nums,
+            all_awards_by_team, dp_raw, awards_raw, alliances,
+            client, ev, district_info,
+        )
+
+    # ── District / pre-2026 fallback: use TBA district_points ──
+    point_standings = _build_tba_point_standings(dp_raw, name_map)
+
+    # Advancement-qualifying awards
+    advancement_awards = []
+    if awards_raw and isinstance(awards_raw, list):
+        for a in awards_raw:
+            atype = a.get("award_type")
+            if atype in _ADVANCEMENT_AWARD_TYPES:
+                for r in a.get("recipient_list", []):
+                    tk = r.get("team_key")
+                    if tk:
+                        num = int(tk.replace("frc", ""))
+                        advancement_awards.append({
+                            "team_number": num,
+                            "nickname": name_map.get(tk, ""),
+                            "award": _ADVANCEMENT_AWARD_TYPES[atype],
+                        })
+
+    # Event winners (winning alliance)
+    event_winners = _extract_event_winners(alliances, name_map)
+
+    # Build qualified_teams from TBA data (district / legacy)
+    pts_map = {t["team_number"]: t for t in point_standings}
+    qualified_teams = []
+    seen_qualified: set[int] = set()
+    for w in event_winners:
+        num = w["team_number"]
+        if num in seen_qualified:
+            continue
+        seen_qualified.add(num)
+        pts = pts_map.get(num, {})
+        qualified_teams.append({
+            "team_number": num,
+            "nickname": w["nickname"],
+            "method": "Backup Bot" if w.get("is_backup") else "Event Winner",
+            "total_points": pts.get("total", 0),
+            "qual_points": pts.get("qual_points", 0),
+            "alliance_points": pts.get("alliance_points", 0),
+            "elim_points": pts.get("elim_points", 0),
+            "award_points": pts.get("award_points", 0),
+            "awards": all_awards_by_team.get(num, []),
+        })
+    for aa in advancement_awards:
+        if aa["award"] != "Impact Award":
+            continue
+        num = aa["team_number"]
+        if num in seen_qualified:
+            continue
+        seen_qualified.add(num)
+        pts = pts_map.get(num, {})
+        qualified_teams.append({
+            "team_number": num,
+            "nickname": aa["nickname"],
+            "method": "Impact Award",
+            "total_points": pts.get("total", 0),
+            "qual_points": pts.get("qual_points", 0),
+            "alliance_points": pts.get("alliance_points", 0),
+            "elim_points": pts.get("elim_points", 0),
+            "award_points": pts.get("award_points", 0),
+            "awards": all_awards_by_team.get(num, []),
+        })
+
+    result: dict = {
+        "event_type": "district" if is_district else "regional",
+        "qualified_teams": qualified_teams,
+        "point_standings": point_standings,
+        "advancement_awards": advancement_awards,
+        "event_winners": event_winners,
+    }
+
+    # ── District-wide rankings (one extra API call) ──────────
+    if is_district and district_info and district_info.get("key"):
+        dk = district_info["key"]
+        dr_raw = await _safe(client.get(f"/district/{dk}/rankings"))
+        if dr_raw and isinstance(dr_raw, list):
+            district_rankings = []
+            for dr in dr_raw:
+                tk = dr.get("team_key", "")
+                num = int(tk.replace("frc", "")) if tk.startswith("frc") else 0
+                district_rankings.append({
+                    "team_number": num,
+                    "rank": dr.get("rank", 0),
+                    "point_total": dr.get("point_total", 0),
+                    "rookie_bonus": dr.get("rookie_bonus", 0),
+                    "event_count": len(dr.get("event_points", [])),
+                    "at_this_event": num in team_nums,
+                })
+            result["district_rankings"] = district_rankings
+            result["district_name"] = (
+                district_info.get("display_name")
+                or district_info.get("abbreviation", "").upper()
+            )
+
+    # ── Regional cumulative points (2026+ with universal points) ─
+    # NOTE: For 2026+ regionals the code takes the v3.2 fast-path above,
+    # so this block only fires for pre-2026 regionals (unlikely).
+    if not is_district and point_standings:
+        yr = int(event_key[:4])
+        if yr >= 2026:
+            result["regional_season"] = await _build_regional_season_points(
+                client, teams, event_key, yr
+            )
+            result["regional_pool"] = await _fetch_regional_pool_for_event(
+                team_nums, yr
+            )
+
+    return result
+
+
+# ─── helpers ────────────────────────────────────────────────
+
+def _build_tba_point_standings(dp_raw, name_map) -> list[dict]:
+    """Build point standings from TBA district_points response."""
+    point_standings = []
+    if dp_raw and isinstance(dp_raw, dict):
+        pts = dp_raw.get("points", dp_raw)
+        if isinstance(pts, dict):
+            for tk, pt in pts.items():
+                if not isinstance(pt, dict):
+                    continue
+                num = int(tk.replace("frc", ""))
+                point_standings.append({
+                    "team_number": num,
+                    "nickname": name_map.get(tk, ""),
+                    "qual_points": pt.get("qual_points", 0),
+                    "alliance_points": pt.get("alliance_points", 0),
+                    "elim_points": pt.get("elim_points", 0),
+                    "award_points": pt.get("award_points", 0),
+                    "total": pt.get("total", 0),
+                })
+    point_standings.sort(key=lambda x: x["total"], reverse=True)
+    return point_standings
+
+
+def _extract_event_winners(alliances, name_map) -> list[dict]:
+    """Extract the winning alliance from TBA alliances data."""
+    event_winners = []
+    if alliances:
+        for al in alliances:
+            status = al.get("status", {})
+            if isinstance(status, dict) and status.get("status") == "won":
+                backup = al.get("backup") or {}
+                backup_in = backup.get("in")
+                for tk in al.get("picks", []):
+                    num = int(tk.replace("frc", ""))
+                    event_winners.append({
+                        "team_number": num,
+                        "nickname": name_map.get(tk, ""),
+                        "is_backup": False,
+                    })
+                if backup_in:
+                    num = int(backup_in.replace("frc", ""))
+                    event_winners.append({
+                        "team_number": num,
+                        "nickname": name_map.get(backup_in, ""),
+                        "is_backup": True,
+                    })
+                break
+    return event_winners
+
+
+async def _build_regional_advancement(
+    event_key: str, year: int,
+    teams: list[dict], name_map: dict, team_nums: set[int],
+    all_awards_by_team: dict[int, list[str]],
+    dp_raw, awards_raw, alliances,
+    client, ev: dict, district_info,
+) -> dict:
+    """Build advancement for 2026+ regionals using the FRC v3.2 eventdetail
+    endpoint, which has the authoritative regional point rankings and
+    qualification flags (award points are weighted differently than TBA)."""
+    from .frc_client import get_frc_client
+    frc = get_frc_client()
+
+    event_code = event_key[4:].upper()
+    try:
+        event_detail = await frc.get_regional_pool_event(year, event_code)
+    except Exception:
+        event_detail = None
+
+    team_details = (event_detail or {}).get("teamDetails", [])
+
+    if not team_details:
+        # Fallback to TBA data if v3.2 is unavailable
+        point_standings = _build_tba_point_standings(dp_raw, name_map)
+        event_winners = _extract_event_winners(alliances, name_map)
+        return {
+            "event_type": "regional",
+            "qualified_teams": [],
+            "point_standings": point_standings,
+            "event_winners": event_winners,
+        }
+
+    # ── Build point standings from FRC v3.2 (authoritative) ──
+    point_standings = []
+    qualified_teams = []
+    for td in team_details:
+        num = td.get("teamNumber", 0)
+        rd = td.get("regionalDetails") or {}
+        nickname = name_map.get(f"frc{num}", td.get("teamName", ""))
+
+        entry = {
+            "team_number": num,
+            "nickname": nickname,
+            "qual_points": rd.get("qualificationPerformancePoints", 0),
+            "alliance_points": rd.get("allianceSelectionPoints", 0),
+            "elim_points": rd.get("playoffAdvancementPoints", 0),
+            "award_points": rd.get("awardPoints", 0),
+            "total": td.get("regionalPoints", 0),
+        }
+        point_standings.append(entry)
+
+        # Check if this team qualified at THIS event
+        qualified = td.get("qualifiedFirstCmp", False)
+        qual_event = (td.get("qualifiedFirstCmpEventCode") or "").upper()
+        if qualified and qual_event == event_code:
+            # Determine qualification method
+            award_name = td.get("qualifiedFirstCmpAwardName")
+            status = td.get("championshipStatus", "")
+            if award_name:
+                method = award_name
+            elif "Ranking" in status:
+                method = "Directly Qualified"
+            else:
+                method = "Qualified"
+
+            qualified_teams.append({
+                "team_number": num,
+                "nickname": nickname,
+                "method": method,
+                "total_points": td.get("regionalPoints", 0),
+                "qual_points": rd.get("qualificationPerformancePoints", 0),
+                "alliance_points": rd.get("allianceSelectionPoints", 0),
+                "elim_points": rd.get("playoffAdvancementPoints", 0),
+                "award_points": rd.get("awardPoints", 0),
+                "awards": all_awards_by_team.get(num, []),
+            })
+
+    point_standings.sort(key=lambda x: x["total"], reverse=True)
+    qualified_teams.sort(key=lambda x: x["total_points"], reverse=True)
+
+    event_winners = _extract_event_winners(alliances, name_map)
+
+    return {
+        "event_type": "regional",
+        "qualified_teams": qualified_teams,
+        "point_standings": point_standings,
+        "event_winners": event_winners,
+    }
+
+
+async def _fetch_regional_pool_for_event(
+    team_nums: set[int], year: int,
+) -> list[dict]:
+    """Return global regional pool rank + qualification status for
+    teams at this event (uses FRC Events API v3.2)."""
+    from .frc_client import get_frc_client
+    frc = get_frc_client()
+    try:
+        all_teams = await frc.get_regional_pool(year)
+    except Exception:
+        return []
+    # Filter to teams at this event
+    result = []
+    for t in all_teams:
+        if t.get("teamNumber") in team_nums:
+            result.append({
+                "team_number": t["teamNumber"],
+                "rank": t.get("rank"),
+                "total_points": t.get("totalPoints"),
+                "qualified": t.get("qualifiedFirstCmp", False),
+                "declined": t.get("declinedFirstCmp", False),
+                "status": t.get("championshipStatus", ""),
+                "qual_method": t.get("qualifiedFirstCmpAwardName") or "",
+            })
+    result.sort(key=lambda x: x.get("rank") or 9999)
+    return result
+
+
+async def _build_regional_season_points(
+    client, teams: list[dict], current_event_key: str, year: int,
+) -> list[dict]:
+    """Aggregate district-style points across all regionals for each team
+    at this event (2026+ universal point system)."""
+    team_keys = [f"frc{t['team_number']}" for t in teams]
+    name_map = {f"frc{t['team_number']}": t.get("nickname", "") for t in teams}
+
+    # Round 1: fetch each team's events for this year (parallel, cached)
+    event_results = await asyncio.gather(
+        *[_safe(client.get_team_events(tk, year)) for tk in team_keys]
+    )
+
+    # Collect unique event keys (skip current event, offseason, championship)
+    _SKIP_TYPES = {3, 4, 99, 100, -1}
+    unique_event_keys: set[str] = set()
+    team_event_map: dict[str, list[str]] = {}  # team_key -> [event_keys]
+    for tk, events in zip(team_keys, event_results):
+        if not events:
+            continue
+        ek_list = []
+        for ev in events:
+            ek = ev.get("key", "")
+            etype = ev.get("event_type", -1)
+            if etype in _SKIP_TYPES:
+                continue
+            ek_list.append(ek)
+            unique_event_keys.add(ek)
+        team_event_map[tk] = ek_list
+
+    if not unique_event_keys:
+        return []
+
+    # Round 2: fetch district_points for each unique event (parallel, cached)
+    ek_list_unique = list(unique_event_keys)
+    dp_results = await asyncio.gather(
+        *[_safe(client.get(f"/event/{ek}/district_points")) for ek in ek_list_unique]
+    )
+    dp_cache: dict[str, dict] = {}
+    for ek, dp_raw in zip(ek_list_unique, dp_results):
+        if dp_raw and isinstance(dp_raw, dict):
+            dp_cache[ek] = dp_raw.get("points", dp_raw)
+
+    # Aggregate per team
+    season_totals: dict[str, dict] = {}
+    for tk in team_keys:
+        total = 0
+        events_played = 0
+        for ek in team_event_map.get(tk, []):
+            pts = dp_cache.get(ek, {})
+            team_pts = pts.get(tk)
+            if team_pts and isinstance(team_pts, dict):
+                total += team_pts.get("total", 0)
+                events_played += 1
+        if events_played > 0:
+            num = int(tk.replace("frc", ""))
+            season_totals[tk] = {
+                "team_number": num,
+                "nickname": name_map.get(tk, ""),
+                "season_total": total,
+                "events_played": events_played,
+            }
+
+    result = sorted(season_totals.values(), key=lambda x: x["season_total"], reverse=True)
+    # Add rank
+    for i, entry in enumerate(result, 1):
+        entry["rank"] = i
+    return result
+
+
 # ── Helpers for past-event and past-season award data ───────
 
 def _extract_past_event_champions(

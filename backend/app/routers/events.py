@@ -6,6 +6,7 @@ from ..services import summary_service
 from ..services import region_service
 from ..services import world_record_service
 from ..services.tba_client import get_tba_client
+from ..services.frc_client import get_frc_client
 from ..services.alliance_service import get_alliances_with_stats
 
 router = APIRouter()
@@ -75,6 +76,15 @@ async def event_summary_awards(event_key: str):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.get("/{event_key}/summary/advancement")
+async def event_summary_advancement(event_key: str):
+    """Deferred: advancement point standings, awards, winners, district rankings."""
+    try:
+        return await summary_service.get_event_advancement(event_key)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @router.get("/{event_key}/summary/connections")
 async def event_connections(
     event_key: str,
@@ -131,6 +141,29 @@ async def compare_teams(
         return await event_service.get_team_comparison(event_key, teams)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# ═══════════════════════════════════════════════════════════
+#  Regional Advancement Pool (FRC Events API v3.2)
+# ═══════════════════════════════════════════════════════════
+
+@router.get("/regional-pool/{season}")
+async def regional_pool(season: int):
+    """Global regional advancement pool rankings for a season."""
+    try:
+        teams = await get_frc_client().get_regional_pool(season)
+        return {"season": season, "teams": teams}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/regional-pool/{season}/{event_code}")
+async def regional_pool_event(season: int, event_code: str):
+    """Per-event regional advancement detail."""
+    try:
+        return await get_frc_client().get_regional_pool_event(season, event_code)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 

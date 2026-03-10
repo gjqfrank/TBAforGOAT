@@ -19,6 +19,7 @@ const API = {
     eventSummary:       (ek) => API.get(`/events/${ek}/summary`),
     eventSummaryRefresh:(ek) => API.get(`/events/${ek}/summary/refresh-stats`),
     eventSummaryAwards: (ek) => API.get(`/events/${ek}/summary/awards`),
+    eventAdvancement:   (ek) => API.get(`/events/${ek}/summary/advancement`),
     eventConnections:   (ek, allTime, teams) => {
         let url = `/events/${ek}/summary/connections?all_time=${allTime ? 'true' : 'false'}`;
         if (teams && teams.length) url += `&teams=${teams.join(',')}`;
@@ -53,6 +54,10 @@ const API = {
     regionFacts:  (name) => API.get(`/events/region/${encodeURIComponent(name)}/facts`),
     regionsList:  ()     => API.get('/events/regions/list'),
     eventHistory: (ek)   => API.get(`/events/${ek}/history`),
+
+    // ── Regional Advancement Pool ───────────────────────
+    regionalPool:      (season) => API.get(`/events/regional-pool/${season}`),
+    regionalPoolEvent: (season, code) => API.get(`/events/regional-pool/${season}/${code}`),
 
     // ── Season ──────────────────────────────────────────
     worldRecord:  ()     => API.get('/events/world-record'),

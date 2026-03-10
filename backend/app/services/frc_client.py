@@ -1,6 +1,7 @@
 """FIRST FRC Events API v3 async client with in-memory caching."""
 from __future__ import annotations
 
+import base64
 import time
 from typing import Any, Optional
 
@@ -9,7 +10,14 @@ import httpx
 from ..config import FRC_EVENTS_API_TOKEN
 
 FRC_BASE = "https://frc-api.firstinspires.org/v3.0"
+FRC_BASE_V32 = "https://frc-api.firstinspires.org/v3.2"
 CACHE_TTL = 120  # seconds – fresher than TBA for live events
+
+# Public credentials for the Regional Pool page (embedded in the
+# frc-events.firstinspires.org frontend bundle).
+_RA_AUTH = base64.b64encode(
+    b"FRC_RegionalPool:F2057EBA-2E07-40C4-A1A3-D66CDFCA6326"
+).decode()
 
 
 class FRCClient:
@@ -22,6 +30,7 @@ class FRCClient:
         }
         self._cache: dict[str, tuple[float, Any]] = {}
         self._http: Optional[httpx.AsyncClient] = None
+        self._http_v32: Optional[httpx.AsyncClient] = None
 
     def _client(self) -> httpx.AsyncClient:
         if self._http is None or self._http.is_closed:
@@ -31,6 +40,19 @@ class FRCClient:
                 timeout=30.0,
             )
         return self._http
+
+    def _client_v32(self) -> httpx.AsyncClient:
+        """v3.2 client using the Regional Pool credentials."""
+        if self._http_v32 is None or self._http_v32.is_closed:
+            self._http_v32 = httpx.AsyncClient(
+                base_url=FRC_BASE_V32,
+                headers={
+                    "Authorization": f"Basic {_RA_AUTH}",
+                    "Accept": "application/json",
+                },
+                timeout=30.0,
+            )
+        return self._http_v32
 
     async def get(self, endpoint: str, *, bypass_cache: bool = False,
                   ttl_override: float | None = None) -> Any:
@@ -111,6 +133,43 @@ class FRCClient:
         """Return teams at an event with organization/school info."""
         data = await self.get(f"/{season}/teams?eventCode={event_code}")
         return data.get("teams", [])
+
+    # ── Regional Advancement Pool (v3.2) ─────────────────
+    REGIONAL_POOL_TTL = 300  # 5 min — data changes infrequently
+
+    async def get_regional_pool(self, season: int) -> list[dict]:
+        """Global regional advancement pool rankings (all regional teams)."""
+        endpoint = f"/{season}/rankings/regional/teamdetail"
+        now = time.time()
+        cache_key = f"v32:{endpoint}"
+        if cache_key in self._cache:
+            ts, data = self._cache[cache_key]
+            if now - ts < self.REGIONAL_POOL_TTL:
+                return data
+
+        resp = await self._client_v32().get(endpoint)
+        resp.raise_for_status()
+        teams = resp.json().get("teams", [])
+        self._cache[cache_key] = (now, teams)
+        return teams
+
+    async def get_regional_pool_event(
+        self, season: int, event_code: str,
+    ) -> dict:
+        """Per-event regional advancement detail."""
+        endpoint = f"/{season}/rankings/regional/eventdetail/{event_code}"
+        now = time.time()
+        cache_key = f"v32:{endpoint}"
+        if cache_key in self._cache:
+            ts, data = self._cache[cache_key]
+            if now - ts < self.REGIONAL_POOL_TTL:
+                return data
+
+        resp = await self._client_v32().get(endpoint)
+        resp.raise_for_status()
+        data = resp.json()
+        self._cache[cache_key] = (now, data)
+        return data
 
 
 # ── Singleton ───────────────────────────────────────────────

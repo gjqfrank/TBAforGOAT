@@ -1022,12 +1022,142 @@ document.addEventListener('click', e => {
 
 // Load season events on page init
 loadSeasonEvents();
+loadRegionalPool();
+
+/** Unified collapse toggle helper. Updates body, header class, and pill label/arrow. */
+function _toggleCollapse(bodyId, toggleId, headerEl) {
+    const body = $(bodyId);
+    const toggle = $(toggleId);
+    if (!body) return;
+    body.classList.toggle('collapsed');
+    const collapsed = body.classList.contains('collapsed');
+    if (toggle) {
+        const label = toggle.querySelector('.collapse-toggle-label');
+        const arrow = toggle.querySelector('.collapse-toggle-arrow');
+        if (label) label.textContent = collapsed ? 'Show' : 'Hide';
+        if (arrow) arrow.style.transform = collapsed ? 'rotate(0deg)' : 'rotate(180deg)';
+    }
+    // Add/remove class on closest card header for styling hooks
+    const header = headerEl
+        ? (typeof headerEl === 'string' ? $(headerEl) : headerEl)
+        : body.previousElementSibling;
+    if (header) header.classList.toggle('collapsed-header', collapsed);
+}
 
 function toggleManualEntry() {
-    const body = $('manual-entry-body');
-    const icon = $('manual-toggle-icon');
-    body.classList.toggle('collapsed');
-    icon.textContent = body.classList.contains('collapsed') ? '▼' : '▲';
+    _toggleCollapse('manual-entry-body', 'manual-toggle-icon');
+}
+
+// ═══════════════════════════════════════════════════════════
+//  Regional Advancement Pool
+// ═══════════════════════════════════════════════════════════
+let _regionalPoolData = null;      // raw array of team objects
+let _regionalPoolFiltered = null;  // filtered view
+
+async function loadRegionalPool() {
+    try {
+        const resp = await API.regionalPool(2026);
+        if (!resp || !resp.teams || !resp.teams.length) return;
+        _regionalPoolData = resp.teams;
+        _regionalPoolFiltered = _regionalPoolData;
+        const card = $('regional-pool-card');
+        card.classList.remove('hidden');
+        const badge = $('regional-pool-badge');
+        const qualCount = _regionalPoolData.filter(t => t.qualifiedFirstCmp).length;
+        badge.textContent = `${_regionalPoolData.length} teams · ${qualCount} qualified`;
+        renderRegionalPool();
+    } catch (err) {
+        console.warn('[Regional Pool]', err);
+    }
+}
+
+function toggleRegionalPool() {
+    _toggleCollapse('regional-pool-body', 'regional-pool-toggle');
+}
+
+function filterRegionalPool() {
+    if (!_regionalPoolData) return;
+    const q = ($('regional-pool-search').value || '').trim().toLowerCase();
+    const qualOnly = $('regional-pool-qualified-only').checked;
+
+    _regionalPoolFiltered = _regionalPoolData.filter(t => {
+        if (qualOnly && !t.qualifiedFirstCmp) return false;
+        if (q) {
+            const numStr = String(t.teamNumber);
+            const name = (t.nameShort || '').toLowerCase();
+            if (!numStr.includes(q) && !name.includes(q)) return false;
+        }
+        return true;
+    });
+    renderRegionalPool();
+}
+
+function renderRegionalPool() {
+    const el = $('regional-pool-content');
+    const teams = _regionalPoolFiltered || [];
+    if (!teams.length) {
+        el.innerHTML = '<p class="empty" style="margin:.5rem 0;font-size:.82rem">No teams match your filters.</p>';
+        return;
+    }
+
+    let html = '<div class="adv-table-wrap rp-table-wrap"><table class="adv-table rp-table">';
+    html += '<thead><tr>';
+    html += '<th>Rank</th><th>Team</th>';
+    html += '<th title="Best event points">Event 1</th>';
+    html += '<th title="Second event / projection">Event 2</th>';
+    html += '<th class="adv-col-total">Total</th>';
+    html += '<th>Status</th>';
+    html += '</tr></thead><tbody>';
+
+    teams.forEach(t => {
+        const isQual = t.qualifiedFirstCmp;
+        const rowCls = isQual ? 'rp-row-qualified' : '';
+
+        // Event 1 details
+        const e1 = t.regional1Details;
+        const e1Code = e1 ? e1.tournamentCode : '';
+        const e1Pts = t.regional1Points != null ? t.regional1Points : '–';
+
+        // Event 2: actual or projected
+        const e2 = t.regional2Details;
+        const e2Pts = t.regional2Points != null ? t.regional2Points
+                    : (t.regional2PointsProjection != null ? `~${t.regional2PointsProjection}` : '–');
+        const e2Code = e2 ? e2.tournamentCode : '';
+
+        // Status
+        let statusHtml = '';
+        if (isQual) {
+            if (t.declinedFirstCmp) {
+                statusHtml = '<span class="rp-status rp-status-declined">Declined</span>';
+            } else {
+                const method = _rpQualMethod(t);
+                statusHtml = `<span class="rp-status rp-status-qualified">${method}</span>`;
+            }
+        } else {
+            statusHtml = '<span class="rp-status rp-status-none">–</span>';
+        }
+
+        html += `<tr class="${rowCls}">`;
+        html += `<td>${t.rank}</td>`;
+        html += `<td><span class="adv-team-num">${t.teamNumber}</span> <span class="adv-team-name">${t.nameShort || ''}</span></td>`;
+        html += `<td>${e1Code ? `<span class="rp-event-code" title="${e1Code}">${e1Pts}</span>` : '–'}</td>`;
+        html += `<td>${e2Code ? `<span class="rp-event-code" title="${e2Code}">${e2Pts}</span>` : e2Pts}</td>`;
+        html += `<td class="adv-col-total">${t.totalPoints != null ? t.totalPoints : '–'}</td>`;
+        html += `<td>${statusHtml}</td>`;
+        html += '</tr>';
+    });
+
+    html += '</tbody></table></div>';
+    el.innerHTML = html;
+}
+
+function _rpQualMethod(t) {
+    if (t.qualifiedFirstCmpAwardName) return t.qualifiedFirstCmpAwardName;
+    const status = (t.championshipStatus || '').toLowerCase();
+    if (status.includes('ranking')) return 'Directly Qualified';
+    if (status.includes('award')) return 'By Award';
+    if (status.includes('waitlist')) return 'Waitlist';
+    return 'Qualified';
 }
 
 function clearActiveEvent() {
@@ -1124,7 +1254,10 @@ function applyFastRankings(fastData, oldMap) {
         const f = fastMap.get(tk);
         if (!f) continue;
         const rankCell = row.querySelector('.rank');
-        if (rankCell) rankCell.textContent = f.rank;
+        if (rankCell) {
+            rankCell.textContent = f.rank;
+            rankCell.classList.toggle('rank-top8', f.rank >= 1 && f.rank <= 8);
+        }
         const recordCell = row.querySelector('.record');
         if (recordCell) recordCell.textContent = `${f.wins}-${f.losses}-${f.ties}`;
         const rpCell = row.querySelector('.rp');
@@ -2062,6 +2195,112 @@ async function loadSummaryAwards() {
     }
 }
 
+/** Lazy-load advancement data (point standings, awards, district rankings) */
+let _loadingAdvancement = false;
+async function loadSummaryAdvancement() {
+    if (!currentEvent || !summaryData || _loadingAdvancement) return;
+    _loadingAdvancement = true;
+    const eventKey = currentEvent;
+    try {
+        const data = await API.eventAdvancement(eventKey);
+        if (currentEvent !== eventKey || !summaryData) return;
+        summaryData.advancement = data;
+        renderAdvancement(data);
+        autoCacheTab('summary', summaryData);
+    } catch {
+        if (currentEvent !== eventKey) return;
+        $('summary-advancement-content').innerHTML = '<p class="empty" style="margin:.5rem 0;font-size:.82rem">Could not load advancement data.</p>';
+    } finally {
+        _loadingAdvancement = false;
+    }
+}
+
+function toggleAdvancement() {
+    _toggleCollapse('summary-advancement-body', 'advancement-toggle-icon');
+}
+
+function renderAdvancement(data) {
+    const el = $('summary-advancement');
+    const content = $('summary-advancement-content');
+
+    const hasQualified = data.qualified_teams && data.qualified_teams.length > 0;
+    const hasDistrict = data.district_rankings && data.district_rankings.length > 0;
+
+    if (!hasQualified && !hasDistrict) {
+        el.classList.add('hidden');
+        return;
+    }
+
+    el.classList.remove('hidden');
+    let html = '';
+
+    // ── Direct Qualifications ───────────────────────────────
+    if (hasQualified) {
+        html += '<div class="adv-section">';
+        html += '<h4 class="adv-section-title">Championship Qualifications</h4>';
+        html += '<div class="adv-qual-list">';
+        data.qualified_teams.forEach(t => {
+            const m = (t.method || '').toLowerCase();
+            const methodCls = m.includes('impact') ? 'adv-method-impact'
+                            : m.includes('backup') ? 'adv-method-backup'
+                            : m.includes('award')  ? 'adv-method-award'
+                            : 'adv-method-ranking';
+            const awardsStr = (t.awards || []).filter(a => a !== 'Winner' && a !== 'Finalist').join(', ');
+            html += '<div class="adv-qual-row">';
+            html += `<span class="adv-team-num">${t.team_number}</span>`;
+            html += `<span class="adv-team-name">${t.nickname}</span>`;
+            html += `<span class="adv-method ${methodCls}">${t.method}</span>`;
+            html += `<span class="adv-pts" title="Qual ${t.qual_points} · Alliance ${t.alliance_points} · Elim ${t.elim_points} · Award ${t.award_points}">${t.total_points} pts</span>`;
+            if (awardsStr) {
+                html += `<span class="adv-awards-badge" title="${awardsStr}">${awardsStr}</span>`;
+            }
+            html += '</div>';
+        });
+        html += '</div>';
+        html += '</div>';
+    }
+
+    // ── District Rankings ───────────────────────────────────
+    if (hasDistrict) {
+        html += '<div class="adv-section">';
+        html += `<h4 class="adv-section-title">${data.district_name || 'District'} Rankings</h4>`;
+        html += _renderDistrictRankingsTable(data.district_rankings);
+        html += '</div>';
+    }
+
+    content.innerHTML = html;
+}
+
+function _renderDistrictRankingsTable(rankings) {
+    let html = '<div class="adv-table-wrap adv-table-district"><table class="adv-table">';
+    html += '<thead><tr><th>Rank</th><th>Team</th><th>Points</th><th>Events</th></tr></thead>';
+    html += '<tbody>';
+
+    // Show top 25 + all teams at this event, with gap markers
+    const topN = 25;
+    const rows = rankings.filter(dr => dr.rank <= topN || dr.at_this_event);
+    rows.sort((a, b) => a.rank - b.rank);
+
+    let lastRank = 0;
+    rows.forEach(dr => {
+        if (dr.rank > lastRank + 1 && lastRank > 0) {
+            html += '<tr class="adv-gap"><td colspan="4">···</td></tr>';
+        }
+        const cls = dr.at_this_event ? 'adv-row-here' : '';
+        const star = dr.at_this_event ? ' <span class="adv-here-star">★</span>' : '';
+        html += `<tr class="${cls}">`;
+        html += `<td>${dr.rank}</td>`;
+        html += `<td>${dr.team_number}${star}</td>`;
+        html += `<td class="adv-col-total">${dr.point_total}</td>`;
+        html += `<td>${dr.event_count}</td>`;
+        html += '</tr>';
+        lastRank = dr.rank;
+    });
+
+    html += '</tbody></table></div>';
+    return html;
+}
+
 function _champBadge(entries, cls, icon, label) {
     const years = entries.map(y => typeof y === 'object' ? y.year : y).join(', ');
     const frontText = `${icon} ${label}: ${years}`;
@@ -2296,6 +2535,22 @@ function renderSummary(data) {
         loadSummaryAwards();
     }
 
+    // Advancement — lazy-load (only for completed events)
+    const advEl = $('summary-advancement');
+    if (currentEventStatus === 'completed') {
+        advEl.classList.remove('hidden');
+        if (data.advancement && (data.advancement.qualified_teams?.length || data.advancement.district_rankings?.length)) {
+            renderAdvancement(data.advancement);
+        } else if (!data.advancement) {
+            $('summary-advancement-content').innerHTML = '<p class="empty" style="margin:.5rem 0;font-size:.82rem">Loading…</p>';
+            loadSummaryAdvancement();
+        } else {
+            advEl.classList.add('hidden');
+        }
+    } else {
+        advEl.classList.add('hidden');
+    }
+
     // Prior connections — lazy-load on demand
     const histEl = $('summary-history');
     histEl.classList.remove('hidden');
@@ -2324,17 +2579,12 @@ let currentConnSearch = '';
 let currentConnSort = 'most';
 
 function toggleSummarySection(type) {
-    const body = $(type === 'past-champs' ? 'summary-past-champs-body' : 'summary-past-awards-body');
-    const icon = $(type + '-toggle-icon');
-    body.classList.toggle('collapsed');
-    icon.textContent = body.classList.contains('collapsed') ? '▼' : '▲';
+    const bodyId = type === 'past-champs' ? 'summary-past-champs-body' : 'summary-past-awards-body';
+    _toggleCollapse(bodyId, type + '-toggle-icon');
 }
 
 function toggleConnections() {
-    const body = $('summary-history-body');
-    const icon = $('conn-toggle-icon');
-    body.classList.toggle('collapsed');
-    icon.textContent = body.classList.contains('collapsed') ? '▼' : '▲';
+    _toggleCollapse('summary-history-body', 'conn-toggle-icon');
 }
 
 function filterConnections(filter, btn) {
@@ -3436,8 +3686,8 @@ function renderPbpMatch() {
     // Alliance titles (include alliance # for playoff matches)
     const redAllianceNum = m.red.alliance_number;
     const blueAllianceNum = m.blue.alliance_number;
-    const redTitle = 'Red Alliance' + (redAllianceNum ? ` #${redAllianceNum}` : '');
-    const blueTitle = 'Blue Alliance' + (blueAllianceNum ? ` #${blueAllianceNum}` : '');
+    const redTitle = redAllianceNum ? `Alliance #${redAllianceNum}` : 'Red Alliance';
+    const blueTitle = blueAllianceNum ? `Alliance #${blueAllianceNum}` : 'Blue Alliance';
 
     // Render team cards or alliance placeholder when teams aren't assigned yet
     const redTeamCards = m.red.teams.length
@@ -3713,7 +3963,6 @@ function renderPbpTeam(t, sideCls) {
                 <div class="pbp-stat-value">${t.avg_rp}</div>
             </div>
         </div>
-        ${t.high_score > 0 ? `<div class="pbp-team-highscore">Team high score: ${t.high_score}${t.high_score_match ? ' in ' + t.high_score_match : ''}</div>` : ''}
         <div class="pbp-awards-slot" data-team="${t.team_number}"></div>
     </div>`;
 }
@@ -4219,7 +4468,7 @@ function renderBreakdown(data) {
 function renderBdAlliance(alliance, color, won, nickMap, statsMap, allianceNum, isPlayoff) {
     const bd = alliance.breakdown;
     const sideCls = color === 'red' ? 'red-side' : 'blue-side';
-    const title = (color === 'red' ? 'Red Alliance' : 'Blue Alliance') + (allianceNum ? ` #${allianceNum}` : '');
+    const title = allianceNum ? `Alliance #${allianceNum}` : (color === 'red' ? 'Red Alliance' : 'Blue Alliance');
     const displayScore = alliance.score != null && alliance.score >= 0 ? alliance.score : '–';
 
     const headerContent = color === 'blue'
@@ -4456,7 +4705,7 @@ function renderReefGrid(reef, otherPhaseReef, isAuto) {
 function renderBdAlliance2026(alliance, color, won, nickMap, statsMap, allianceNum, isPlayoff) {
     const bd = alliance.breakdown;
     const sideCls = color === 'red' ? 'red-side' : 'blue-side';
-    const title = (color === 'red' ? 'Red Alliance' : 'Blue Alliance') + (allianceNum ? ` #${allianceNum}` : '');
+    const title = allianceNum ? `Alliance #${allianceNum}` : (color === 'red' ? 'Red Alliance' : 'Blue Alliance');
     const displayScore = alliance.score != null && alliance.score >= 0 ? alliance.score : '–';
 
     const headerContent = color === 'blue'
