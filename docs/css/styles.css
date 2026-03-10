@@ -399,6 +399,19 @@ tr.rookie-team-row {
     background: #22c55e;
 }
 
+/* ── Double-click team lookup hint ────────────────────────── */
+.team-num,
+.adv-team-num,
+.pbp-team-number,
+.top-team-num,
+.high-score-team,
+.summary-hof-num,
+.prestige-entry-num,
+.conn-team-num,
+.rp-team-num {
+    cursor: pointer;
+}
+
 /* ── Dark-mode checkboxes ─────────────────────────────────── */
 input[type="checkbox"] {
     accent-color: var(--primary);

@@ -141,6 +141,33 @@ document.addEventListener('mouseover', e => {
     tip.classList.add(cls);
 });
 
+// ── Global double-click → Team Lookup ─────────────────────
+const _TEAM_NUM_SELECTORS = [
+    '.team-num', '.adv-team-num', '.pbp-team-number', '.top-team-num',
+    '.high-score-team', '.summary-hof-num', '.prestige-entry-num',
+    '.conn-team-num', '.rp-team-num'
+];
+document.addEventListener('dblclick', e => {
+    // Skip if inside an input/textarea/select
+    const tag = e.target.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    // Skip if inside the floating lookup panel itself
+    if (e.target.closest('#float-lookup')) return;
+
+    // 1. Check known team-number elements
+    let el = e.target.closest(_TEAM_NUM_SELECTORS.join(','));
+    if (el) {
+        const num = parseInt(el.textContent.trim(), 10);
+        if (num > 0 && num < 100000) { floatLookupQuick(num); return; }
+    }
+    // 2. Fallback: check if user selected text that looks like a team number
+    const sel = window.getSelection().toString().trim();
+    if (/^\d{1,5}$/.test(sel)) {
+        const num = parseInt(sel, 10);
+        if (num > 0 && num < 100000) floatLookupQuick(num);
+    }
+});
+
 let currentEvent = null;   // event_key once loaded
 let currentEventYear = null; // numeric year of the loaded event
 let eventInfoData = null;  // cached event info for saving
