@@ -511,15 +511,31 @@ async def generate():
             r_vis[region] = items
 
     # ── Phase 7b: Resolve active teams per region ──────────────
+    # Use _true_home (team's registered country/state) instead of team_home
+    # (most-attended event region) to avoid inflating counts with visitors.
     print(f"\nPhase 7b: Resolving {len(active_team_keys)} active {ACTIVE_YEAR} teams to home regions...")
+
+    # Ensure team_info is populated for every active team
+    active_missing = [tk for tk in active_team_keys if tk not in team_info]
+    if active_missing:
+        print(f"  Fetching info for {len(active_missing)} active teams not yet in team_info...")
+        for i in range(0, len(active_missing), BATCH):
+            batch = active_missing[i:i + BATCH]
+            results = await asyncio.gather(
+                *[_safe(client.get(f"/team/{tk}")) for tk in batch]
+            )
+            for tk, info in zip(batch, results):
+                if info:
+                    team_info[tk] = {
+                        "team_number": info.get("team_number"),
+                        "nickname": info.get("nickname", ""),
+                        "country": _norm(info.get("country", "") or ""),
+                        "state_prov": info.get("state_prov", ""),
+                    }
+
     current_season_by_region: Counter = Counter()
     for tk in active_team_keys:
-        if tk in team_home:
-            current_season_by_region[team_home[tk]] += 1
-        else:
-            home = _true_home(tk)
-            if home:
-                current_season_by_region[home] += 1
+        current_season_by_region[_true_home(tk)] += 1
 
     # ── Phase 8: Assemble ─────────────────────────────────────
     print("\nPhase 8: Assembling...")
