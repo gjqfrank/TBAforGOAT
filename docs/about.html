@@ -198,7 +198,7 @@
         <div class="about-hero">
             <h1>Caster's Tool</h1>
             <div class="about-tagline">Events at a glance!</div>
-            <span class="about-version">v1.1</span>
+            <span class="about-version">v1.2</span>
         </div>
 
         <!-- ── What is it ──────────────────────────────── -->
@@ -220,16 +220,20 @@
                     <p>Season event picker with region/week filters, search, manual event code entry, and saved events for instant loading.</p>
                 </div>
                 <div class="feature-card">
+                    <h3>Regional Advancement Pool</h3>
+                    <p>Global Championship qualification rankings for regional teams, pulled from the official FIRST FRC Events API (v3.2). Search and filter by team number, name, or qualification status.</p>
+                </div>
+                <div class="feature-card">
                     <h3>Rankings</h3>
-                    <p>Live team rankings with rank, record, OPR, and Statbotics EPA. Toggle school names and select teams to compare with EPA breakdowns (auto, teleop, endgame).</p>
+                    <p>Live team rankings with rank, record, OPR, and Statbotics EPA. Top 8 teams highlighted in amber. Rankings update in real time and highlighting follows rank changes automatically.</p>
                 </div>
                 <div class="feature-card">
                     <h3>Summary</h3>
-                    <p>Event demographics, Hall of Fame teams, Impact finalists, playoff connections graph, and top scorers.</p>
+                    <p>Event demographics, advancement panel (directly qualified teams for completed events), top scorers, highest match scores, returning champions and finalists, past season awards, and prior playoff connections.</p>
                 </div>
                 <div class="feature-card">
                     <h3>Play by Play</h3>
-                    <p>Match-by-match view with per-team stats, inline comparison, and quick navigation between matches.</p>
+                    <p>Match-by-match view with per-team stats (rank, OPR, EPA, record), inline comparison, and quick navigation between matches.</p>
                 </div>
                 <div class="feature-card">
                     <h3>Breakdown</h3>
@@ -245,11 +249,19 @@
                 </div>
                 <div class="feature-card">
                     <h3>History</h3>
-                    <p>Event lineage: past winners, finalists, awards timeline back to 1992. Region facts &amp; district stats.</p>
+                    <p>Event lineage: past winners, finalists, awards timeline back to 1992. Region facts and district stats.</p>
                 </div>
                 <div class="feature-card">
                     <h3>Team Lookup</h3>
-                    <p>Individual team profiles with awards, blue banners, season achievements, and head-to-head playoff history.</p>
+                    <p>Individual team profiles with awards, blue banners, season achievements, and head-to-head playoff history. Double-click any team number anywhere in the app to instantly look it up.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Compare Teams</h3>
+                    <p>Select multiple teams from Rankings and compare EPA breakdowns (auto, teleop, endgame) side by side.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Collapsible Sections</h3>
+                    <p>All data panels in Summary and Events can be collapsed or expanded with visible Show/Hide toggle pills. Keeps the view clean when focusing on specific information.</p>
                 </div>
             </div>
         </div>
@@ -262,6 +274,10 @@
                 <li><strong>Navigate tabs</strong>: Switch between Rankings, Summary, Play by Play, Breakdown, Alliances, Playoffs, and History.</li>
                 <li><strong>Compare teams</strong>: Check boxes next to teams in Rankings, then click the floating compare bar (or press <kbd>C</kbd>).</li>
                 <li><strong>Quick team lookup</strong>: Press <kbd>Q</kbd> to toggle the floating Quick Lookup panel, or select one team and press <kbd>L</kbd>.</li>
+                <li><strong>Double-click any team number</strong>: Anywhere in the app (Rankings, Play by Play, Summary, etc.), double-click a team number to instantly open the floating Team Lookup panel with that team's data.</li>
+                <li><strong>Regional Advancement Pool</strong>: On the Events tab, the pool shows all regional teams ranked by Championship qualification points. Use the search box and "Qualified only" filter to narrow the list.</li>
+                <li><strong>Advancement panel</strong>: On the Summary tab for completed events, see which teams directly qualified for the Championship, their point breakdowns, and qualifying awards.</li>
+                <li><strong>Collapse sections</strong>: Click any section header with a Show/Hide pill to collapse or expand it. Works on Summary cards, Events sections, and connections.</li>
                 <li><strong>Save events</strong>: Click the save icon on the event bar to cache data for instant reloading.</li>
                 <li><strong>Toggle settings</strong>: Use the gear icon to switch themes, highlight international teams, or include offseason events in data.</li>
             </ul>
@@ -280,6 +296,7 @@
                     <tr><td><kbd>Q</kbd></td><td>Toggle Quick Lookup panel</td><td>Anywhere (not in a text field)</td></tr>
                     <tr><td><kbd>Esc</kbd></td><td>Close overlay / deselect</td><td>Any overlay open</td></tr>
                     <tr><td><kbd>←</kbd> <kbd>→</kbd></td><td>Previous / Next match</td><td>Play by Play or Breakdown tab</td></tr>
+                    <tr><td>Double-click</td><td>Look up a team number</td><td>Any team number in the app</td></tr>
                 </tbody>
             </table>
         </div>
@@ -293,8 +310,8 @@
             <ul>
                 <li><strong><a href="https://www.thebluealliance.com" target="_blank" rel="noopener">The Blue Alliance (TBA)</a></strong>:
                     Event lists, team info, rankings, OPRs, match results, alliances, awards, and media.</li>
-                <li><strong><a href="https://frc-events.firstinspires.org/services/API" target="_blank" rel="noopener">FIRST FRC Events API</a></strong>:
-                    Score breakdowns, per-robot match performance, school names, and team avatars.</li>
+                <li><strong><a href="https://frc-events.firstinspires.org/services/API" target="_blank" rel="noopener">FIRST FRC Events API (v3.0 + v3.2)</a></strong>:
+                    Score breakdowns, per-robot match performance, school names, team avatars, and authoritative regional advancement/qualification data via the v3.2 Regional Pool endpoints.</li>
                 <li><strong><a href="https://www.statbotics.io" target="_blank" rel="noopener">Statbotics</a></strong>:
                     EPA (Expected Points Added) ratings and match win predictions.</li>
             </ul>
@@ -336,7 +353,7 @@
         <div class="footer-top">
             <span>Caster's Tool</span>
             <span class="footer-sep">·</span>
-            <span class="footer-version">v1.1</span>
+            <span class="footer-version">v1.2</span>
         </div>
     </footer>
 </body>
