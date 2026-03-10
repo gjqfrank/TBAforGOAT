@@ -140,6 +140,8 @@
 html {
     scroll-behavior: smooth;
     touch-action: manipulation;   /* prevent double-tap zoom on mobile */
+    background: var(--bg);
+    overscroll-behavior-y: none;  /* prevent elastic overscroll white flash */
 }
 
 body {
@@ -1067,8 +1069,9 @@ input.input-loading {
     overflow: visible;
     max-height: 200px;
     opacity: 1;
-    transition: max-height .3s ease, opacity .2s ease, margin .2s ease;
+    transition: max-height .25s ease, opacity .2s ease, margin .2s ease;
     margin-top: .4rem;
+    will-change: max-height, opacity;
 }
 .manual-entry-body.collapsed {
     overflow: hidden;
@@ -5265,10 +5268,11 @@ tr:hover .compare-cb,
 }
 #summary-history-body {
     overflow: hidden;
-    max-height: 2000px;
-    transition: max-height .35s ease, opacity .25s ease, margin .25s ease;
+    max-height: 800px;
+    transition: max-height .3s ease, opacity .2s ease, margin .2s ease;
     opacity: 1;
     margin-top: .4rem;
+    will-change: max-height, opacity;
 }
 #summary-history-list {
     max-height: 45rem;
@@ -5360,10 +5364,11 @@ tr:hover .compare-cb,
 /* Collapsible section body (past champs, past awards) */
 .summary-collapse-body {
     overflow: hidden;
-    max-height: 2000px;
-    transition: max-height .35s ease, opacity .25s ease, margin .25s ease;
+    max-height: 800px;
+    transition: max-height .3s ease, opacity .2s ease, margin .2s ease;
     opacity: 1;
     margin-top: .4rem;
+    will-change: max-height, opacity;
 }
 .summary-collapse-body:not(.collapsed) {
     overflow: visible;
@@ -5549,10 +5554,11 @@ tr:hover .compare-cb,
 /* ── Advancement card ────────────────────────────────── */
 #summary-advancement-body {
     overflow: hidden;
-    max-height: 5000px;
-    transition: max-height .35s ease, opacity .25s ease, margin .25s ease;
+    max-height: 800px;
+    transition: max-height .3s ease, opacity .2s ease, margin .2s ease;
     opacity: 1;
     margin-top: .4rem;
+    will-change: max-height, opacity;
 }
 #summary-advancement-body.collapsed {
     max-height: 0;
@@ -7120,9 +7126,10 @@ td .pick-flip-back { font-size: inherit; }
 }
 #regional-pool-body {
     overflow: hidden;
-    max-height: 5000px;
-    transition: max-height .35s ease, opacity .25s ease;
+    max-height: 800px;
+    transition: max-height .3s ease, opacity .2s ease;
     opacity: 1;
+    will-change: max-height, opacity;
 }
 #regional-pool-body.collapsed {
     max-height: 0;

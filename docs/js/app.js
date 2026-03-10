@@ -151,8 +151,8 @@ document.addEventListener('dblclick', e => {
     // Skip if inside an input/textarea/select
     const tag = e.target.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-    // Skip if inside the floating lookup panel itself
-    if (e.target.closest('#float-lookup')) return;
+    // Skip if inside lookup panels (floating or modal) or the Team tab
+    if (e.target.closest('#float-lookup, #lookup-overlay, #tab-team, #team-stats')) return;
 
     // 1. Check known team-number elements
     let el = e.target.closest(_TEAM_NUM_SELECTORS.join(','));

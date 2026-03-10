@@ -260,10 +260,7 @@
                     <button class="summary-refresh-btn" onclick="refreshSummaryStats()">↻ Refresh Stats</button>
                 </div>
 
-                <!-- Demographics row -->
-                <div class="summary-stats-row" id="summary-demographics"></div>
-
-                <!-- Advancement (shown at top for completed events) -->
+                <!-- Advancement (shown for completed events) -->
                 <div id="summary-advancement" class="summary-card hidden">
                     <div class="summary-card-header" onclick="toggleAdvancement()">
                         <h3>Advancement</h3>
@@ -274,6 +271,9 @@
                     </div>
                 </div>
 
+                <!-- Demographics row -->
+                <div class="summary-stats-row" id="summary-demographics"></div>
+
                 <!-- Hall of Fame & Impact Award -->
                 <div id="summary-prestige-row" class="team-highlights hidden">
                     <div id="summary-hof" class="highlight-card highlight-hof hidden">
@@ -283,18 +283,6 @@
                     <div id="summary-impact" class="highlight-card highlight-impact hidden">
                         <div class="highlight-label">⭐ Impact Award Finalists</div>
                         <div id="summary-impact-list"></div>
-                    </div>
-                </div>
-
-                <!-- Top scorers + High scores side-by-side (most caster-relevant) -->
-                <div class="summary-dual-row">
-                    <div id="summary-top-scorers" class="summary-card hidden">
-                        <h3>Top Score Contributors</h3>
-                        <div id="summary-top-list"></div>
-                    </div>
-                    <div id="summary-high-scores" class="summary-card hidden">
-                        <h3>Highest Match Scores</h3>
-                        <div id="summary-high-list"></div>
                     </div>
                 </div>
 
@@ -358,6 +346,19 @@
                         <div id="summary-history-list"></div>
                     </div>
                 </div>
+
+                <!-- Top scorers + High scores side-by-side -->
+                <div class="summary-dual-row">
+                    <div id="summary-top-scorers" class="summary-card hidden">
+                        <h3>Top Score Contributors</h3>
+                        <div id="summary-top-list"></div>
+                    </div>
+                    <div id="summary-high-scores" class="summary-card hidden">
+                        <h3>Highest Match Scores</h3>
+                        <div id="summary-high-list"></div>
+                    </div>
+                </div>
+
             </div>
             <div id="summary-loading" class="hidden">
                 <div class="loading-status" id="summary-loading-status">Analysing event data…</div>
