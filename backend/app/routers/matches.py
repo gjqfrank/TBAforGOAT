@@ -811,16 +811,31 @@ async def get_team_performance(event_key: str, team_number: int):
         mn = mr.get("matchNumber", 0)
         desc = mr.get("description", f"{level} {mn}")
 
-        # Find which station this team is at
+        # Find which station this team is at and collect all teams
         station = None
         alliance_color = None
+        red_teams = []
+        blue_teams = []
         for t in mr.get("teams", []):
-            if t.get("teamNumber") == team_number:
-                station = t.get("station", "")
-                alliance_color = "Red" if station.startswith("Red") else "Blue"
-                break
+            tn = t.get("teamNumber")
+            st = t.get("station", "")
+            if st.startswith("Red"):
+                red_teams.append(tn)
+            elif st.startswith("Blue"):
+                blue_teams.append(tn)
+            if tn == team_number:
+                station = st
+                alliance_color = "Red" if st.startswith("Red") else "Blue"
         if not station:
             continue
+
+        # Determine alliance partners (excluding self) and opponents
+        if alliance_color == "Red":
+            alliance_partners = [t for t in red_teams if t != team_number]
+            opponent_teams = blue_teams
+        else:
+            alliance_partners = [t for t in blue_teams if t != team_number]
+            opponent_teams = red_teams
 
         # Robot index (1, 2, or 3) from station like "Red2" or "Blue1"
         robot_idx = int(station[-1]) if station and station[-1].isdigit() else 0
@@ -886,6 +901,8 @@ async def get_team_performance(event_key: str, team_number: int):
             "result": result,
             "allianceScore": my_score,
             "opponentScore": opp_score,
+            "allianceTeams": alliance_partners,
+            "opponentTeams": opponent_teams,
             "autoTower": auto_tower,
             "endGameTower": end_tower,
             "allianceHub": hub,

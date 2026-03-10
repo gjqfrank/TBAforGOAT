@@ -662,9 +662,25 @@
         </div>
     </div>
 
+    <!-- ═══ Match History Modal ═══ -->
+    <div id="match-history-overlay" class="compare-overlay hidden" onclick="if(event.target===this)closeMatchHistory()">
+        <div class="compare-modal match-history-modal">
+            <div class="compare-modal-header">
+                <h2 id="match-history-title">Match History</h2>
+                <button class="compare-close-btn" onclick="closeMatchHistory()" title="Close">&times;</button>
+            </div>
+            <div id="match-history-body" class="compare-body">
+                <p class="empty">Select a team to view match history.</p>
+            </div>
+        </div>
+    </div>
+
     <!-- ═══ Floating Compare Bar (for table selection) ═══ -->
     <div id="compare-bar" class="compare-bar hidden">
         <span id="compare-bar-count">0 teams selected</span>
+        <button id="compare-bar-match-history" class="hidden" onclick="launchMatchHistoryFromSelection()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:3px"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="10"/></svg>Matches <kbd>M</kbd>
+        </button>
         <button id="compare-bar-lookup" class="hidden" onclick="launchLookupFromSelection()">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:3px"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Lookup <kbd>L</kbd>
         </button>

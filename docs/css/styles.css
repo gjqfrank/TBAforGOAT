@@ -6600,6 +6600,126 @@ tr:hover .compare-cb,
 .tower-level-chip.tower-level3 { border-color: rgba(168,85,247,.4); }
 
 /* ═══════════════════════════════════════════════════════════
+   Match History Panel (Rankings tab)
+   ═══════════════════════════════════════════════════════════ */
+
+.match-history-modal {
+    max-width: 600px;
+}
+
+.mh-summary {
+    display: flex;
+    gap: 1.2rem;
+    padding: .8rem 0;
+    justify-content: center;
+    flex-wrap: wrap;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: .8rem;
+}
+.mh-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: .15rem;
+}
+.mh-stat-val {
+    font-family: var(--mono);
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text);
+}
+.mh-stat-lbl {
+    font-size: .65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: var(--text-muted);
+}
+
+.mh-towers {
+    display: flex;
+    flex-direction: column;
+    gap: .4rem;
+    padding: .5rem 0 .8rem;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: .6rem;
+}
+.mh-tower-row {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+}
+.mh-tower-label {
+    font-size: .7rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    min-width: 90px;
+    text-align: right;
+}
+.mh-tower-chips {
+    display: flex;
+    gap: .3rem;
+    flex-wrap: wrap;
+}
+.mh-none {
+    font-size: .75rem;
+    color: var(--text-muted);
+}
+
+.mh-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: .78rem;
+}
+.mh-table th {
+    font-size: .6rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: var(--text-muted);
+    padding: .3rem .4rem;
+    text-align: center;
+    border-bottom: 1px solid var(--border);
+}
+.mh-table td {
+    padding: .35rem .4rem;
+    text-align: center;
+    font-family: var(--mono);
+    font-size: .75rem;
+    color: var(--text-secondary);
+}
+.mh-table tr:not(:last-child) td {
+    border-bottom: 1px solid rgba(255,255,255,.04);
+}
+.mh-table tr:hover td {
+    background: rgba(255,255,255,.03);
+}
+
+.mh-alliance-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+.mh-color-red  { background: #ef4444; }
+.mh-color-blue { background: #3b82f6; }
+
+.mh-teams-cell {
+    font-size: .72rem;
+    white-space: nowrap;
+}
+.mh-team-link {
+    cursor: pointer;
+    color: var(--primary);
+    font-weight: 600;
+    transition: color .15s, text-decoration .15s;
+}
+.mh-team-link:hover {
+    color: var(--primary-light, #8b7fff);
+    text-decoration: underline;
+}
+
+/* ═══════════════════════════════════════════════════════════
    Region & Event History tab
    ═══════════════════════════════════════════════════════════ */
 

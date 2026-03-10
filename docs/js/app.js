@@ -5363,6 +5363,10 @@ document.addEventListener('keydown', e => {
         closeFloatingLookup();
         return;
     }
+    if (!$('match-history-overlay')?.classList.contains('hidden')) {
+        closeMatchHistory();
+        return;
+    }
     if (!$('lookup-overlay')?.classList.contains('hidden')) {
         closeLookup();
         return;
@@ -5450,9 +5454,11 @@ function updateCompareBar() {
     if (n > 0) {
         show('compare-bar');
         $('compare-bar-count').textContent = `${n} team${n > 1 ? 's' : ''} selected`;
-        // Show Lookup button only when exactly 1 team is selected
+        // Show Lookup and Match History buttons only when exactly 1 team is selected
         const lkBtn = $('compare-bar-lookup');
         if (lkBtn) { n === 1 ? show('compare-bar-lookup') : hide('compare-bar-lookup'); }
+        const mhBtn = $('compare-bar-match-history');
+        if (mhBtn) { n === 1 ? show('compare-bar-match-history') : hide('compare-bar-match-history'); }
     } else {
         hide('compare-bar');
     }
@@ -5532,7 +5538,160 @@ document.addEventListener('keydown', e => {
             launchLookupFromSelection();
         }
     }
+    if ((e.key === 'm' || e.key === 'M') && !e.ctrlKey && !e.metaKey) {
+        // Toggle: close if already open
+        if (!$('match-history-overlay')?.classList.contains('hidden')) {
+            e.preventDefault();
+            closeMatchHistory();
+            return;
+        }
+        if (compareSelection.size === 1) {
+            e.preventDefault();
+            launchMatchHistoryFromSelection();
+        }
+    }
 });
+
+// ═══════════════════════════════════════════════════════════
+// MATCH HISTORY FROM RANKINGS
+// ═══════════════════════════════════════════════════════════
+
+function openMatchHistory() {
+    show('match-history-overlay');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeMatchHistory() {
+    hide('match-history-overlay');
+    document.body.style.overflow = '';
+}
+
+async function launchMatchHistoryFromSelection() {
+    if (compareSelection.size !== 1 || !currentEvent) return;
+    const teamKey = [...compareSelection][0];
+    const num = parseInt(teamKey.replace('frc', ''), 10);
+    if (!num) return;
+
+    // Find team nickname from teamsData
+    const teamInfo = teamsData?.find(t => t.team_key === teamKey);
+    const nick = teamInfo ? formatTeamName(teamInfo.nickname) : '';
+
+    openMatchHistory();
+    $('match-history-title').textContent = `Match History · ${num}${nick ? ` — ${nick}` : ''}`;
+    $('match-history-body').innerHTML = '<p class="loading-msg">Loading match history…</p>';
+
+    try {
+        const perf = await API.teamPerf(currentEvent, num);
+        renderMatchHistoryPanel(perf, num, nick);
+    } catch (err) {
+        $('match-history-body').innerHTML = `<p class="empty">Error: ${err.message}</p>`;
+    }
+}
+
+function renderMatchHistoryPanel(perf, teamNum, nick) {
+    const body = $('match-history-body');
+    if (!perf || perf.matches_played === 0) {
+        body.innerHTML = '<p class="empty">No matches played yet.</p>';
+        return;
+    }
+
+    const rec = perf.record;
+    const winPct = perf.matches_played > 0 ? Math.round((rec.wins / perf.matches_played) * 100) : 0;
+
+    // Summary stats
+    let html = `
+        <div class="mh-summary">
+            <div class="mh-stat">
+                <span class="mh-stat-val">${rec.wins}-${rec.losses}${rec.ties ? `-${rec.ties}` : ''}</span>
+                <span class="mh-stat-lbl">Record</span>
+            </div>
+            <div class="mh-stat">
+                <span class="mh-stat-val">${winPct}%</span>
+                <span class="mh-stat-lbl">Win Rate</span>
+            </div>
+            <div class="mh-stat">
+                <span class="mh-stat-val">${perf.matches_played}</span>
+                <span class="mh-stat-lbl">Matches</span>
+            </div>
+            <div class="mh-stat">
+                <span class="mh-stat-val">${perf.avg_alliance_score}</span>
+                <span class="mh-stat-lbl">Avg Alliance Pts</span>
+            </div>
+        </div>`;
+
+    // Tower distribution (2026+)
+    if (perf.autoTower && perf.endGameTower) {
+        const ad = perf.autoTower.distribution || {};
+        const ed = perf.endGameTower.distribution || {};
+        html += `
+        <div class="mh-towers">
+            <div class="mh-tower-row">
+                <span class="mh-tower-label">Auto Tower</span>
+                <div class="mh-tower-chips">
+                    ${ad['1'] ? `<span class="tower-level-chip tower-level1">L1 <b>${ad['1']}</b></span>` : ''}
+                    ${ad['2'] ? `<span class="tower-level-chip tower-level2">L2 <b>${ad['2']}</b></span>` : ''}
+                    ${ad['3'] ? `<span class="tower-level-chip tower-level3">L3 <b>${ad['3']}</b></span>` : ''}
+                    ${!ad['1'] && !ad['2'] && !ad['3'] ? '<span class="mh-none">–</span>' : ''}
+                </div>
+            </div>
+            <div class="mh-tower-row">
+                <span class="mh-tower-label">Endgame Tower</span>
+                <div class="mh-tower-chips">
+                    ${ed['1'] ? `<span class="tower-level-chip tower-level1">L1 <b>${ed['1']}</b></span>` : ''}
+                    ${ed['2'] ? `<span class="tower-level-chip tower-level2">L2 <b>${ed['2']}</b></span>` : ''}
+                    ${ed['3'] ? `<span class="tower-level-chip tower-level3">L3 <b>${ed['3']}</b></span>` : ''}
+                    ${!ed['1'] && !ed['2'] && !ed['3'] ? '<span class="mh-none">–</span>' : ''}
+                </div>
+            </div>
+        </div>`;
+    }
+
+    // Match-by-match table
+    if (perf.matches && perf.matches.length > 0) {
+        let rows = '';
+        for (const pm of perf.matches) {
+            const score = pm.allianceScore != null ? `${pm.allianceScore}-${pm.opponentScore}` : '–';
+            const colorCls = pm.allianceColor === 'Red' ? 'mh-color-red' : 'mh-color-blue';
+            const allies = (pm.allianceTeams || []).map(n =>
+                `<span class="mh-team-link" onclick="lookupTeamFromMatchHistory(${n})">${n}</span>`
+            ).join(', ');
+            const opps = (pm.opponentTeams || []).map(n =>
+                `<span class="mh-team-link" onclick="lookupTeamFromMatchHistory(${n})">${n}</span>`
+            ).join(', ');
+            rows += `<tr>
+                <td>${pm.description}</td>
+                <td><span class="mh-alliance-dot ${colorCls}"></span></td>
+                <td><span class="result-badge result-${pm.result}">${pm.result}</span></td>
+                <td>${score}</td>
+                <td class="mh-teams-cell">${allies}</td>
+                <td class="mh-teams-cell">${opps}</td>
+            </tr>`;
+        }
+
+        html += `
+        <table class="mh-table">
+            <thead><tr>
+                <th>Match</th><th></th><th></th><th>Score</th><th>Alliance</th><th>Opponents</th>
+            </tr></thead>
+            <tbody>${rows}</tbody>
+        </table>`;
+    }
+
+    body.innerHTML = html;
+}
+
+function lookupTeamFromMatchHistory(teamNum) {
+    closeMatchHistory();
+    openLookup();
+    $('lookup-title').textContent = `Team Lookup · ${teamNum}`;
+    $('lookup-body').innerHTML = '<p class="loading-msg">Loading team data\u2026</p>';
+    const year = currentEventYear || null;
+    API.teamStats(teamNum, year).then(data => {
+        $('lookup-body').innerHTML = renderTeamStats(data);
+    }).catch(err => {
+        $('lookup-body').innerHTML = `<p class="empty">Error: ${err.message}</p>`;
+    });
+}
 
 // ═══════════════════════════════════════════════════════════
 // FLOATING TEAM LOOKUP PANEL
