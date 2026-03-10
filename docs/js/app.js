@@ -153,6 +153,8 @@ document.addEventListener('dblclick', e => {
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
     // Skip if inside lookup panels (floating or modal) or the Team tab
     if (e.target.closest('#float-lookup, #lookup-overlay, #tab-team, #team-stats')) return;
+    // Skip if inside Breakdown robot cards (single-click is spotlight toggle there)
+    if (e.target.closest('.bd-robot-card')) return;
 
     // 1. Check known team-number elements
     let el = e.target.closest(_TEAM_NUM_SELECTORS.join(','));
