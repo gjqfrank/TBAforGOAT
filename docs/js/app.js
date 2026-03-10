@@ -147,6 +147,16 @@ const _TEAM_NUM_SELECTORS = [
     '.high-score-team', '.summary-hof-num', '.prestige-entry-num',
     '.conn-team-num', '.rp-team-num'
 ];
+// Selectors for elements that contain numeric data (scores, points, years)
+// that should NOT trigger the text-selection team-lookup fallback.
+const _NO_TEAM_FALLBACK_ZONES = [
+    '.adv-col-total',       // advancement / regional pool total-points cells
+    '.rp-event-code',       // regional pool event-score spans
+    '.season-controls',     // event selector (year, week numbers)
+    '#manual-entry-body',   // manual event code entry (year field)
+    '.adv-table-district',  // district ranking tables (points, event counts)
+    '.season-selected-bar', // selected-event confirmation bar
+];
 document.addEventListener('dblclick', e => {
     // Skip if inside an input/textarea/select
     const tag = e.target.tagName;
@@ -156,13 +166,15 @@ document.addEventListener('dblclick', e => {
     // Skip if inside Breakdown robot cards (single-click is spotlight toggle there)
     if (e.target.closest('.bd-robot-card')) return;
 
-    // 1. Check known team-number elements
+    // 1. Check known team-number elements (explicit team-num classes)
     let el = e.target.closest(_TEAM_NUM_SELECTORS.join(','));
     if (el) {
         const num = parseInt(el.textContent.trim(), 10);
         if (num > 0 && num < 100000) { floatLookupQuick(num); return; }
     }
-    // 2. Fallback: check if user selected text that looks like a team number
+    // 2. Fallback: check if user selected text that looks like a team number,
+    //    but NOT inside zones known to contain non-team numeric data.
+    if (e.target.closest(_NO_TEAM_FALLBACK_ZONES.join(','))) return;
     const sel = window.getSelection().toString().trim();
     if (/^\d{1,5}$/.test(sel)) {
         const num = parseInt(sel, 10);
@@ -5329,21 +5341,33 @@ function closeCompare() {
     document.body.style.overflow = '';
 }
 
-// Close on Escape
+// Close on Escape or Q
 document.addEventListener('keydown', e => {
-    if (e.key === 'Escape' && compareSelection.size > 0) {
+    const isEsc = e.key === 'Escape';
+    const isQ = (e.key === 'q' || e.key === 'Q') && !e.ctrlKey && !e.metaKey && !e.altKey;
+    // Q should not fire when the user is typing in an input/textarea/select
+    const inInput = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName);
+    const dismiss = isEsc || (isQ && !inInput);
+    if (!dismiss) return;
+
+    if (compareSelection.size > 0) {
         clearCompareSelection();
         return;
     }
-    if (e.key === 'Escape' && _spotlightTeam != null) {
+    if (_spotlightTeam != null) {
         closeSpotlight();
         return;
     }
-    if (e.key === 'Escape' && !$('lookup-overlay')?.classList.contains('hidden')) {
+    // Close floating lookup panel if open
+    if (!$('float-lookup')?.classList.contains('hidden')) {
+        closeFloatingLookup();
+        return;
+    }
+    if (!$('lookup-overlay')?.classList.contains('hidden')) {
         closeLookup();
         return;
     }
-    if (e.key === 'Escape' && !$('compare-overlay')?.classList.contains('hidden')) {
+    if (!$('compare-overlay')?.classList.contains('hidden')) {
         closeCompare();
         return;
     }
