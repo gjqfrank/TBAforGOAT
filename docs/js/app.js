@@ -6502,8 +6502,6 @@ function toggleRankingsView() {
 
 function renderTeamCards(teams) {
     const toolbar = `<div class="rankings-toolbar">
-        <label class="toggle-label"><input type="checkbox" ${rankingsCompact ? 'checked' : ''} onchange="toggleRankingsCompact(this.checked)"> Compact</label>
-        <label class="toggle-label"><input type="checkbox" ${rankingsShowSchool ? 'checked' : ''} onchange="toggleRankingsSchool(this.checked)"> School / Org</label>
         <button class="rankings-view-toggle" onclick="toggleRankingsView()">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
             ${rankingsCardView ? 'Table View' : 'Card View'}
