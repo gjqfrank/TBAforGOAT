@@ -7347,3 +7347,600 @@ td .pick-flip-back { font-size: inherit; }
     color: #b91c1c;
 }
 
+
+/* ═══════════════════════════════════════════════════════════
+   MOBILE UX IMPROVEMENTS
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── 1. Sticky Bottom Navigation Bar ──────────────────────── */
+.mobile-bottom-nav {
+    display: none;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 9998;
+    background: var(--surface-glass);
+    backdrop-filter: blur(20px) saturate(1.4);
+    -webkit-backdrop-filter: blur(20px) saturate(1.4);
+    border-top: 1px solid var(--border);
+    box-shadow: 0 -2px 20px rgba(0,0,0,.3);
+    padding: .25rem .5rem;
+    padding-bottom: calc(.25rem + env(safe-area-inset-bottom, 0px));
+}
+.mobile-bottom-nav-inner {
+    display: flex;
+    justify-content: space-around;
+    align-items: stretch;
+    max-width: 500px;
+    margin: 0 auto;
+}
+.mob-nav-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: .15rem;
+    padding: .35rem .25rem .25rem;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: .62rem;
+    font-weight: 600;
+    font-family: var(--font);
+    cursor: pointer;
+    transition: color .15s, background .15s;
+    border-radius: 8px;
+    min-width: 52px;
+    min-height: 48px;
+    box-shadow: none;
+    -webkit-tap-highlight-color: transparent;
+    position: relative;
+    letter-spacing: .02em;
+}
+.mob-nav-btn svg {
+    width: 20px;
+    height: 20px;
+    stroke-width: 2;
+    flex-shrink: 0;
+}
+.mob-nav-btn.active {
+    color: var(--primary);
+    background: var(--primary-soft);
+}
+.mob-nav-btn.active svg {
+    filter: drop-shadow(0 0 4px var(--primary-glow));
+}
+.mob-nav-btn:active {
+    transform: scale(.92);
+}
+/* Badge on bottom nav */
+.mob-nav-badge {
+    position: absolute;
+    top: 2px;
+    right: 4px;
+    min-width: 16px;
+    height: 16px;
+    line-height: 16px;
+    text-align: center;
+    font-size: .55rem;
+    font-weight: 700;
+    color: #fff;
+    background: var(--primary);
+    border-radius: 999px;
+    padding: 0 3px;
+    display: none;
+}
+.mob-nav-badge.visible { display: block; }
+
+/* More menu popover */
+.mob-more-menu {
+    position: fixed;
+    bottom: calc(60px + env(safe-area-inset-bottom, 0px));
+    right: .5rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: .4rem;
+    box-shadow: var(--shadow-lg);
+    z-index: 9999;
+    display: none;
+    min-width: 150px;
+}
+.mob-more-menu.open { display: flex; flex-direction: column; gap: .15rem; }
+.mob-more-item {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .6rem .85rem;
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: .82rem;
+    font-weight: 500;
+    font-family: var(--font);
+    cursor: pointer;
+    border-radius: 6px;
+    white-space: nowrap;
+    box-shadow: none;
+    -webkit-tap-highlight-color: transparent;
+}
+.mob-more-item:active,
+.mob-more-item:hover { background: var(--primary-soft); color: var(--text); }
+.mob-more-item svg { width: 16px; height: 16px; stroke-width: 2; flex-shrink: 0; }
+.mob-more-item.active { color: var(--primary); font-weight: 600; }
+
+@media (max-width: 768px) {
+    .mobile-bottom-nav { display: block; }
+    .tabs-wrap { display: none; }
+    body { padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px)); }
+}
+
+
+/* ── 3. Auto-Hiding Header on Scroll Down ─────────────────── */
+@media (max-width: 768px) {
+    header {
+        position: sticky;
+        top: 0;
+        transition: transform .3s cubic-bezier(.4,0,.2,1);
+        will-change: transform;
+    }
+    header.header-hidden {
+        transform: translateY(-100%);
+    }
+}
+
+
+/* ── 4. Bottom-Sheet Modals ───────────────────────────────── */
+@media (max-width: 768px) {
+    .compare-overlay {
+        align-items: flex-end !important;
+        padding: 0 !important;
+    }
+    .compare-modal,
+    .lookup-modal,
+    .match-history-modal {
+        max-width: 100% !important;
+        max-height: 92vh !important;
+        width: 100% !important;
+        border-radius: 16px 16px 0 0 !important;
+        animation: sheet-up .3s ease-out !important;
+    }
+    /* Pull handle */
+    .compare-modal::before,
+    .lookup-modal::before,
+    .match-history-modal::before {
+        content: '';
+        display: block;
+        width: 36px;
+        height: 4px;
+        background: var(--text-muted);
+        opacity: .4;
+        border-radius: 999px;
+        margin: 8px auto 4px;
+    }
+    .compare-body,
+    #lookup-body,
+    #match-history-body {
+        max-height: calc(92vh - 80px);
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+}
+@keyframes sheet-up {
+    from { transform: translateY(100%); }
+    to   { transform: translateY(0); }
+}
+
+
+/* ── 5. Card-Based Rankings View ──────────────────────────── */
+.rankings-card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr));
+    gap: .6rem;
+    padding: .5rem 0;
+}
+.rank-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: .7rem .85rem;
+    display: flex;
+    flex-direction: column;
+    gap: .35rem;
+    transition: var(--transition);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+.rank-card:active {
+    transform: scale(.98);
+    border-color: var(--primary);
+}
+.rank-card-top {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+}
+.rank-card-rank {
+    font-size: 1.05rem;
+    font-weight: 800;
+    color: var(--text-muted);
+    min-width: 2rem;
+    text-align: center;
+    font-family: var(--mono);
+}
+.rank-card-rank.rank-top8 { color: var(--primary); }
+.rank-card-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    object-fit: contain;
+    flex-shrink: 0;
+}
+.rank-card-avatar-placeholder {
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    background: var(--primary-soft);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: .6rem;
+    font-weight: 700;
+    color: var(--primary);
+    font-family: var(--mono);
+    flex-shrink: 0;
+}
+.rank-card-info {
+    flex: 1;
+    min-width: 0;
+}
+.rank-card-num {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text);
+    font-family: var(--mono);
+    cursor: pointer;
+}
+.rank-card-name {
+    font-size: .78rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.rank-card-stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: .35rem;
+}
+.rank-card-stat {
+    text-align: center;
+    padding: .25rem;
+    background: var(--primary-soft);
+    border-radius: 4px;
+}
+.rank-card-stat-val {
+    font-size: .82rem;
+    font-weight: 700;
+    font-family: var(--mono);
+    color: var(--text);
+}
+.rank-card-stat-label {
+    font-size: .6rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: var(--text-muted);
+}
+
+/* View toggle button */
+.rankings-view-toggle {
+    display: none;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    padding: .35rem .75rem;
+    border-radius: var(--radius);
+    font-size: .75rem;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: none;
+    margin-left: auto;
+}
+.rankings-view-toggle:hover { background: var(--primary-soft); color: var(--primary); }
+@media (max-width: 768px) {
+    .rankings-view-toggle { display: inline-flex; align-items: center; gap: .35rem; }
+}
+
+
+/* ── 6. Pull-to-Refresh ──────────────────────────────────── */
+.ptr-indicator {
+    text-align: center;
+    padding: 0;
+    height: 0;
+    overflow: hidden;
+    transition: height .2s ease, opacity .2s ease;
+    opacity: 0;
+    color: var(--text-muted);
+    font-size: .78rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: .4rem;
+}
+.ptr-indicator.pulling {
+    opacity: 1;
+}
+.ptr-indicator.refreshing {
+    opacity: 1;
+}
+.ptr-spinner {
+    width: 18px;
+    height: 18px;
+    border: 2px solid var(--border);
+    border-top-color: var(--primary);
+    border-radius: 50%;
+    display: inline-block;
+}
+.ptr-spinner.spinning {
+    animation: spin .6s linear infinite;
+}
+.ptr-arrow {
+    display: inline-block;
+    transition: transform .2s;
+}
+.ptr-arrow.flipped {
+    transform: rotate(180deg);
+}
+
+
+/* ── 7. Tab Badge Counts (enhanced) ──────────────────────── */
+.tab .tab-badge {
+    display: none;
+    font-size: .55rem;
+    font-weight: 700;
+    background: var(--primary);
+    color: #fff;
+    padding: 0 4px;
+    border-radius: 999px;
+    min-width: 16px;
+    height: 16px;
+    line-height: 16px;
+    text-align: center;
+    margin-left: .2rem;
+}
+.tab .tab-badge.visible { display: inline-block; }
+.tab.active .tab-badge { background: var(--primary-hover); }
+
+
+/* ── 8. Settings as Bottom Sheet on Mobile ────────────────── */
+@media (max-width: 768px) {
+    .settings-menu {
+        position: fixed !important;
+        top: auto !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        max-width: 100% !important;
+        min-width: 100% !important;
+        border-radius: 16px 16px 0 0 !important;
+        padding: 1rem 1.2rem calc(1rem + env(safe-area-inset-bottom, 0px)) !important;
+        z-index: 10001 !important;
+        animation: sheet-up .25s ease-out;
+        max-height: 80vh;
+        overflow-y: auto;
+    }
+    .settings-menu::before {
+        content: '';
+        display: block;
+        width: 36px;
+        height: 4px;
+        background: var(--text-muted);
+        opacity: .4;
+        border-radius: 999px;
+        margin: 0 auto 10px;
+    }
+    /* Larger touch targets for toggles */
+    .settings-toggle {
+        padding: .6rem 0;
+        min-height: 48px;
+    }
+    .toggle-slider {
+        width: 44px;
+        height: 24px;
+    }
+    .toggle-slider::after {
+        width: 20px;
+        height: 20px;
+    }
+    .settings-toggle input:checked + .toggle-slider::after {
+        transform: translateX(20px);
+    }
+    .toggle-label {
+        font-size: .88rem;
+    }
+    /* Backdrop */
+    .settings-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,.5);
+        z-index: 10000;
+        animation: fade-in .2s ease;
+    }
+}
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+
+/* ── 9. Full-Screen Lookup on Mobile ──────────────────────── */
+@media (max-width: 768px) {
+    .float-lookup {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        border-radius: 0 !important;
+        z-index: 10002 !important;
+        animation: fade-in .2s ease-out;
+    }
+    .float-lookup .float-lookup-body {
+        max-height: calc(100vh - 100px);
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    .float-lookup .float-lookup-close {
+        width: 40px;
+        height: 40px;
+    }
+    .float-lookup .float-lookup-search input[type="text"] {
+        font-size: 16px !important;
+    }
+}
+
+
+/* ── 10. Minimum Text Sizes ───────────────────────────────── */
+@media (max-width: 768px) {
+    .bd-reef-cell { font-size: .75rem !important; }
+    .comp-label { font-size: .72rem !important; }
+    .compare-grid { font-size: .75rem !important; }
+    .footer-attribution { font-size: .72rem !important; }
+    .site-footer { font-size: .72rem !important; }
+    .hsc-label { font-size: .72rem !important; }
+    .hsc-sub { font-size: .72rem !important; }
+    .pbp-stat-label { font-size: .65rem !important; }
+    .status-item { font-size: .72rem !important; }
+    .season-count-badge { font-size: .72rem !important; }
+    .rp-status { font-size: .72rem !important; }
+}
+@media (max-width: 480px) {
+    .bd-reef-cell { font-size: .72rem !important; min-width: 24px !important; }
+    .comp-label { font-size: .68rem !important; }
+}
+
+
+/* ── 11. Touch Feedback Improvements ──────────────────────── */
+@media (max-width: 768px) {
+    button:active,
+    .settings-btn:active,
+    .empty-action-btn:active,
+    .pbp-nav-btn:active,
+    .ssb-load-btn:active,
+    .inline-error-retry:active {
+        transform: scale(.95) !important;
+        transition: transform .08s !important;
+    }
+    .summary-stat-card:active,
+    .history-stat-card:active,
+    .event-section-card:active,
+    .rank-card:active {
+        transform: scale(.97);
+        transition: transform .08s;
+    }
+    .alliance-card:active {
+        transform: scale(.98);
+        transition: transform .08s;
+    }
+    a:active, .team-num:active, .conn-team-num:active {
+        opacity: .7;
+        transition: opacity .08s;
+    }
+    /* Universal tap highlight color */
+    * {
+        -webkit-tap-highlight-color: rgba(99,102,241,.12);
+    }
+}
+
+
+/* ── 12. Skeleton Fade-In Transitions ─────────────────────── */
+.content-fade-in {
+    animation: content-fade .2s ease-out;
+}
+.tab-content.active {
+    animation: tab-fade .25s ease-out;
+}
+
+
+/* ── 13. Event Selection Simplification ───────────────────── */
+@media (max-width: 768px) {
+    #manual-entry-body.collapsed { display: none; }
+    .collapsed-header .collapse-toggle-arrow { font-size: .7rem; }
+    /* Stack the saved events more compactly */
+    .saved-events-card { margin-bottom: .5rem; }
+    .saved-event-item { font-size: .82rem; }
+}
+
+
+/* ── 14. Safe Area Insets ─────────────────────────────────── */
+@supports (padding: env(safe-area-inset-top)) {
+    header {
+        padding-left: max(2.5rem, env(safe-area-inset-left));
+        padding-right: max(2.5rem, env(safe-area-inset-right));
+    }
+    .compare-bar {
+        bottom: calc(.75rem + env(safe-area-inset-bottom));
+    }
+    .back-to-top {
+        bottom: calc(1.5rem + env(safe-area-inset-bottom));
+    }
+    @media (max-width: 768px) {
+        header {
+            padding-top: max(.65rem, env(safe-area-inset-top));
+            padding-left: max(1rem, env(safe-area-inset-left));
+            padding-right: max(1rem, env(safe-area-inset-right));
+        }
+        main {
+            padding-left: max(1rem, env(safe-area-inset-left));
+            padding-right: max(1rem, env(safe-area-inset-right));
+        }
+        .compare-bar {
+            bottom: calc(.75rem + env(safe-area-inset-bottom) + 56px);
+            left: max(.75rem, env(safe-area-inset-left));
+            right: max(.75rem, env(safe-area-inset-right));
+        }
+        .back-to-top {
+            bottom: calc(1.5rem + env(safe-area-inset-bottom) + 56px);
+            right: max(1.5rem, env(safe-area-inset-right));
+        }
+    }
+}
+
+
+/* ── 15. Landscape Orientation Warning ────────────────────── */
+.landscape-hint {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    padding: .45rem 1rem;
+    background: linear-gradient(135deg, var(--primary) 0%, #7c7ff7 100%);
+    color: #fff;
+    font-size: .75rem;
+    font-weight: 600;
+    text-align: center;
+    z-index: 11000;
+    animation: fade-in .3s ease;
+    cursor: pointer;
+}
+.landscape-hint-close {
+    position: absolute;
+    right: .5rem;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: rgba(255,255,255,.8);
+    font-size: 1.1rem;
+    cursor: pointer;
+    padding: .25rem;
+    line-height: 1;
+    box-shadow: none;
+}
+@media (max-width: 900px) and (orientation: landscape) and (max-height: 500px) {
+    .landscape-hint.show { display: block; }
+}
+.landscape-hint.dismissed { display: none !important; }

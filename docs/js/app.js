@@ -77,6 +77,8 @@ function updateTabDots() {
         const btn = document.querySelector(`.tab[data-tab="${tab}"]`);
         if (btn) btn.classList.toggle('tab-has-data', hasData);
     }
+    // Update mobile nav badges when tab dots update
+    if (typeof updateMobileNavBadges === 'function') updateMobileNavBadges();
 }
 
 // ── Find latest scored match index ─────────────────────────
@@ -195,6 +197,7 @@ let highlightRookie = false;   // settings: highlight rookie teams
 let showOffseason = false;     // settings: show offseason events
 let rankingsCompact = false;      // toggle: compressed rankings view
 let rankingsShowSchool = false;   // toggle: show school/org column
+let rankingsCardView = false;     // toggle: card view on mobile
 let allianceShowEpa = false;      // toggle: show EPA breakdown in alliance cards
 let allianceShowPlayoff = false;  // toggle: show playoff ribbons/status
 let allianceShowAvatars = true;  // toggle: show team avatars
@@ -2040,14 +2043,18 @@ function sortTeamsData() {
 function toggleRankingsCompact(on) {
     rankingsCompact = on;
     if (teamsData) {
-        $('event-teams').innerHTML = renderTeamTable(teamsData, teamsSortCol, teamsSortAsc);
+        $('event-teams').innerHTML = rankingsCardView
+            ? renderTeamCards(teamsData)
+            : renderTeamTable(teamsData, teamsSortCol, teamsSortAsc);
     }
 }
 
 function toggleRankingsSchool(on) {
     rankingsShowSchool = on;
     if (teamsData) {
-        $('event-teams').innerHTML = renderTeamTable(teamsData, teamsSortCol, teamsSortAsc);
+        $('event-teams').innerHTML = rankingsCardView
+            ? renderTeamCards(teamsData)
+            : renderTeamTable(teamsData, teamsSortCol, teamsSortAsc);
     }
 }
 
@@ -2058,9 +2065,14 @@ function renderTeamTable(teams, sortCol, asc) {
     const compact = rankingsCompact;
 
     const school = rankingsShowSchool;
+    const viewToggle = `<button class="rankings-view-toggle" onclick="toggleRankingsView()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        ${rankingsCardView ? 'Table View' : 'Card View'}
+    </button>`;
     const toolbar = `<div class="rankings-toolbar">
         <label class="toggle-label"><input type="checkbox" ${compact ? 'checked' : ''} onchange="toggleRankingsCompact(this.checked)"> Compact</label>
         <label class="toggle-label"><input type="checkbox" ${school ? 'checked' : ''} onchange="toggleRankingsSchool(this.checked)"> School / Org</label>
+        ${viewToggle}
     </div>`;
 
     return toolbar + `
@@ -5646,6 +5658,14 @@ function renderMatchHistoryPanel(perf, teamNum, nick) {
         </div>`;
     }
 
+    // Build a nickname lookup from teamsData for hover tooltips
+    const nickLookup = {};
+    if (teamsData) {
+        for (const t of teamsData) {
+            nickLookup[t.team_number] = formatTeamName(t.nickname) || '';
+        }
+    }
+
     // Match-by-match table
     if (perf.matches && perf.matches.length > 0) {
         let rows = '';
@@ -5653,10 +5673,10 @@ function renderMatchHistoryPanel(perf, teamNum, nick) {
             const score = pm.allianceScore != null ? `${pm.allianceScore}-${pm.opponentScore}` : '–';
             const colorCls = pm.allianceColor === 'Red' ? 'mh-color-red' : 'mh-color-blue';
             const allies = (pm.allianceTeams || []).map(n =>
-                `<span class="mh-team-link" onclick="lookupTeamFromMatchHistory(${n})">${n}</span>`
+                `<span class="mh-team-link" title="${nickLookup[n] || ''}" onclick="lookupTeamFromMatchHistory(${n})">${n}</span>`
             ).join(', ');
             const opps = (pm.opponentTeams || []).map(n =>
-                `<span class="mh-team-link" onclick="lookupTeamFromMatchHistory(${n})">${n}</span>`
+                `<span class="mh-team-link" title="${nickLookup[n] || ''}" onclick="lookupTeamFromMatchHistory(${n})">${n}</span>`
             ).join(', ');
             rows += `<tr>
                 <td>${pm.description}</td>
@@ -6263,3 +6283,406 @@ function _fmtDate(dateStr) {
 }
 
 
+// ═══════════════════════════════════════════════════════════
+// MOBILE UX IMPROVEMENTS
+// ═══════════════════════════════════════════════════════════
+
+// ── 1. Mobile Bottom Navigation ────────────────────────────
+function mobileNavTo(tabName) {
+    // Close the more menu if open
+    const moreMenu = document.getElementById('mob-more-menu');
+    if (moreMenu) moreMenu.classList.remove('open');
+
+    // Use the existing tab switching mechanism
+    const tabBtn = document.querySelector(`.tab[data-tab="${tabName}"]`);
+    if (tabBtn) tabBtn.click();
+
+    // Sync bottom nav active state
+    syncMobileNav(tabName);
+}
+
+function syncMobileNav(tabName) {
+    document.querySelectorAll('.mob-nav-btn').forEach(b => {
+        const t = b.dataset.tab;
+        b.classList.toggle('active', t === tabName);
+    });
+    // Also highlight "more" items
+    document.querySelectorAll('.mob-more-item').forEach(b => {
+        b.classList.toggle('active', b.dataset.tab === tabName);
+    });
+    // If tab is in the "more" menu, highlight the "more" button
+    const moreTabs = ['history', 'summary', 'breakdown', 'alliance', 'team'];
+    const moreBtn = document.querySelector('.mob-nav-btn[data-tab="more"]');
+    if (moreBtn) {
+        moreBtn.classList.toggle('active', moreTabs.includes(tabName));
+    }
+}
+
+function toggleMobileMore() {
+    const menu = document.getElementById('mob-more-menu');
+    menu.classList.toggle('open');
+}
+
+// Close more menu on outside click
+document.addEventListener('click', e => {
+    const menu = document.getElementById('mob-more-menu');
+    if (!menu || !menu.classList.contains('open')) return;
+    if (!e.target.closest('#mob-more-menu') && !e.target.closest('.mob-nav-btn[data-tab="more"]')) {
+        menu.classList.remove('open');
+    }
+});
+
+// Sync bottom nav when desktop tabs are clicked
+document.querySelectorAll('.tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+        syncMobileNav(btn.dataset.tab);
+    });
+});
+
+// Update mobile nav badges
+function updateMobileNavBadges() {
+    const rankBadge = document.getElementById('mob-badge-rankings');
+    const pbpBadge = document.getElementById('mob-badge-pbp');
+    if (rankBadge) {
+        if (teamsData && teamsData.length) {
+            rankBadge.textContent = teamsData.length;
+            rankBadge.classList.add('visible');
+        } else {
+            rankBadge.classList.remove('visible');
+        }
+    }
+    if (pbpBadge) {
+        if (pbpData && pbpData.matches && pbpData.matches.length) {
+            const m = pbpData.matches[pbpIndex];
+            pbpBadge.textContent = m ? m.label.replace(/^Qualification /i, 'Q').replace(/^Playoff /i, 'P') : '';
+            pbpBadge.classList.add('visible');
+        } else {
+            pbpBadge.classList.remove('visible');
+        }
+    }
+}
+
+
+// ── 2. Swipe Gestures for Match Navigation ─────────────────
+(function initSwipeGestures() {
+    const swipeTargets = [
+        { containerId: 'tab-playbyplay', prev: () => pbpPrev(), next: () => pbpNext() },
+        { containerId: 'tab-breakdown',  prev: () => bdPrev(),  next: () => bdNext() },
+    ];
+
+    swipeTargets.forEach(({ containerId, prev, next }) => {
+        const el = document.getElementById(containerId);
+        if (!el) return;
+
+        let startX = 0, startY = 0, swiping = false;
+        const THRESHOLD = 60;
+
+        el.addEventListener('touchstart', e => {
+            if (e.touches.length !== 1) return;
+            startX = e.touches[0].clientX;
+            startY = e.touches[0].clientY;
+            swiping = true;
+        }, { passive: true });
+
+        el.addEventListener('touchmove', e => {
+            if (!swiping) return;
+            // If vertical scroll is larger than horizontal, cancel swipe
+            const dx = Math.abs(e.touches[0].clientX - startX);
+            const dy = Math.abs(e.touches[0].clientY - startY);
+            if (dy > dx) swiping = false;
+        }, { passive: true });
+
+        el.addEventListener('touchend', e => {
+            if (!swiping) return;
+            swiping = false;
+            const endX = e.changedTouches[0].clientX;
+            const dx = endX - startX;
+            if (Math.abs(dx) < THRESHOLD) return;
+            if (dx < 0) next();  // swipe left → next
+            else prev();          // swipe right → prev
+        }, { passive: true });
+    });
+})();
+
+
+// ── 3. Auto-Hiding Header on Scroll ────────────────────────
+(function initAutoHideHeader() {
+    const header = document.querySelector('header');
+    if (!header) return;
+    let lastScrollY = 0;
+    let ticking = false;
+    const SCROLL_THRESHOLD = 10;
+
+    window.addEventListener('scroll', () => {
+        if (ticking) return;
+        ticking = true;
+        requestAnimationFrame(() => {
+            // Only apply on narrow screens
+            if (window.innerWidth > 768) {
+                header.classList.remove('header-hidden');
+                ticking = false;
+                return;
+            }
+            const currentY = window.scrollY;
+            if (currentY > lastScrollY + SCROLL_THRESHOLD && currentY > 80) {
+                header.classList.add('header-hidden');
+            } else if (currentY < lastScrollY - SCROLL_THRESHOLD || currentY < 20) {
+                header.classList.remove('header-hidden');
+            }
+            lastScrollY = currentY;
+            ticking = false;
+        });
+    }, { passive: true });
+})();
+
+
+// ── 4. Bottom-Sheet Modal Drag-to-Close ────────────────────
+(function initSheetDrag() {
+    if (window.innerWidth > 768) return;
+
+    /** Attach drag-to-dismiss to a modal overlay. */
+    function makeDraggable(overlayId, closeFn) {
+        const overlay = document.getElementById(overlayId);
+        if (!overlay) return;
+
+        let startY = 0, currentY = 0, dragging = false;
+
+        // Watch for new modals being shown (MutationObserver would be heavier,
+        // so instead we use touchstart directly on the overlay)
+        overlay.addEventListener('touchstart', e => {
+            const modal = overlay.querySelector('.compare-modal, .lookup-modal, .match-history-modal');
+            if (!modal) return;
+            // Only activate on the "handle" area (top 40px of modal)
+            const rect = modal.getBoundingClientRect();
+            if (e.touches[0].clientY - rect.top > 40) return;
+            startY = e.touches[0].clientY;
+            currentY = startY;
+            dragging = true;
+            modal.style.transition = 'none';
+        }, { passive: true });
+
+        overlay.addEventListener('touchmove', e => {
+            if (!dragging) return;
+            currentY = e.touches[0].clientY;
+            const dy = currentY - startY;
+            if (dy < 0) return; // don't drag up
+            const modal = overlay.querySelector('.compare-modal, .lookup-modal, .match-history-modal');
+            if (modal) modal.style.transform = `translateY(${dy}px)`;
+        }, { passive: true });
+
+        overlay.addEventListener('touchend', () => {
+            if (!dragging) return;
+            dragging = false;
+            const dy = currentY - startY;
+            const modal = overlay.querySelector('.compare-modal, .lookup-modal, .match-history-modal');
+            if (modal) {
+                modal.style.transition = '';
+                modal.style.transform = '';
+            }
+            if (dy > 120) closeFn();
+        }, { passive: true });
+    }
+
+    makeDraggable('compare-overlay', closeCompare);
+    makeDraggable('lookup-overlay', closeLookup);
+    makeDraggable('match-history-overlay', closeMatchHistory);
+})();
+
+
+// ── 5. Card-Based Rankings View ────────────────────────────
+
+function toggleRankingsView() {
+    rankingsCardView = !rankingsCardView;
+    if (teamsData) {
+        $('event-teams').innerHTML = rankingsCardView
+            ? renderTeamCards(teamsData)
+            : renderTeamTable(teamsData, teamsSortCol, teamsSortAsc);
+    }
+}
+
+function renderTeamCards(teams) {
+    const toolbar = `<div class="rankings-toolbar">
+        <label class="toggle-label"><input type="checkbox" ${rankingsCompact ? 'checked' : ''} onchange="toggleRankingsCompact(this.checked)"> Compact</label>
+        <label class="toggle-label"><input type="checkbox" ${rankingsShowSchool ? 'checked' : ''} onchange="toggleRankingsSchool(this.checked)"> School / Org</label>
+        <button class="rankings-view-toggle" onclick="toggleRankingsView()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+            ${rankingsCardView ? 'Table View' : 'Card View'}
+        </button>
+    </div>`;
+
+    if (!rankingsCardView) return toolbar;
+
+    const cards = teams.map(t => {
+        const name = formatTeamName(t.nickname);
+        const avatarImg = t.avatar
+            ? `<img src="${t.avatar}" class="rank-card-avatar" alt="" loading="lazy">`
+            : `<span class="rank-card-avatar-placeholder">${t.team_number}</span>`;
+        const isIntl = highlightForeign && t.country && eventCountry && t.country !== eventCountry;
+        const isRookie = highlightRookie && t.rookie_year && currentEventYear && t.rookie_year >= currentEventYear;
+
+        return `<div class="rank-card${isIntl ? ' foreign-team-row' : ''}${isRookie ? ' rookie-team-row' : ''}" data-team-key="${t.team_key}" onclick="floatLookupQuick(${t.team_number})">
+            <div class="rank-card-top">
+                <span class="rank-card-rank${Number(t.rank) >= 1 && Number(t.rank) <= 8 ? ' rank-top8' : ''}">#${t.rank}</span>
+                ${avatarImg}
+                <div class="rank-card-info">
+                    <span class="rank-card-num team-num">${t.team_number}</span>
+                    <span class="rank-card-name">${name}</span>
+                </div>
+            </div>
+            <div class="rank-card-stats">
+                <div class="rank-card-stat"><div class="rank-card-stat-val">${t.wins}-${t.losses}-${t.ties}</div><div class="rank-card-stat-label">W-L-T</div></div>
+                <div class="rank-card-stat"><div class="rank-card-stat-val">${t.opr}</div><div class="rank-card-stat-label">OPR</div></div>
+                <div class="rank-card-stat"><div class="rank-card-stat-val">${t.epa != null ? t.epa : '\u2013'}</div><div class="rank-card-stat-label">EPA</div></div>
+                <div class="rank-card-stat"><div class="rank-card-stat-val">${t.ranking_points != null ? t.ranking_points : '\u2013'}</div><div class="rank-card-stat-label">RP</div></div>
+            </div>
+        </div>`;
+    }).join('');
+
+    return toolbar + `<div class="rankings-card-grid">${cards}</div>`;
+}
+
+// ── 6. Pull-to-Refresh ─────────────────────────────────────
+(function initPullToRefresh() {
+    if (!('ontouchstart' in window)) return;
+
+    const refreshFns = {
+        rankings: () => {
+            if (!currentEvent) return;
+            // Trigger a re-load of rankings
+            const eventKey = currentEvent;
+            API.eventTeams(eventKey).then(data => {
+                if (data && !data.error) {
+                    $('event-teams').innerHTML = buildTeamTable(data.teams || data);
+                    showToast('Rankings refreshed', 'info', 2000);
+                    updateMobileNavBadges();
+                }
+            }).catch(() => showToast('Refresh failed', 'error', 2000));
+        },
+        summary: () => { if (currentEvent) loadSummary(); },
+        playbyplay: () => {
+            if (pbpData && pbpData.matches && pbpData.matches.length) {
+                if (typeof pbpAutoRefresh === 'function') pbpAutoRefresh();
+                showToast('Refreshing match data\u2026', 'info', 1500);
+            }
+        },
+    };
+
+    document.querySelectorAll('[data-ptr]').forEach(section => {
+        const key = section.dataset.ptr;
+        const indicator = document.getElementById('ptr-' + key);
+        if (!indicator) return;
+
+        let startY = 0, pulling = false, triggered = false;
+        const PULL_THRESHOLD = 70;
+
+        section.addEventListener('touchstart', e => {
+            // Only activate if scrolled to top
+            if (section.scrollTop > 5 || window.scrollY > 5) return;
+            startY = e.touches[0].clientY;
+            pulling = true;
+            triggered = false;
+        }, { passive: true });
+
+        section.addEventListener('touchmove', e => {
+            if (!pulling) return;
+            const dy = e.touches[0].clientY - startY;
+            if (dy < 0) { pulling = false; return; }
+            const progress = Math.min(dy, PULL_THRESHOLD + 20);
+            indicator.style.height = progress + 'px';
+            indicator.classList.add('pulling');
+
+            const arrow = indicator.querySelector('.ptr-arrow');
+            if (arrow) arrow.classList.toggle('flipped', dy >= PULL_THRESHOLD);
+
+            if (dy >= PULL_THRESHOLD) triggered = true;
+            else triggered = false;
+        }, { passive: true });
+
+        section.addEventListener('touchend', () => {
+            if (!pulling) return;
+            pulling = false;
+
+            if (triggered && refreshFns[key]) {
+                indicator.innerHTML = '<span class="ptr-spinner spinning"></span> Refreshing\u2026';
+                indicator.classList.add('refreshing');
+                indicator.style.height = '40px';
+                refreshFns[key]();
+                setTimeout(() => {
+                    indicator.style.height = '0';
+                    indicator.classList.remove('pulling', 'refreshing');
+                    indicator.innerHTML = '<span class="ptr-arrow">\u2193</span> Pull to refresh';
+                    indicator.querySelector('.ptr-arrow')?.classList.remove('flipped');
+                }, 2000);
+            } else {
+                indicator.style.height = '0';
+                indicator.classList.remove('pulling');
+                const arrow = indicator.querySelector('.ptr-arrow');
+                if (arrow) arrow.classList.remove('flipped');
+            }
+        }, { passive: true });
+    });
+})();
+
+
+// ── 8. Settings as Bottom Sheet on Mobile ──────────────────
+(function initSettingsSheet() {
+    const origToggle = window.toggleSettings;
+    window.toggleSettings = function() {
+        const menu = document.getElementById('settings-menu');
+        if (!menu) return;
+
+        if (window.innerWidth <= 768) {
+            const isOpen = !menu.classList.contains('hidden');
+            if (isOpen) {
+                menu.classList.add('hidden');
+                document.getElementById('settings-backdrop')?.remove();
+                document.body.style.overflow = '';
+            } else {
+                menu.classList.remove('hidden');
+                document.body.style.overflow = 'hidden';
+                // Add backdrop
+                if (!document.getElementById('settings-backdrop')) {
+                    const bd = document.createElement('div');
+                    bd.id = 'settings-backdrop';
+                    bd.className = 'settings-backdrop';
+                    bd.onclick = () => {
+                        menu.classList.add('hidden');
+                        bd.remove();
+                        document.body.style.overflow = '';
+                    };
+                    document.body.appendChild(bd);
+                }
+            }
+        } else {
+            origToggle();
+        }
+    };
+})();
+
+
+// ── 15. Landscape Orientation Warning ──────────────────────
+(function initLandscapeHint() {
+    const hint = document.getElementById('landscape-hint');
+    if (!hint) return;
+
+    const dismissed = sessionStorage.getItem('landscapeHintDismissed');
+    if (dismissed) { hint.classList.add('dismissed'); return; }
+
+    function checkOrientation() {
+        if (window.innerWidth <= 900 && window.innerHeight <= 500 && window.innerWidth > window.innerHeight) {
+            hint.classList.add('show');
+        } else {
+            hint.classList.remove('show');
+        }
+    }
+
+    window.addEventListener('resize', checkOrientation, { passive: true });
+    screen.orientation?.addEventListener('change', checkOrientation);
+    checkOrientation();
+})();
+
+function dismissLandscapeHint() {
+    const hint = document.getElementById('landscape-hint');
+    if (hint) hint.classList.add('dismissed');
+    sessionStorage.setItem('landscapeHintDismissed', 'true');
+}
