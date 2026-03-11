@@ -2076,7 +2076,7 @@ function renderTeamTable(teams, sortCol, asc) {
     </button>`;
     const toolbar = `<div class="rankings-toolbar">
         <label class="toggle-label"><input type="checkbox" ${compact ? 'checked' : ''} onchange="toggleRankingsCompact(this.checked)"> Compact</label>
-        <label class="toggle-label"><input type="checkbox" ${school ? 'checked' : ''} onchange="toggleRankingsSchool(this.checked)"> School / Org</label>
+        <label class="toggle-label school-toggle"><input type="checkbox" ${school ? 'checked' : ''} onchange="toggleRankingsSchool(this.checked)"> School / Org</label>
         ${viewToggle}
     </div>`;
 

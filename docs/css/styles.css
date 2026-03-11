@@ -4770,11 +4770,21 @@ tr:hover .compare-cb,
         border-radius: var(--radius-lg);
     }
 
-    /* ── Rankings table: hide location & OPR on mobile portrait ── */
+    /* ── Rankings table: hide location, OPR & school on mobile portrait ── */
     .data-table .location,
     .data-table .col-location,
+    .data-table .col-school_name,
     .data-table .stat-opr,
     .data-table .col-opr { display: none; }
+    .school-toggle { display: none; }
+
+    /* ── Rankings table: realign column titles ── */
+    .data-table th,
+    .data-table td { text-align: center; }
+    .data-table th:nth-child(4),
+    .data-table td:nth-child(4),
+    .data-table th:nth-child(5),
+    .data-table td:nth-child(5) { text-align: left; }
 
     /* ── Alliance ── */
     #alliance-grid { grid-template-columns: 1fr; }
@@ -4790,6 +4800,11 @@ tr:hover .compare-cb,
 
     /* ── PBP Mobile Overhaul ── */
     .pbp-arena { grid-template-columns: 1fr; gap: .6rem; }
+
+    /* Portrait stacked: flip blue header so title+score match red's orientation */
+    .pbp-alliance.blue-side .pbp-alliance-header {
+        flex-direction: row-reverse;
+    }
 
     /* Sticky compact topbar */
     .pbp-topbar {
@@ -5086,13 +5101,19 @@ tr:hover .compare-cb,
 
     /* ── Rankings table: hide low-priority columns ── */
     .data-table { font-size: .76rem; }
-    .data-table th { padding: .5rem .35rem; font-size: .62rem; }
-    .data-table td { padding: .45rem .35rem; }
+    .data-table th { padding: .5rem .35rem; font-size: .62rem; text-align: center; }
+    .data-table td { padding: .45rem .35rem; text-align: center; }
+    .data-table th:nth-child(4),
+    .data-table td:nth-child(4),
+    .data-table th:nth-child(5),
+    .data-table td:nth-child(5) { text-align: left; }
     .data-table .location,
     .data-table .col-location,
+    .data-table .col-school_name,
     .data-table .stat-epa,
     .data-table .col-epa,
     .data-table .team-avatar-cell { display: none; }
+    .school-toggle { display: none; }
     .data-table .team-num { font-size: .82rem; }
     .data-table .rank { text-align: center; min-width: 2rem; }
     .compare-td { padding: .3rem !important; }

@@ -380,7 +380,12 @@ async def generate():
             for tk in teams_in_matches:
                 einstein_by_team[tk].append(yr)
         elif not any(yr in yrs for yrs in einstein_by_team.values()) and roster:
-            # 3) Fallback for older events with no match data AND no alliance data
+            # 3) Fallback for older events with no match data AND no alliance data.
+            #    SKIP current year — TBA lists unassigned championship-eligible
+            #    teams on the Einstein roster before divisions are set, which
+            #    would incorrectly inflate the Einstein count.
+            if yr >= ACTIVE_YEAR:
+                continue
             for t in roster:
                 einstein_by_team[t["key"]].append(yr)
 

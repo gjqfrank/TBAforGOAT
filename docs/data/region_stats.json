@@ -78,8 +78,7 @@
         "years": [
           2021,
           2024,
-          2025,
-          2026
+          2025
         ]
       },
       {
@@ -98,13 +97,6 @@
         ]
       },
       {
-        "team_number": 5985,
-        "nickname": "Project Bucephalus",
-        "years": [
-          2026
-        ]
-      },
-      {
         "team_number": 6035,
         "nickname": "House of Ulladulla",
         "years": [
@@ -112,7 +104,7 @@
         ]
       }
     ],
-    "einstein_count": 5,
+    "einstein_count": 4,
     "top_international_visitors": [
       {
         "team_number": 6083,
@@ -431,13 +423,6 @@
         ]
       },
       {
-        "team_number": 3990,
-        "nickname": "Tech for Kids",
-        "years": [
-          2026
-        ]
-      },
-      {
         "team_number": 3996,
         "nickname": "RIKITIK",
         "years": [
@@ -494,13 +479,6 @@
         ]
       },
       {
-        "team_number": 7287,
-        "nickname": "Esquimalt Atom Smashers",
-        "years": [
-          2026
-        ]
-      },
-      {
         "team_number": 7558,
         "nickname": "ALT-F4",
         "years": [
@@ -508,7 +486,7 @@
         ]
       }
     ],
-    "einstein_count": 26,
+    "einstein_count": 23,
     "top_international_visitors": [
       {
         "team_number": 244,
@@ -632,13 +610,6 @@
     "einstein_winner_count": 0,
     "einstein_teams": [
       {
-        "team_number": 6766,
-        "nickname": "AtomStorm",
-        "years": [
-          2026
-        ]
-      },
-      {
         "team_number": 6986,
         "nickname": "PPT Bots",
         "years": [
@@ -646,7 +617,7 @@
         ]
       }
     ],
-    "einstein_count": 2,
+    "einstein_count": 1,
     "top_international_visitors": []
   },
   "Chinese Taipei": {
@@ -674,16 +645,9 @@
         "years": [
           2021
         ]
-      },
-      {
-        "team_number": 8725,
-        "nickname": "MistyPanther",
-        "years": [
-          2026
-        ]
       }
     ],
-    "einstein_count": 2,
+    "einstein_count": 1,
     "top_international_visitors": []
   },
   "FIRST California": {
@@ -1779,13 +1743,6 @@
         ]
       },
       {
-        "team_number": 1629,
-        "nickname": "Garrett Coalition (GaCo)",
-        "years": [
-          2026
-        ]
-      },
-      {
         "team_number": 2363,
         "nickname": "Triple Helix Robotics",
         "years": [
@@ -1828,7 +1785,7 @@
         ]
       }
     ],
-    "einstein_count": 11,
+    "einstein_count": 10,
     "top_international_visitors": [],
     "official_team_count": 118
   },
@@ -2649,8 +2606,7 @@
         "team_number": 321,
         "nickname": "RoboLancers",
         "years": [
-          2024,
-          2026
+          2024
         ]
       },
       {
@@ -3361,8 +3317,7 @@
         "years": [
           2005,
           2006,
-          2021,
-          2026
+          2021
         ]
       },
       {
@@ -3522,7 +3477,7 @@
         ]
       }
     ],
-    "einstein_count": 51,
+    "einstein_count": 25,
     "top_international_visitors": [],
     "official_team_count": 531
   },
@@ -3807,8 +3762,7 @@
         "nickname": "KnightKrawler",
         "years": [
           2016,
-          2019,
-          2026
+          2019
         ]
       },
       {
@@ -3856,8 +3810,7 @@
         "team_number": 5348,
         "nickname": "Charger Robotics",
         "years": [
-          2020,
-          2026
+          2020
         ]
       },
       {
@@ -3917,13 +3870,6 @@
         ]
       },
       {
-        "team_number": 1816,
-        "nickname": "\"The Green Machine\"",
-        "years": [
-          2026
-        ]
-      },
-      {
         "team_number": 1939,
         "nickname": "THE KUHNIGHTS",
         "years": [
@@ -3945,13 +3891,6 @@
         ]
       },
       {
-        "team_number": 2491,
-        "nickname": "NoMythic",
-        "years": [
-          2026
-        ]
-      },
-      {
         "team_number": 2512,
         "nickname": "Duluth East Daredevils",
         "years": [
@@ -3964,16 +3903,9 @@
         "years": [
           2015
         ]
-      },
-      {
-        "team_number": 3100,
-        "nickname": "The Lightning Turtles",
-        "years": [
-          2026
-        ]
       }
     ],
-    "einstein_count": 37,
+    "einstein_count": 22,
     "top_international_visitors": [
       {
         "team_number": 5996,
@@ -4174,8 +4106,7 @@
         "nickname": "The Cobra Commanders",
         "years": [
           2019,
-          2025,
-          2026
+          2025
         ]
       },
       {
@@ -4207,8 +4138,7 @@
         "team_number": 4499,
         "nickname": "The Highlanders",
         "years": [
-          2018,
-          2026
+          2018
         ]
       },
       {
@@ -4223,13 +4153,6 @@
         "nickname": "CRUSH",
         "years": [
           2017
-        ]
-      },
-      {
-        "team_number": 2486,
-        "nickname": "CocoNuts",
-        "years": [
-          2026
         ]
       },
       {
@@ -4268,7 +4191,7 @@
         ]
       }
     ],
-    "einstein_count": 15,
+    "einstein_count": 14,
     "top_international_visitors": [
       {
         "team_number": 7645,
@@ -5855,16 +5778,14 @@
         "team_number": 1902,
         "nickname": "Exploding Bacon",
         "years": [
-          2007,
-          2026
+          2007
         ]
       },
       {
         "team_number": 8044,
         "nickname": "Denham Venom",
         "years": [
-          2025,
-          2026
+          2025
         ]
       },
       {
@@ -6114,8 +6035,7 @@
         "team_number": 9483,
         "nickname": "Overcharge",
         "years": [
-          2024,
-          2026
+          2024
         ]
       },
       {
@@ -6124,23 +6044,9 @@
         "years": [
           2019
         ]
-      },
-      {
-        "team_number": 6436,
-        "nickname": "PARS ROBOTICS",
-        "years": [
-          2026
-        ]
-      },
-      {
-        "team_number": 6988,
-        "nickname": "ACI35",
-        "years": [
-          2026
-        ]
       }
     ],
-    "einstein_count": 4,
+    "einstein_count": 2,
     "top_international_visitors": [
       {
         "team_number": 6417,
