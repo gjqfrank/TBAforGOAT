@@ -158,6 +158,10 @@ const _NO_TEAM_FALLBACK_ZONES = [
     '#manual-entry-body',   // manual event code entry (year field)
     '.adv-table-district',  // district ranking tables (points, event counts)
     '.season-selected-bar', // selected-event confirmation bar
+    '.event-section-header',// section headers (e.g. "2026 Season Events")
+    '.pbp-score-group',     // PBP alliance scores / winner label
+    '.pbp-match-label',     // PBP match number label (e.g. "Qual 12")
+    '.pbp-alliance-opr',    // PBP alliance OPR sum
 ];
 document.addEventListener('dblclick', e => {
     // Skip if inside an input/textarea/select
@@ -244,7 +248,8 @@ function toggleSettings() {
 // Close settings when clicking outside
 document.addEventListener('click', e => {
     const wrapper = e.target.closest('.settings-wrapper');
-    if (!wrapper) document.getElementById('settings-menu')?.classList.add('hidden');
+    const menu = e.target.closest('.settings-menu');
+    if (!wrapper && !menu) document.getElementById('settings-menu')?.classList.add('hidden');
 });
 
 // ── Theme Toggle ───────────────────────────────────────────
@@ -3125,7 +3130,8 @@ function _buildMobileBracket(slot, finalNums) {
                 return tag + s.matches.map(([set, lbl]) => slot(set, lbl)).join('');
             }).join('');
         } else {
-            bodyHtml = r.matches.map(([set, lbl]) => slot(set, lbl)).join('');
+            const tag = r.tagLabel ? `<span class="bkt-m-bracket-tag bkt-m-tag-${r.tag}">${r.tagLabel}</span>` : '';
+            bodyHtml = tag + r.matches.map(([set, lbl]) => slot(set, lbl)).join('');
         }
         return `<div class="bkt-m-round">
             <div class="bkt-m-round-hdr${hdrCls}" onclick="this.parentElement.classList.toggle('collapsed')">
@@ -3976,6 +3982,7 @@ async function togglePbpConnRange(allTime) {
 
 function renderPbpTeam(t, sideCls) {
     const loc = [t.city, t.state_prov, t.country].filter(Boolean).join(', ');
+    const shortLoc = [t.state_prov, t.country].filter(Boolean).join(', ');
     const foreignCls = highlightForeign && t.country && eventCountry && t.country !== eventCountry ? 'foreign-team' : '';
     const rookieCls = highlightRookie && t.rookie_year && currentEventYear && t.rookie_year >= currentEventYear ? 'rookie-team' : '';
 
@@ -3987,7 +3994,8 @@ function renderPbpTeam(t, sideCls) {
             <div class="pbp-team-identity">
                 <div class="pbp-team-nickname">${t.nickname || 'Team ' + t.team_number}</div>
                 ${t.school_name ? `<div class="pbp-team-school">${t.school_name}</div>` : ''}
-                ${loc ? `<div class="pbp-team-location">${loc}</div>` : ''}
+                ${loc ? `<div class="pbp-team-location pbp-loc-full">${loc}</div>` : ''}
+                ${shortLoc ? `<div class="pbp-team-location pbp-loc-short">${shortLoc}</div>` : ''}
             </div>
         </div>
         <div class="pbp-team-stats">
@@ -5401,7 +5409,7 @@ async function compareCurrentMatch() {
     // build comparison from the local PBP data we already have
     openCompare();
     $('compare-body').innerHTML = '<p class="loading-msg">Fetching comparison data\u2026</p>';
-    $('compare-title').textContent = `Match Comparison \u2014 ${m.label}`;
+    $('compare-title').textContent = `Match Comparison: ${m.label}`;
 
     try {
         const data = await API.compareTeams(currentEvent, allKeys);
@@ -5869,7 +5877,7 @@ async function showComparison(teamKeys, opts = {}) {
     openCompare();
     $('compare-body').innerHTML = '<p class="loading-msg">Fetching comparison data\u2026</p>';
     $('compare-title').textContent = opts.matchLabel
-        ? `Match Comparison \u2014 ${opts.matchLabel}`
+        ? `Match Comparison: ${opts.matchLabel}`
         : 'Team Comparison';
 
     try {
@@ -6501,7 +6509,11 @@ function toggleRankingsView() {
 }
 
 function renderTeamCards(teams) {
+    const compact = rankingsCompact;
+    const school = rankingsShowSchool;
     const toolbar = `<div class="rankings-toolbar">
+        <label class="toggle-label"><input type="checkbox" ${compact ? 'checked' : ''} onchange="toggleRankingsCompact(this.checked)"> Compact</label>
+        <label class="toggle-label"><input type="checkbox" ${school ? 'checked' : ''} onchange="toggleRankingsSchool(this.checked)"> School / Org</label>
         <button class="rankings-view-toggle" onclick="toggleRankingsView()">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
             ${rankingsCardView ? 'Table View' : 'Card View'}
@@ -6625,6 +6637,19 @@ function renderTeamCards(teams) {
 // ── 8. Settings as Bottom Sheet on Mobile ──────────────────
 (function initSettingsSheet() {
     const origToggle = window.toggleSettings;
+    // Remember the original parent so we can put the menu back for desktop
+    let _settingsOrigParent = null;
+
+    function closeSheet(menu) {
+        menu.classList.add('hidden');
+        document.getElementById('settings-backdrop')?.remove();
+        document.body.style.overflow = '';
+        // Move menu back into the header wrapper for desktop use
+        if (_settingsOrigParent && menu.parentNode !== _settingsOrigParent) {
+            _settingsOrigParent.appendChild(menu);
+        }
+    }
+
     window.toggleSettings = function() {
         const menu = document.getElementById('settings-menu');
         if (!menu) return;
@@ -6632,10 +6657,14 @@ function renderTeamCards(teams) {
         if (window.innerWidth <= 768) {
             const isOpen = !menu.classList.contains('hidden');
             if (isOpen) {
-                menu.classList.add('hidden');
-                document.getElementById('settings-backdrop')?.remove();
-                document.body.style.overflow = '';
+                closeSheet(menu);
             } else {
+                // Move menu to body so it escapes the header's backdrop-filter
+                // containing block (which breaks position:fixed)
+                if (!_settingsOrigParent) _settingsOrigParent = menu.parentNode;
+                if (menu.parentNode !== document.body) {
+                    document.body.appendChild(menu);
+                }
                 menu.classList.remove('hidden');
                 document.body.style.overflow = 'hidden';
                 // Add backdrop
@@ -6643,15 +6672,15 @@ function renderTeamCards(teams) {
                     const bd = document.createElement('div');
                     bd.id = 'settings-backdrop';
                     bd.className = 'settings-backdrop';
-                    bd.onclick = () => {
-                        menu.classList.add('hidden');
-                        bd.remove();
-                        document.body.style.overflow = '';
-                    };
+                    bd.onclick = () => closeSheet(menu);
                     document.body.appendChild(bd);
                 }
             }
         } else {
+            // Desktop: ensure menu is back in its wrapper
+            if (_settingsOrigParent && menu.parentNode !== _settingsOrigParent) {
+                _settingsOrigParent.appendChild(menu);
+            }
             origToggle();
         }
     };

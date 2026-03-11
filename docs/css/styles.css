@@ -549,7 +549,7 @@ main {
 }
 
 input[type="text"] {
-    background: var(--card);
+    background: var(--bg);
     border: 1px solid var(--border);
     color: var(--text);
     padding: .65rem 1.1rem;
@@ -1707,6 +1707,8 @@ input.input-loading {
     font-family: var(--mono);
     font-size: .92rem;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
     position: relative;
     min-width: 0;
 }
@@ -2514,6 +2516,13 @@ input.input-loading {
     margin-bottom: 1.1rem;
 }
 
+/* Team Lookup section title — matches H2H title spacing */
+#tab-team > .section-title {
+    font-weight: 700;
+    letter-spacing: -.01em;
+    margin-bottom: 1.1rem;
+}
+
 .h2h-card {
     background: var(--card);
     border: 1px solid var(--border);
@@ -2891,17 +2900,16 @@ input.input-loading {
 }
 
 .pbp-alliance {
-    border-radius: var(--radius-lg);
+    border-radius: var(--radius);
     overflow: hidden;
-    border: 1px solid var(--border);
-    box-shadow: var(--shadow-md);
+    border: 2px solid var(--border);
 }
 
 .pbp-alliance.red-side {
-    border-top: 3px solid var(--red);
+    border-color: var(--red-border);
 }
 .pbp-alliance.blue-side {
-    border-top: 3px solid var(--blue);
+    border-color: var(--blue-border);
 }
 
 .pbp-alliance-header {
@@ -2959,13 +2967,6 @@ input.input-loading {
 
 .pbp-alliance-won .pbp-alliance-score {
     color: var(--green) !important;
-}
-.pbp-alliance-won .pbp-alliance-header {
-    background: rgba(34,197,94,.06) !important;
-}
-.pbp-alliance-won {
-    border-top-color: var(--green) !important;
-    box-shadow: var(--shadow-md), 0 0 16px rgba(34,197,94,.1);
 }
 
 /* ── Team card inside alliance ───────────────────────────── */
@@ -3039,6 +3040,7 @@ input.input-loading {
     color: var(--text-muted);
     margin-top: .1rem;
 }
+.pbp-loc-short { display: none; }
 
 .pbp-team-stats {
     display: grid;
@@ -4720,6 +4722,7 @@ tr:hover .compare-cb,
     header h1 { font-size: 1rem; }
     .brand-sub { display: none; }
     .brand-icon { width: 22px; height: 22px; }
+    #fullscreen-btn { display: none; }
 
     main {
         padding: 1.2rem 1rem;
@@ -4745,13 +4748,33 @@ tr:hover .compare-cb,
 
     /* ── Active event banner ── */
     .active-event-banner {
-        flex-wrap: wrap;
+        flex-direction: column;
+        align-items: stretch;
         padding: .65rem 1rem;
         gap: .5rem;
     }
+    .aeb-left { width: 100%; }
     .aeb-name { white-space: normal; word-break: break-word; }
-    .aeb-right { width: 100%; justify-content: flex-end; }
-    .aeb-cache-badge { font-size: .65rem; }
+    .aeb-right {
+        width: 100%;
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .aeb-cache-badge { font-size: .65rem; text-align: center; justify-content: center; }
+    .btn-save-event {
+        width: 100%;
+        justify-content: center;
+        padding: .65rem 1rem;
+        font-size: .88rem;
+        min-height: 48px;
+        border-radius: var(--radius-lg);
+    }
+
+    /* ── Rankings table: hide location & OPR on mobile portrait ── */
+    .data-table .location,
+    .data-table .col-location,
+    .data-table .stat-opr,
+    .data-table .col-opr { display: none; }
 
     /* ── Alliance ── */
     #alliance-grid { grid-template-columns: 1fr; }
@@ -4829,10 +4852,11 @@ tr:hover .compare-cb,
     .pbp-team-nickname {
         font-size: .88rem;
     }
-    .pbp-team-school,
-    .pbp-team-location {
-        display: none;
+    .pbp-team-school {
+        font-size: .7rem;
     }
+    .pbp-loc-full { display: none; }
+    .pbp-loc-short { display: block; font-size: .68rem; }
 
     /* Hide stats, awards, highscore in portrait */
     .pbp-team-stats,
@@ -4890,12 +4914,17 @@ tr:hover .compare-cb,
         vertical-align: middle;
     }
     .regional-pool-controls {
-        flex-direction: column;
-        align-items: stretch;
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: .4rem;
     }
     .regional-pool-controls input[type="text"] {
-        flex: 1 1 auto;
-        width: 100%;
+        flex: 1 1 120px;
+        max-width: 200px;
+        min-width: 0;
+        padding: .3rem .5rem;
+        font-size: .75rem;
     }
 
     /* ── Breakdown ── */
@@ -4941,6 +4970,7 @@ tr:hover .compare-cb,
     .compare-grid { font-size: .72rem; }
     .comp-label { font-size: .62rem; padding: .35rem .4rem; }
     .comp-team-num { font-size: .95rem; }
+    .comp-team-name, .comp-team-loc { display: none; }
 
     /* ── Compare bar ── */
     .compare-bar {
@@ -4949,8 +4979,10 @@ tr:hover .compare-cb,
         transform: none;
         border-radius: var(--radius-lg);
         justify-content: center;
+        flex-wrap: wrap;
         padding: .55rem .85rem;
     }
+    .compare-bar button kbd { display: none; }
     @keyframes comp-bar-in {
         from { opacity: 0; transform: translateY(20px); }
         to   { opacity: 1; transform: translateY(0); }
@@ -5121,18 +5153,19 @@ tr:hover .compare-cb,
     .comp-label { font-size: .55rem; padding: .3rem .35rem; min-width: 0; }
     .comp-header { padding: .45rem .35rem; }
     .comp-team-num { font-size: .85rem; }
-    .comp-team-name { font-size: .65rem; }
+    .comp-team-name, .comp-team-loc { display: none; }
 
     /* ── Compare bar ── */
     .compare-bar {
         bottom: .75rem;
         left: .5rem;
         right: .5rem;
-        font-size: .78rem;
-        padding: .45rem .65rem;
-        gap: .5rem;
+        font-size: .72rem;
+        padding: .4rem .55rem;
+        gap: .35rem;
     }
-    .compare-bar button { padding: .35rem .75rem; font-size: .72rem; }
+    .compare-bar span { font-size: .7rem; }
+    .compare-bar button { padding: .3rem .6rem; font-size: .68rem; }
 
     /* ── Footer ── */
     .site-footer {
@@ -5154,12 +5187,7 @@ tr:hover .compare-cb,
     /* ── PBP connections ── */
     .pbp-conn-item { flex-wrap: wrap; }
 
-    /* ── Settings menu ── */
-    .settings-menu {
-        min-width: 200px;
-        right: -.5rem;
-        max-width: calc(100vw - 1.5rem);
-    }
+    /* ── Settings menu: handled by bottom-sheet rules in section 8 ── */
 
     /* ── Saved events ── */
     .saved-event-item { padding: .5rem .65rem; }
@@ -5218,22 +5246,13 @@ tr:hover .compare-cb,
         min-width: 50px;
     }
     .pbp-team-nickname { font-size: .85rem; }
-    .pbp-team-school { font-size: .68rem; display: block; }
-    .pbp-team-location { font-size: .66rem; display: block; }
-    .pbp-team-stats {
-        display: grid !important;
-        grid-template-columns: repeat(3, 1fr);
-        gap: .3rem;
-        margin-top: .25rem;
-    }
-    .pbp-stat { padding: .2rem .4rem; }
-    .pbp-stat-label { font-size: .55rem; }
-    .pbp-stat-value { font-size: .78rem; }
-    .pbp-awards-slot { display: block !important; }
-    .pbp-team-highscore { display: block !important; }
-    .pbp-stat { padding: .2rem .4rem; }
-    .pbp-stat-label { font-size: .55rem; }
-    .pbp-stat-value { font-size: .78rem; }
+    .pbp-team-school { font-size: .72rem; display: block !important; }
+    .pbp-loc-full { display: block !important; font-size: .68rem; }
+    .pbp-loc-short { display: none; }
+    /* Phone landscape: hide stats, show full team identity instead */
+    .pbp-team-stats { display: none !important; }
+    .pbp-awards-slot { display: none !important; }
+    .pbp-team-highscore { display: none !important; }
     .pbp-alliance-score { font-size: 1.2rem; }
     .pbp-alliance-header {
         padding: .45rem .8rem;
@@ -5247,6 +5266,12 @@ tr:hover .compare-cb,
         font-size: .78rem;
     }
     .pbp-match-label { font-size: .88rem; }
+
+    /* Rankings: restore OPR + location in landscape */
+    .data-table .stat-opr,
+    .data-table .col-opr,
+    .data-table .location,
+    .data-table .col-location { display: table-cell !important; }
 
     /* Breakdown in landscape */
     .bd-content { flex-direction: row; }
