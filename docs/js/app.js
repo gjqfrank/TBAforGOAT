@@ -3039,7 +3039,7 @@ function renderBracketTree() {
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
             </button>
         </div>
-        ${_buildMobileBracket(slot)}
+        ${_buildMobileBracket(slot, finalNums)}
     `;
 
     // Set up scroll-based visibility for the arrow
@@ -3073,7 +3073,7 @@ function _setupBracketScrollArrow() {
 }
 
 /* ── Mobile bracket: vertical stacked rounds ────────────── */
-function _buildMobileBracket(slot) {
+function _buildMobileBracket(slot, finalNums) {
     const rounds = [
         {
             label: 'Round 1',
