@@ -3017,6 +3017,13 @@ input.input-loading {
     min-width: 0;
 }
 
+.pbp-team-name-row {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    min-width: 0;
+}
+
 .pbp-team-nickname {
     font-size: 1.15rem;
     font-weight: 800;
@@ -3025,6 +3032,8 @@ input.input-loading {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    flex: 1;
+    min-width: 0;
 }
 
 .pbp-team-school {
@@ -3092,7 +3101,7 @@ input.input-loading {
 .pbp-firsts-slot:empty { display: none; }
 .pbp-firsts-slot {
     display: flex;
-    flex-direction: column;
+    flex-shrink: 0;
     gap: .25rem;
 }
 .pbp-first-badge {
@@ -4523,7 +4532,8 @@ tr:hover .compare-cb,
     box-shadow: 0 4px 16px var(--primary-glow);
     transform: translateY(-1px);
 }
-.pbp-compare-btn kbd {
+.pbp-compare-btn kbd,
+.pbp-breakdown-btn kbd {
     display: inline-block;
     background: rgba(255,255,255,.18);
     border: 1px solid rgba(255,255,255,.22);
@@ -4534,6 +4544,32 @@ tr:hover .compare-cb,
     line-height: 1.4;
     margin-left: .3em;
     vertical-align: baseline;
+}
+
+.pbp-footer-actions {
+    display: flex;
+    gap: .5rem;
+    align-items: center;
+}
+
+.pbp-breakdown-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    padding: .4rem 1rem;
+    font-size: .78rem;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #10b981 0%, #34d399 100%);
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    font-weight: 600;
+    box-shadow: 0 2px 8px rgba(16, 185, 129, .25);
+    transition: var(--transition);
+}
+.pbp-breakdown-btn:hover {
+    box-shadow: 0 4px 16px rgba(16, 185, 129, .35);
+    transform: translateY(-1px);
 }
 
 .site-footer {
@@ -4781,10 +4817,10 @@ tr:hover .compare-cb,
     /* ── Rankings table: realign column titles ── */
     .data-table th,
     .data-table td { text-align: center; }
-    .data-table th:nth-child(4),
-    .data-table td:nth-child(4),
-    .data-table th:nth-child(5),
-    .data-table td:nth-child(5) { text-align: left; }
+    .data-table .col-team_number,
+    .data-table .col-nickname,
+    .data-table .team-num,
+    .data-table .team-name { text-align: left; }
 
     /* ── Alliance ── */
     #alliance-grid { grid-template-columns: 1fr; }
@@ -4806,18 +4842,14 @@ tr:hover .compare-cb,
         flex-direction: row-reverse;
     }
 
-    /* Sticky compact topbar */
+    /* Compact topbar (not sticky — avoids overlap with auto-hiding header) */
     .pbp-topbar {
         flex-wrap: nowrap;
         justify-content: space-between;
         gap: .35rem;
         padding: .5rem .65rem;
         margin-bottom: .75rem;
-        position: sticky;
-        top: 0;
-        z-index: 50;
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
+        position: static;
     }
     .pbp-nav-btn {
         padding: .45rem .6rem;
@@ -4889,10 +4921,16 @@ tr:hover .compare-cb,
         gap: .5rem;
         align-items: stretch;
     }
-    .pbp-compare-btn {
+    .pbp-footer-actions {
+        flex-direction: column;
+        gap: .4rem;
+    }
+    .pbp-compare-btn,
+    .pbp-breakdown-btn {
         width: 100%;
         justify-content: center;
     }
+    .kbd-desktop { display: none; }
     .pbp-footer-text {
         font-size: .72rem;
         text-align: center;
@@ -5103,10 +5141,10 @@ tr:hover .compare-cb,
     .data-table { font-size: .76rem; }
     .data-table th { padding: .5rem .35rem; font-size: .62rem; text-align: center; }
     .data-table td { padding: .45rem .35rem; text-align: center; }
-    .data-table th:nth-child(4),
-    .data-table td:nth-child(4),
-    .data-table th:nth-child(5),
-    .data-table td:nth-child(5) { text-align: left; }
+    .data-table .col-team_number,
+    .data-table .col-nickname,
+    .data-table .team-num,
+    .data-table .team-name { text-align: left; }
     .data-table .location,
     .data-table .col-location,
     .data-table .col-school_name,
@@ -5188,6 +5226,37 @@ tr:hover .compare-cb,
     .compare-bar span { font-size: .7rem; }
     .compare-bar button { padding: .3rem .6rem; font-size: .68rem; }
 
+    /* ── Match History modal ── */
+    .mh-teams-cell {
+        white-space: normal;
+        word-break: break-word;
+        font-size: .65rem;
+    }
+    .mh-table th { font-size: .55rem; padding: .25rem .2rem; }
+    .mh-table td { padding: .3rem .2rem; font-size: .68rem; }
+    .mh-table .mh-teams-cell { font-size: .65rem; }
+    .mh-stat-val { font-size: .95rem; }
+    .mh-stat-lbl { font-size: .58rem; }
+
+    /* ── Season High Score pill ── */
+    .footer-world-record {
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: .25rem .45rem;
+        padding: .4rem .75rem;
+        font-size: .68rem;
+        max-width: 90vw;
+    }
+    .footer-wr-label { font-size: .68rem; }
+    .footer-wr-score { font-size: .72rem; }
+    .footer-wr-detail { font-size: .62rem; }
+
+    /* ── Regional Advancement badge ── */
+    .season-count-badge {
+        font-size: .62rem;
+        padding: .1rem .4rem;
+    }
+
     /* ── Footer ── */
     .site-footer {
         font-size: .68rem;
@@ -5195,6 +5264,8 @@ tr:hover .compare-cb,
         gap: .25rem;
     }
     .footer-top .footer-sep { display: none; }
+    .footer-about-link { display: none; }
+    .footer-guide-sep { display: none; }
     .footer-attribution .footer-sep { display: none; }
     .footer-attribution {
         flex-direction: column;
@@ -7657,6 +7728,7 @@ td .pick-flip-back { font-size: inherit; }
 }
 .mob-more-item:active,
 .mob-more-item:hover { background: var(--primary-soft); color: var(--text); }
+a.mob-more-item { text-decoration: none; }
 .mob-more-item svg { width: 16px; height: 16px; stroke-width: 2; flex-shrink: 0; }
 .mob-more-item.active { color: var(--primary); font-weight: 600; }
 
@@ -7716,6 +7788,14 @@ td .pick-flip-back { font-size: inherit; }
         overflow-y: auto;
         -webkit-overflow-scrolling: touch;
     }
+
+    /* ── Match History table: allow wrapping ── */
+    .mh-teams-cell {
+        white-space: normal;
+    }
+    .mh-table { font-size: .72rem; }
+    .mh-table th { padding: .25rem .3rem; }
+    .mh-table td { padding: .3rem .3rem; }
 }
 @keyframes sheet-up {
     from { transform: translateY(100%); }

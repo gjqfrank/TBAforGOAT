@@ -637,6 +637,15 @@ document.addEventListener('keydown', e => {
         }
     }
 
+    // B key — Go to Breakdown from Play by Play
+    if ((e.key === 'b' || e.key === 'B') && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        const pbpActive = $('tab-playbyplay')?.classList.contains('active');
+        if (pbpActive && pbpData && pbpData.matches.length) {
+            e.preventDefault();
+            goToBreakdownFromPbp();
+        }
+    }
+
     // Number keys 1-9 — quick tab switching
     if (e.key >= '1' && e.key <= '9' && !e.ctrlKey && !e.metaKey && !e.altKey) {
         const tabs = document.querySelectorAll('.tab');
@@ -2086,7 +2095,7 @@ function renderTeamTable(teams, sortCol, asc) {
             <tr>
                 <th class="compare-th"></th>
                 ${th('rank', 'Rank')}
-                <th></th>
+                <th class="team-avatar-cell"></th>
                 ${th('team_number', 'Team')}
                 ${th('nickname', 'Name')}
                 ${compact ? '' : th('location', 'Location')}
@@ -2113,7 +2122,7 @@ function renderTeamTable(teams, sortCol, asc) {
                 <td class="rank${Number(t.rank) >= 1 && Number(t.rank) <= 8 ? ' rank-top8' : ''}">${t.rank}</td>
                 <td class="team-avatar-cell">${avatarImg}</td>
                 <td class="team-num">${t.team_number}</td>
-                <td>${name}</td>
+                <td class="team-name">${name}</td>
                 ${compact ? '' : `<td class="location">${loc}</td>`}
                 ${school ? `<td class="location">${t.school_name || ''}</td>` : ''}
                 <td class="stat">${t.wins}-${t.losses}-${t.ties}</td>
@@ -3800,10 +3809,16 @@ function renderPbpMatch() {
     // Footer: event high score + compare button
     const qs = pbpData.event_high_score;
     $('pbp-footer').innerHTML = `
-        <button class="pbp-compare-btn" onclick="compareCurrentMatch()" title="Compare all 6 teams side by side">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-            Compare Teams <kbd>C</kbd>
-        </button>
+        <div class="pbp-footer-actions">
+            <button class="pbp-compare-btn" onclick="compareCurrentMatch()" title="Compare all 6 teams side by side">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                Compare Teams <kbd class="kbd-desktop">C</kbd>
+            </button>
+            <button class="pbp-breakdown-btn" onclick="goToBreakdownFromPbp()" title="View score breakdown for this match">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 16l4-8 4 4 4-6"/></svg>
+                Breakdown <kbd class="kbd-desktop">B</kbd>
+            </button>
+        </div>
         ${qs && qs.score > 0
             ? `<span class="pbp-footer-text">
                    Event High Score: <span class="pbp-footer-score">${qs.score}</span>
@@ -3990,9 +4005,11 @@ function renderPbpTeam(t, sideCls) {
     <div class="pbp-team ${foreignCls} ${rookieCls}" data-country="${t.country || ''}" data-rookie-year="${t.rookie_year || ''}">
         <div class="pbp-team-top">
             <div class="pbp-team-number">${t.team_number}</div>
-            <div class="pbp-firsts-slot" data-firsts-team="${t.team_number}"></div>
             <div class="pbp-team-identity">
-                <div class="pbp-team-nickname">${t.nickname || 'Team ' + t.team_number}</div>
+                <div class="pbp-team-name-row">
+                    <div class="pbp-team-nickname">${t.nickname || 'Team ' + t.team_number}</div>
+                    <div class="pbp-firsts-slot" data-firsts-team="${t.team_number}"></div>
+                </div>
                 ${t.school_name ? `<div class="pbp-team-school">${t.school_name}</div>` : ''}
                 ${loc ? `<div class="pbp-team-location pbp-loc-full">${loc}</div>` : ''}
                 ${shortLoc ? `<div class="pbp-team-location pbp-loc-short">${shortLoc}</div>` : ''}
@@ -5398,6 +5415,20 @@ document.addEventListener('keydown', e => {
 });
 
 // ── Auto-compare from PBP match ────────────────────────────
+function goToBreakdownFromPbp() {
+    if (!pbpData || !pbpData.matches.length) return;
+    // Sync breakdown index to the current PBP match
+    bdIndex = pbpIndex;
+    // Navigate to breakdown tab
+    const tabBtn = document.querySelector('.tab[data-tab="breakdown"]');
+    if (tabBtn) tabBtn.click();
+    // If breakdown already loaded, jump to the same match
+    if ($('bd-match-select')) {
+        $('bd-match-select').value = bdIndex;
+        if (typeof loadBdMatch === 'function') loadBdMatch();
+    }
+}
+
 async function compareCurrentMatch() {
     if (!pbpData || !pbpData.matches.length || !currentEvent) return;
     const m = pbpData.matches[pbpIndex];
@@ -6513,7 +6544,7 @@ function renderTeamCards(teams) {
     const school = rankingsShowSchool;
     const toolbar = `<div class="rankings-toolbar">
         <label class="toggle-label"><input type="checkbox" ${compact ? 'checked' : ''} onchange="toggleRankingsCompact(this.checked)"> Compact</label>
-        <label class="toggle-label"><input type="checkbox" ${school ? 'checked' : ''} onchange="toggleRankingsSchool(this.checked)"> School / Org</label>
+        <label class="toggle-label school-toggle"><input type="checkbox" ${school ? 'checked' : ''} onchange="toggleRankingsSchool(this.checked)"> School / Org</label>
         <button class="rankings-view-toggle" onclick="toggleRankingsView()">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
             ${rankingsCardView ? 'Table View' : 'Card View'}
