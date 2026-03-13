@@ -448,23 +448,28 @@ input[type="checkbox"] {
 
 .tabs {
     display: flex;
+    justify-content: center;
+    align-items: center;
     background: var(--surface-glass);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
     border-bottom: 1px solid var(--border);
-    padding: 0 2.5rem;
-    gap: .25rem;
+    padding: .5rem .75rem;
+    gap: .35rem;
     overflow-x: auto;
     scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
 }
 .tabs::-webkit-scrollbar { display: none; }
 
 .tab {
     position: relative;
+    display: inline-flex;
+    align-items: center;
     background: none;
-    border: none;
+    border: 1px solid transparent;
     color: var(--text-muted);
-    padding: .85rem 1.5rem;
+    padding: .6rem 1.15rem;
     font-family: var(--font);
     font-size: .88rem;
     font-weight: 500;
@@ -473,12 +478,14 @@ input[type="checkbox"] {
     letter-spacing: .01em;
     white-space: nowrap;
     flex-shrink: 0;
+    gap: .45rem;
+    border-radius: 999px;
 }
 
 .tab:hover {
     color: var(--text-secondary);
     background: var(--primary-soft);
-    border-radius: var(--radius) var(--radius) 0 0;
+    border-color: var(--border);
 }
 
 .tab.disabled {
@@ -491,18 +498,8 @@ input[type="checkbox"] {
     color: var(--primary-hover);
     font-weight: 600;
     background: var(--primary-soft);
-    border-radius: var(--radius) var(--radius) 0 0;
-}
-
-.tab.active::after {
-    content: '';
-    position: absolute;
-    bottom: 0;
-    left: .5rem; right: .5rem;
-    height: 2.5px;
-    background: var(--primary);
-    border-radius: 3px 3px 0 0;
-    box-shadow: 0 0 10px var(--primary-glow);
+    border-color: var(--primary-glow);
+    box-shadow: 0 0 12px var(--primary-glow);
 }
 
 .tab-icon {
@@ -606,6 +603,16 @@ button:hover {
 button:active {
     transform: translateY(0);
     box-shadow: 0 1px 6px var(--primary-glow);
+}
+
+/* Keep breakdown button green on hover/active */
+.pbp-breakdown-btn:hover {
+    background: linear-gradient(135deg, #10b981 0%, #34d399 100%);
+    box-shadow: 0 4px 16px rgba(16, 185, 129, .35);
+}
+.pbp-breakdown-btn:active {
+    background: linear-gradient(135deg, #10b981 0%, #34d399 100%);
+    box-shadow: 0 1px 6px rgba(16, 185, 129, .25);
 }
 
 /* Button loading state */
@@ -4887,10 +4894,17 @@ tr:hover .compare-cb,
     /* Compact team rows */
     .pbp-team {
         padding: .6rem .85rem;
+        position: relative;
     }
     .pbp-team-top {
         gap: .6rem;
         margin-bottom: 0;
+    }
+    .pbp-firsts-slot {
+        position: absolute;
+        right: .85rem;
+        top: 50%;
+        transform: translateY(-50%);
     }
     .pbp-team-number {
         font-size: 1.2rem;
@@ -5039,6 +5053,24 @@ tr:hover .compare-cb,
     @keyframes comp-bar-in {
         from { opacity: 0; transform: translateY(20px); }
         to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── Season High Score pill ── */
+    .footer-world-record {
+        flex-wrap: wrap;
+        justify-content: center;
+        text-align: center;
+        gap: .1rem .35rem;
+        padding: .5rem .85rem;
+        font-size: .68rem;
+        max-width: 90vw;
+    }
+    .footer-wr-label { font-size: .68rem; }
+    .footer-wr-label::after { content: ':'; }
+    .footer-wr-score { font-size: .82rem; }
+    .footer-wr-detail {
+        font-size: .62rem;
+        flex-basis: 100%;
     }
 
     /* ── Footer ── */
@@ -5237,19 +5269,6 @@ tr:hover .compare-cb,
     .mh-table .mh-teams-cell { font-size: .65rem; }
     .mh-stat-val { font-size: .95rem; }
     .mh-stat-lbl { font-size: .58rem; }
-
-    /* ── Season High Score pill ── */
-    .footer-world-record {
-        flex-wrap: wrap;
-        justify-content: center;
-        gap: .25rem .45rem;
-        padding: .4rem .75rem;
-        font-size: .68rem;
-        max-width: 90vw;
-    }
-    .footer-wr-label { font-size: .68rem; }
-    .footer-wr-score { font-size: .72rem; }
-    .footer-wr-detail { font-size: .62rem; }
 
     /* ── Regional Advancement badge ── */
     .season-count-badge {

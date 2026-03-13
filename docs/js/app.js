@@ -199,7 +199,7 @@ let pbpIndex     = 0;      // current match index
 let highlightForeign = false; // settings: highlight international teams
 let highlightRookie = false;   // settings: highlight rookie teams
 let showOffseason = false;     // settings: show offseason events
-let rankingsCompact = false;      // toggle: compressed rankings view
+let rankingsCompact = window.innerWidth <= 768;  // default compact on mobile
 let rankingsShowSchool = false;   // toggle: show school/org column
 let rankingsCardView = false;     // toggle: card view on mobile
 let allianceShowEpa = false;      // toggle: show EPA breakdown in alliance cards
@@ -3811,11 +3811,11 @@ function renderPbpMatch() {
     $('pbp-footer').innerHTML = `
         <div class="pbp-footer-actions">
             <button class="pbp-compare-btn" onclick="compareCurrentMatch()" title="Compare all 6 teams side by side">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 16l4-8 4 4 4-6"/></svg>
                 Compare Teams <kbd class="kbd-desktop">C</kbd>
             </button>
             <button class="pbp-breakdown-btn" onclick="goToBreakdownFromPbp()" title="View score breakdown for this match">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 16l4-8 4 4 4-6"/></svg>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
                 Breakdown <kbd class="kbd-desktop">B</kbd>
             </button>
         </div>
