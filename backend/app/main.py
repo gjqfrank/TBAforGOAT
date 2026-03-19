@@ -35,7 +35,8 @@ _HEAVY_PATTERNS = {
     "/summary/connections", "/summary/awards", "/history",
     "/world-record", "/alliances/",
 }
-_rate_buckets: dict[str, list[float]] = defaultdict(list)
+_rate_buckets_general: dict[str, list[float]] = defaultdict(list)
+_rate_buckets_heavy: dict[str, list[float]] = defaultdict(list)
 
 
 def _is_heavy(path: str) -> bool:
@@ -52,19 +53,31 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         key = client_ip
         cutoff = now - _RATE_WINDOW
 
-        # Prune old entries
-        _rate_buckets[key] = [t for t in _rate_buckets[key] if t > cutoff]
+        heavy = _is_heavy(request.url.path)
 
-        limit = _RATE_LIMIT_HEAVY if _is_heavy(request.url.path) else _RATE_LIMIT_GENERAL
-        if len(_rate_buckets[key]) >= limit:
-            return JSONResponse(
-                status_code=429,
-                content={
-                    "detail": "Too many requests — please slow down and try again in a moment."
-                },
-            )
+        # Prune old entries in both buckets
+        _rate_buckets_general[key] = [t for t in _rate_buckets_general[key] if t > cutoff]
+        _rate_buckets_heavy[key] = [t for t in _rate_buckets_heavy[key] if t > cutoff]
 
-        _rate_buckets[key].append(now)
+        if heavy:
+            if len(_rate_buckets_heavy[key]) >= _RATE_LIMIT_HEAVY:
+                return JSONResponse(
+                    status_code=429,
+                    content={
+                        "detail": "Too many requests — please slow down and try again in a moment."
+                    },
+                )
+            _rate_buckets_heavy[key].append(now)
+        else:
+            if len(_rate_buckets_general[key]) >= _RATE_LIMIT_GENERAL:
+                return JSONResponse(
+                    status_code=429,
+                    content={
+                        "detail": "Too many requests — please slow down and try again in a moment."
+                    },
+                )
+            _rate_buckets_general[key].append(now)
+
         return await call_next(request)
 
 

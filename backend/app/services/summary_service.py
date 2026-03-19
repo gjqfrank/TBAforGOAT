@@ -898,6 +898,34 @@ COMP_LEVEL_LABELS = {
     "sf": "Semi-Finals", "f": "Finals",
 }
 
+# Double-elimination bracket (2023+): set_number → (round, bracket)
+_DOUBLE_ELIM_MAP = {
+    1: (1, "Upper"), 2: (1, "Upper"), 3: (1, "Upper"), 4: (1, "Upper"),
+    5: (2, "Lower"), 6: (2, "Lower"), 7: (2, "Upper"), 8: (2, "Upper"),
+    9: (3, "Lower"), 10: (3, "Lower"),
+    11: (4, "Upper"), 12: (4, "Lower"),
+    13: (5, "Lower"),
+}
+_DOUBLE_ELIM_ROUND_LABELS = {
+    1: "Round 1", 2: "Round 2", 3: "Round 3",
+    4: "Semis", 5: "Semis",
+}
+
+
+def _resolve_de_stage(match: dict) -> tuple[int, str]:
+    """Return (order, label) for a double-elim match based on set_number."""
+    cl = match.get("comp_level", "qm")
+    if cl == "f":
+        return (10, "Finals")
+    sn = match.get("set_number", 0)
+    if cl == "sf" and sn in _DOUBLE_ELIM_MAP:
+        rnd, bracket = _DOUBLE_ELIM_MAP[sn]
+        label = _DOUBLE_ELIM_ROUND_LABELS.get(rnd, f"Round {rnd}")
+        return (rnd, f"{label} ({bracket})")
+    # Fallback for non-double-elim comp_levels
+    order = {"ef": 1, "qf": 2, "sf": 3, "f": 4}.get(cl, 0)
+    return (order, COMP_LEVEL_LABELS.get(cl, cl))
+
 
 async def get_event_connections(event_key: str, all_time: bool = False) -> list[dict]:
     """Public entry point to fetch connections with configurable lookback."""
@@ -1044,8 +1072,9 @@ async def _find_playoff_connections(
 
             if were_partners:
                 # Find highest playoff stage they played together
-                partner_highest = None
+                partner_highest_label = None
                 partner_highest_order = -1
+                is_de = event_year >= 2023
                 for m in match_cache.get(ek, []):
                     cl = m.get("comp_level", "qm")
                     if cl == "qm":
@@ -1053,22 +1082,27 @@ async def _find_playoff_connections(
                     red = m.get("alliances", {}).get("red", {}).get("team_keys", [])
                     blue = m.get("alliances", {}).get("blue", {}).get("team_keys", [])
                     if (ta in red and tb in red) or (ta in blue and tb in blue):
-                        cl_order = {"ef": 1, "qf": 2, "sf": 3, "f": 4}.get(cl, 0)
-                        if cl_order > partner_highest_order:
-                            partner_highest_order = cl_order
-                            partner_highest = cl
+                        if is_de:
+                            order, label = _resolve_de_stage(m)
+                        else:
+                            order = {"ef": 1, "qf": 2, "sf": 3, "f": 4}.get(cl, 0)
+                            label = COMP_LEVEL_LABELS.get(cl, cl)
+                        if order > partner_highest_order:
+                            partner_highest_order = order
+                            partner_highest_label = label
 
                 partner_events.append({
                     "event_key": ek,
                     "event_name": event_name_map.get(ek, ek),
                     "year": event_year,
-                    "stage": COMP_LEVEL_LABELS.get(partner_highest, "Playoffs") if partner_highest else "Alliance",
+                    "stage": partner_highest_label or "Alliance",
                     "result": alliance_result,
                 })
 
             # Check playoff opponents — capture highest comp_level
-            highest_level = None
+            highest_label = None
             highest_order = -1
+            is_de = event_year >= 2023
             for m in match_cache.get(ek, []):
                 cl = m.get("comp_level", "qm")
                 if cl == "qm":
@@ -1076,29 +1110,43 @@ async def _find_playoff_connections(
                 red = m.get("alliances", {}).get("red", {}).get("team_keys", [])
                 blue = m.get("alliances", {}).get("blue", {}).get("team_keys", [])
                 if (ta in red and tb in blue) or (ta in blue and tb in red):
-                    cl_order = {"ef": 1, "qf": 2, "sf": 3, "f": 4}.get(cl, 0)
-                    if cl_order > highest_order:
-                        highest_order = cl_order
-                        highest_level = cl
+                    if is_de:
+                        order, label = _resolve_de_stage(m)
+                    else:
+                        order = {"ef": 1, "qf": 2, "sf": 3, "f": 4}.get(cl, 0)
+                        label = COMP_LEVEL_LABELS.get(cl, cl)
+                    if order > highest_order:
+                        highest_order = order
+                        highest_label = label
 
-            if highest_level:
+            if highest_label:
                 opponent_events.append({
                     "event_key": ek,
                     "event_name": event_name_map.get(ek, ek),
                     "year": event_year,
-                    "stage": COMP_LEVEL_LABELS.get(highest_level, highest_level),
+                    "stage": highest_label,
                 })
 
         if partner_events or opponent_events:
             seen_pairs.add(pair_id)
 
             # Deduplicate per event — keep only the highest stage per event_key
+            def _stage_rank(stage: str) -> int:
+                _STATIC = {"Alliance": 0, "Playoffs": 0, "Eighths": 1, "Quarters": 2, "Semi-Finals": 3, "Semis": 3, "Finals": 4}
+                if stage in _STATIC:
+                    return _STATIC[stage]
+                # Handle "Round N (Upper/Lower)" and "Semis (Upper/Lower)"
+                if stage.startswith("Round "):
+                    return int(stage.split()[1].rstrip(")")) if stage.split()[1][0].isdigit() else 3
+                if stage.startswith("Semis"):
+                    return 3
+                return 0
+
             def _dedup_by_event(events):
-                stage_order = {"Alliance": 0, "Playoffs": 0, "Eighths": 1, "Quarters": 2, "Semi-Finals": 3, "Finals": 4}
                 best: dict[str, dict] = {}
                 for e in events:
                     ek = e["event_key"]
-                    if ek not in best or stage_order.get(e["stage"], 0) > stage_order.get(best[ek]["stage"], 0):
+                    if ek not in best or _stage_rank(e["stage"]) > _stage_rank(best[ek]["stage"]):
                         best[ek] = e
                 return sorted(best.values(), key=lambda x: x["year"], reverse=True)
 

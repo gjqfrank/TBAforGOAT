@@ -5,6 +5,7 @@ import asyncio
 from datetime import date
 from typing import Optional
 from .tba_client import get_tba_client
+from .frc_client import get_frc_client
 
 
 COMP_LEVEL_ORDER = {"qm": 0, "ef": 1, "qf": 2, "sf": 3, "f": 4}
@@ -15,6 +16,46 @@ COMP_LEVEL_LABELS = {
     "sf": "Round 3",
     "f": "Finals",
 }
+
+# Double-elimination bracket (2023+): set_number → (round, bracket)
+_DOUBLE_ELIM_MAP = {
+    1: (1, "Upper"), 2: (1, "Upper"), 3: (1, "Upper"), 4: (1, "Upper"),
+    5: (2, "Lower"), 6: (2, "Lower"), 7: (2, "Upper"), 8: (2, "Upper"),
+    9: (3, "Lower"), 10: (3, "Lower"),
+    11: (4, "Upper"), 12: (4, "Lower"),
+    13: (5, "Lower"),
+}
+_DE_ROUND_LABELS = {
+    1: "Round 1", 2: "Round 2", 3: "Round 3",
+    4: "Semis", 5: "Semis",
+}
+
+
+def _resolve_de_level_frc(playoff_matches: list[dict], team_number: int) -> str | None:
+    """Determine the highest double-elim round a team reached using FRC API data."""
+    best_round = -1
+    best_bracket = ""
+    reached_finals = False
+    for m in playoff_matches:
+        mn = m.get("matchNumber", 0)
+        desc = (m.get("description") or "").lower()
+        match_teams = {t.get("teamNumber", 0) for t in m.get("teams", [])}
+        if team_number not in match_teams:
+            continue
+        if "final" in desc and "semi" not in desc:
+            reached_finals = True
+            continue
+        if mn in _DOUBLE_ELIM_MAP:
+            rnd, bracket = _DOUBLE_ELIM_MAP[mn]
+            if rnd > best_round:
+                best_round = rnd
+                best_bracket = bracket
+    if reached_finals:
+        return "Finals"
+    if best_round < 0:
+        return None
+    stage = _DE_ROUND_LABELS.get(best_round, f"Round {best_round}")
+    return f"{stage} ({best_bracket})"
 
 EVENT_TYPE_ORDER = {99: 0, 6: 0, 0: 1, 1: 1, 5: 2, 2: 3, 3: 4, 4: 5}
 EVENT_TYPE_LABELS = {
@@ -76,6 +117,25 @@ async def get_team_stats(team_number: int, year: Optional[int] = None) -> dict:
 
     statuses = await _safe(client.get_team_events_statuses(team_key, year)) or {}
 
+    # Pre-fetch playoff matches from FRC API for double-elim events
+    # where the team made playoffs — lighter than TBA full match data
+    frc = get_frc_client()
+    team_num = int(team_key.replace("frc", ""))
+    de_event_keys = []
+    if year >= 2023 and isinstance(statuses, dict):
+        for ek, st in statuses.items():
+            po = st.get("playoff") if isinstance(st, dict) else None
+            if po and po.get("level") == "sf":
+                de_event_keys.append(ek)
+    de_match_map: dict[str, list[dict]] = {}
+    if de_event_keys:
+        de_results = await asyncio.gather(
+            *[_safe(frc.get_matches(year, ek[4:].upper(), level="Playoff", team_number=team_num)) for ek in de_event_keys]
+        )
+        for ek, matches in zip(de_event_keys, de_results):
+            if matches:
+                de_match_map[ek] = matches
+
     # Walk every event this year to find highest stage reached
     highest_comp_rank = -1
     highest_comp_et_rank = -1
@@ -128,7 +188,11 @@ async def get_team_stats(team_number: int, year: Optional[int] = None) -> dict:
                 winner_ctx = WINNER_LABELS.get(et, "")
                 highest_comp_label = f"Event Winner ({winner_ctx})" if winner_ctx else "Event Winner"
             else:
-                stage = COMP_LEVEL_LABELS.get(ev_comp_level, "Qualifications")
+                # Use double-elim round resolution when available
+                de_stage = None
+                if ek in de_match_map:
+                    de_stage = _resolve_de_level_frc(de_match_map[ek], team_num)
+                stage = de_stage or COMP_LEVEL_LABELS.get(ev_comp_level, "Qualifications")
                 # Short event-level labels for context
                 _ET_SHORT = {
                     0: "Regional", 1: "District", 2: "District CMP",
@@ -184,8 +248,9 @@ async def get_team_stats(team_number: int, year: Optional[int] = None) -> dict:
             "is_upcoming": is_upcoming,
             "qual_rank": qual_ranking.get("rank", "-"),
             "qual_record": f'{qual_record.get("wins", 0)}-{qual_record.get("losses", 0)}-{qual_record.get("ties", 0)}',
-            "playoff_level": COMP_LEVEL_LABELS.get(ev_comp_level, ev_comp_level)
-                             if ev_comp_level != "winner" else "Finals",
+            "playoff_level": de_match_map.get(ek) and _resolve_de_level_frc(de_match_map[ek], team_num)
+                             or (COMP_LEVEL_LABELS.get(ev_comp_level, ev_comp_level)
+                             if ev_comp_level != "winner" else "Finals"),
             "playoff_status": ev_playoff_status or "-",
             "alliance_pick": alliance_pick,
             "alliance_number": alliance_number,

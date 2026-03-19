@@ -18,13 +18,53 @@ async def _safe(coro):
         return None
 
 
-# Map TBA playoff levels to readable labels
+# Map TBA playoff levels to readable labels (traditional bracket)
 _PLAYOFF_LABELS = {
     "f": "Finals",
     "sf": "Semifinals",
     "qf": "Quarterfinals",
     "ef": "Round 1",
 }
+
+# Double-elimination bracket (2023+): set_number → (round, bracket)
+_DOUBLE_ELIM_MAP = {
+    1: (1, "Upper"), 2: (1, "Upper"), 3: (1, "Upper"), 4: (1, "Upper"),
+    5: (2, "Lower"), 6: (2, "Lower"), 7: (2, "Upper"), 8: (2, "Upper"),
+    9: (3, "Lower"), 10: (3, "Lower"),
+    11: (4, "Upper"), 12: (4, "Lower"),
+    13: (5, "Lower"),
+}
+
+# Round 4+ in upper = Semis, Round 5 in lower = Semis
+_DOUBLE_ELIM_ROUND_LABELS = {
+    1: "Round 1", 2: "Round 2", 3: "Round 3",
+    4: "Semis", 5: "Semis",
+}
+
+
+def _resolve_double_elim_label_frc(playoff_matches: list[dict], alliance_picks: list[str]) -> str | None:
+    """Find the highest double-elim round an alliance played using FRC API data."""
+    pick_numbers = {int(tk.replace("frc", "")) for tk in alliance_picks}
+    best_round = -1
+    best_bracket = ""
+    for m in playoff_matches:
+        mn = m.get("matchNumber", 0)
+        desc = (m.get("description") or "").lower()
+        match_teams = {t.get("teamNumber", 0) for t in m.get("teams", [])}
+        if not pick_numbers & match_teams:
+            continue
+        # Finals detection — made it past semis
+        if "final" in desc and "semi" not in desc:
+            return None  # handled separately as Finalist / Winner
+        if mn in _DOUBLE_ELIM_MAP:
+            rnd, bracket = _DOUBLE_ELIM_MAP[mn]
+            if rnd > best_round:
+                best_round = rnd
+                best_bracket = bracket
+    if best_round < 0:
+        return None
+    stage = _DOUBLE_ELIM_ROUND_LABELS.get(best_round, f"Round {best_round}")
+    return f"{stage} ({best_bracket})"
 
 
 async def get_alliances_with_stats(event_key: str) -> dict:
@@ -35,14 +75,17 @@ async def get_alliances_with_stats(event_key: str) -> dict:
     year = int(event_key[:4]) if event_key[:4].isdigit() else 2026
     event_code = event_key[4:]
 
-    alliances_raw, rankings, oprs, teams_list, frc_teams_raw, epa_data = await asyncio.gather(
+    alliances_raw, rankings, oprs, teams_list, frc_teams_raw, epa_data, frc_playoff_matches = await asyncio.gather(
         client.get_event_alliances(event_key),
         _safe(client.get_event_rankings(event_key)),
         _safe(client.get_event_oprs(event_key)),
         _safe(client.get_event_teams(event_key)),
         _safe(frc.get_event_teams(year, event_code)),
         _safe(get_epa_map(event_key)),
+        _safe(frc.get_matches(year, event_code.upper(), level="Playoff")) if year >= 2023 else asyncio.sleep(0),
     )
+    if not isinstance(frc_playoff_matches, list):
+        frc_playoff_matches = None
     if epa_data is None:
         epa_data = {}
 
@@ -155,6 +198,11 @@ async def get_alliances_with_stats(event_key: str) -> dict:
         pw = playoff_record.get("wins", 0)
         pl = playoff_record.get("losses", 0)
 
+        # For double-elim events (2023+), resolve actual round from FRC playoff data
+        de_label = None
+        if year >= 2023 and playoff_level == "sf" and frc_playoff_matches:
+            de_label = _resolve_double_elim_label_frc(frc_playoff_matches, picks)
+
         if playoff_status == "won":
             result_label = "Event Winner"
             result_type = "winner"
@@ -162,10 +210,16 @@ async def get_alliances_with_stats(event_key: str) -> dict:
             result_label = "Finalist"
             result_type = "finalist"
         elif playoff_status == "eliminated":
-            result_label = f"Eliminated in {_PLAYOFF_LABELS.get(playoff_level, playoff_level)}"
+            if de_label:
+                result_label = f"Eliminated in {de_label}"
+            else:
+                result_label = f"Eliminated in {_PLAYOFF_LABELS.get(playoff_level, playoff_level)}"
             result_type = "eliminated"
         elif playoff_status == "playing":
-            result_label = f"Playing — {_PLAYOFF_LABELS.get(playoff_level, playoff_level)}"
+            if de_label:
+                result_label = f"Playing — {de_label}"
+            else:
+                result_label = f"Playing — {_PLAYOFF_LABELS.get(playoff_level, playoff_level)}"
             result_type = "playing"
         else:
             result_label = ""
