@@ -7602,6 +7602,14 @@ td .pick-flip-back { font-size: inherit; }
     background: rgba(34, 197, 94, .12);
 }
 
+/* Pool-qualified row highlight (amber) */
+.rp-row-pool {
+    background: rgba(251, 191, 36, .08);
+}
+.rp-row-pool:hover {
+    background: rgba(251, 191, 36, .14);
+}
+
 /* Status badges */
 .rp-status {
     display: inline-block;
@@ -7615,6 +7623,11 @@ td .pick-flip-back { font-size: inherit; }
     background: rgba(34, 197, 94, .15);
     color: #16a34a;
     border: 1px solid rgba(34, 197, 94, .3);
+}
+.rp-status-pool {
+    background: rgba(251, 191, 36, .15);
+    color: #d97706;
+    border: 1px solid rgba(251, 191, 36, .3);
 }
 .rp-status-declined {
     background: rgba(239, 68, 68, .12);
@@ -7632,9 +7645,19 @@ td .pick-flip-back { font-size: inherit; }
 [data-theme="light"] .rp-row-qualified:hover {
     background: rgba(34, 197, 94, .15);
 }
+[data-theme="light"] .rp-row-pool {
+    background: rgba(251, 191, 36, .08);
+}
+[data-theme="light"] .rp-row-pool:hover {
+    background: rgba(251, 191, 36, .15);
+}
 [data-theme="light"] .rp-status-qualified {
     background: rgba(34, 197, 94, .12);
     color: #15803d;
+}
+[data-theme="light"] .rp-status-pool {
+    background: rgba(251, 191, 36, .12);
+    color: #b45309;
 }
 [data-theme="light"] .rp-status-declined {
     background: rgba(239, 68, 68, .08);

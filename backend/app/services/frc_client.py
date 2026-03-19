@@ -142,19 +142,34 @@ class FRCClient:
     REGIONAL_POOL_TTL = 300  # 5 min — data changes infrequently
 
     async def get_regional_pool(self, season: int) -> list[dict]:
-        """Global regional advancement pool rankings (all regional teams)."""
-        endpoint = f"/{season}/rankings/regional/teamdetail"
+        """Qualified regional teams from the advancement pool.
+
+        Paginates through the v3.2 teamdetail endpoint and returns only
+        teams that have qualified for the Championship.
+        """
+        cache_key = f"v32:/{season}/rankings/regional/teamdetail:qualified"
         now = time.time()
-        cache_key = f"v32:{endpoint}"
         if cache_key in self._cache:
             ts, data = self._cache[cache_key]
             if now - ts < self.REGIONAL_POOL_TTL:
                 return data
 
         async def _do_request():
-            resp = await self._client_v32().get(endpoint)
-            resp.raise_for_status()
-            return resp.json().get("teams", [])
+            qualified: list[dict] = []
+            page = 1
+            while True:
+                url = f"/{season}/rankings/regional/teamdetail?page={page}"
+                resp = await self._client_v32().get(url)
+                resp.raise_for_status()
+                data = resp.json()
+                teams = data.get("teams", [])
+                page_qualified = [t for t in teams if t.get("qualifiedFirstCmp")]
+                qualified.extend(page_qualified)
+                # Stop once a page has no qualified teams (data is sorted by points)
+                if not page_qualified or page >= data.get("pageTotal", page):
+                    break
+                page += 1
+            return qualified
 
         teams = await frc_breaker.call(_do_request)
         self._cache[cache_key] = (now, teams)

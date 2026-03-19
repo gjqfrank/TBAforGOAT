@@ -1202,8 +1202,8 @@ async function loadRegionalPool() {
         const card = $('regional-pool-card');
         card.classList.remove('hidden');
         const badge = $('regional-pool-badge');
-        const qualCount = _regionalPoolData.filter(t => t.qualifiedFirstCmp).length;
-        badge.textContent = `${_regionalPoolData.length} teams · ${qualCount} qualified`;
+        const poolCount = _regionalPoolData.filter(t => _isPoolQualified(t)).length;
+        badge.textContent = `${_regionalPoolData.length} qualified · ${poolCount} via pool`;
         renderRegionalPool();
     } catch (err) {
         console.warn('[Regional Pool]', err);
@@ -1217,10 +1217,8 @@ function toggleRegionalPool() {
 function filterRegionalPool() {
     if (!_regionalPoolData) return;
     const q = ($('regional-pool-search').value || '').trim().toLowerCase();
-    const qualOnly = $('regional-pool-qualified-only').checked;
 
     _regionalPoolFiltered = _regionalPoolData.filter(t => {
-        if (qualOnly && !t.qualifiedFirstCmp) return false;
         if (q) {
             const numStr = String(t.teamNumber);
             const name = (t.nameShort || '').toLowerCase();
@@ -1245,12 +1243,12 @@ function renderRegionalPool() {
     html += '<th title="Best event points">Event 1</th>';
     html += '<th title="Second event / projection">Event 2</th>';
     html += '<th class="adv-col-total">Total</th>';
-    html += '<th>Status</th>';
+    html += '<th>Method</th>';
     html += '</tr></thead><tbody>';
 
     teams.forEach(t => {
-        const isQual = t.qualifiedFirstCmp;
-        const rowCls = isQual ? 'rp-row-qualified' : '';
+        const isPool = _isPoolQualified(t);
+        const rowCls = isPool ? 'rp-row-pool' : 'rp-row-qualified';
 
         // Event 1 details
         const e1 = t.regional1Details;
@@ -1263,18 +1261,12 @@ function renderRegionalPool() {
                     : (t.regional2PointsProjection != null ? `~${t.regional2PointsProjection}` : '–');
         const e2Code = e2 ? e2.tournamentCode : '';
 
-        // Status
-        let statusHtml = '';
-        if (isQual) {
-            if (t.declinedFirstCmp) {
-                statusHtml = '<span class="rp-status rp-status-declined">Declined</span>';
-            } else {
-                const method = _rpQualMethod(t);
-                statusHtml = `<span class="rp-status rp-status-qualified">${method}</span>`;
-            }
-        } else {
-            statusHtml = '<span class="rp-status rp-status-none">–</span>';
-        }
+        // Method
+        const method = _rpQualMethod(t);
+        let statusCls = isPool ? 'rp-status-pool' : 'rp-status-qualified';
+        if (t.declinedFirstCmp) statusCls = 'rp-status-declined';
+        const statusText = t.declinedFirstCmp ? `${method} (Declined)` : method;
+        const statusHtml = `<span class="rp-status ${statusCls}">${statusText}</span>`;
 
         html += `<tr class="${rowCls}">`;
         html += `<td>${t.rank}</td>`;
@@ -1288,6 +1280,11 @@ function renderRegionalPool() {
 
     html += '</tbody></table></div>';
     el.innerHTML = html;
+}
+
+function _isPoolQualified(t) {
+    const s = (t.championshipStatus || '').toLowerCase();
+    return s.includes('pool');
 }
 
 function _rpQualMethod(t) {
