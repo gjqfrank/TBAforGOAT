@@ -32,8 +32,8 @@ _RATE_LIMIT_GENERAL = 60   # requests per window for normal endpoints
 _RATE_LIMIT_HEAVY = 10     # requests per window for heavy endpoints
 
 # Trusted consumers get higher ceilings but aren't unlimited
-_RATE_LIMIT_TRUSTED_GENERAL = 180
-_RATE_LIMIT_TRUSTED_HEAVY = 30
+_RATE_LIMIT_TRUSTED_GENERAL = 300
+_RATE_LIMIT_TRUSTED_HEAVY = 60
 
 # Endpoints that fan out to many upstream calls
 _HEAVY_PATTERNS = {
