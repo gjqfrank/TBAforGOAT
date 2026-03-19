@@ -4932,6 +4932,10 @@ tr:hover .compare-cb,
     .pbp-team-highscore {
         display: none;
     }
+    /* Show sponsors on mobile when the setting is enabled */
+    body.show-sponsors .pbp-sponsors-slot {
+        display: block !important;
+    }
 
     /* Prediction bar stacks below */
     .pbp-prediction { margin-top: .5rem; }
@@ -5372,6 +5376,8 @@ tr:hover .compare-cb,
     .pbp-awards-slot { display: none !important; }
     .pbp-sponsors-slot { display: none !important; }
     .pbp-team-highscore { display: none !important; }
+    /* Show sponsors on mobile landscape when the setting is enabled */
+    body.show-sponsors .pbp-sponsors-slot { display: block !important; }
     .pbp-alliance-score { font-size: 1.2rem; }
     .pbp-alliance-header {
         padding: .45rem .8rem;

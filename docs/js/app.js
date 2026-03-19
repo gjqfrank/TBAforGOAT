@@ -368,6 +368,7 @@ let _sponsorsShownTeams = new Set();  // tracks teams whose sponsors were alread
 function toggleGatoolSponsors(on) {
     showGatoolSponsors = on;
     localStorage.setItem('showGatoolSponsors', on ? 'true' : 'false');
+    document.body.classList.toggle('show-sponsors', on);
     // Show/hide the sub-toggle
     const row = document.getElementById('sponsor-first-only-row');
     if (row) row.style.display = on ? '' : 'none';
@@ -396,6 +397,7 @@ function toggleSponsorFirstOnly(on) {
             if (cb) cb.checked = true;
             const row = document.getElementById('sponsor-first-only-row');
             if (row) row.style.display = '';
+            document.body.classList.add('show-sponsors');
         });
     }
     const savedFirst = localStorage.getItem('sponsorFirstOnly');
