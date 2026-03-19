@@ -7,6 +7,7 @@ from typing import Any, Optional
 import httpx
 
 from ..config import BLUE_ALLIANCE_API_KEY
+from .circuit_breaker import tba_breaker
 
 TBA_BASE = "https://www.thebluealliance.com/api/v3"
 CACHE_TTL = 120  # seconds – reduced for faster updates during live events
@@ -36,9 +37,12 @@ class TBAClient:
             if now - ts < CACHE_TTL:
                 return data
 
-        resp = await self._client().get(endpoint)
-        resp.raise_for_status()
-        data = resp.json()
+        async def _do_request():
+            resp = await self._client().get(endpoint)
+            resp.raise_for_status()
+            return resp.json()
+
+        data = await tba_breaker.call(_do_request)
         self._cache[endpoint] = (now, data)
         return data
 

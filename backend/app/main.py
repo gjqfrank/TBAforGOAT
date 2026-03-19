@@ -1,15 +1,21 @@
 """FRC Caster's Tool — FastAPI application."""
+import asyncio
+import logging
+import time
+from collections import defaultdict
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pathlib import Path
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
 from .routers import events, matches, alliances, teams
 
-app = FastAPI(title="FRC Caster's Tool", version="1.1.0")
+log = logging.getLogger(__name__)
+
+app = FastAPI(title="FRC Caster's Tool", version="1.2.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -18,6 +24,74 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ── Rate-limiter middleware (in-memory, per-IP) ─────────────
+_RATE_WINDOW = 60          # seconds
+_RATE_LIMIT_GENERAL = 60   # requests per window for normal endpoints
+_RATE_LIMIT_HEAVY = 10     # requests per window for heavy endpoints
+
+# Endpoints that fan out to many upstream calls
+_HEAVY_PATTERNS = {
+    "/summary/connections", "/summary/awards", "/history",
+    "/world-record", "/alliances/",
+}
+_rate_buckets: dict[str, list[float]] = defaultdict(list)
+
+
+def _is_heavy(path: str) -> bool:
+    return any(p in path for p in _HEAVY_PATTERNS)
+
+
+class RateLimitMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        if not request.url.path.startswith("/api/"):
+            return await call_next(request)
+
+        client_ip = request.client.host if request.client else "unknown"
+        now = time.time()
+        key = client_ip
+        cutoff = now - _RATE_WINDOW
+
+        # Prune old entries
+        _rate_buckets[key] = [t for t in _rate_buckets[key] if t > cutoff]
+
+        limit = _RATE_LIMIT_HEAVY if _is_heavy(request.url.path) else _RATE_LIMIT_GENERAL
+        if len(_rate_buckets[key]) >= limit:
+            return JSONResponse(
+                status_code=429,
+                content={
+                    "detail": "Too many requests — please slow down and try again in a moment."
+                },
+            )
+
+        _rate_buckets[key].append(now)
+        return await call_next(request)
+
+
+app.add_middleware(RateLimitMiddleware)
+
+
+# ── Global request timeout middleware ───────────────────────
+_REQUEST_TIMEOUT = 90  # seconds — hard cap on any single API request
+
+
+class TimeoutMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        if not request.url.path.startswith("/api/"):
+            return await call_next(request)
+        try:
+            return await asyncio.wait_for(call_next(request), timeout=_REQUEST_TIMEOUT)
+        except asyncio.TimeoutError:
+            log.warning("Request timed out: %s %s", request.method, request.url.path)
+            return JSONResponse(
+                status_code=504,
+                content={
+                    "detail": "The request took too long to complete. The upstream data sources may be slow — please try again."
+                },
+            )
+
+
+app.add_middleware(TimeoutMiddleware)
 
 # ── API routers ─────────────────────────────────────────────
 app.include_router(events.router, prefix="/api/events", tags=["Events"])
@@ -66,11 +140,13 @@ async def health_check():
 
 @app.get("/api/status")
 async def api_status():
-    """Check connectivity to TBA, FIRST FRC Events, and Statbotics APIs."""
+    """Check connectivity to TBA, FIRST FRC Events, and Statbotics APIs.
+    Also reports circuit breaker status for each upstream service."""
     import asyncio
     from .services.tba_client import get_tba_client
     from .services.frc_client import get_frc_client
     from .services.statbotics_client import get_statbotics_client
+    from .services.circuit_breaker import tba_breaker, frc_breaker, statbotics_breaker, gatool_breaker
 
     async def check_tba():
         try:
@@ -98,4 +174,14 @@ async def api_status():
             return False
 
     tba_ok, frc_ok, sb_ok = await asyncio.gather(check_tba(), check_frc(), check_statbotics())
-    return {"tba": tba_ok, "frc": frc_ok, "statbotics": sb_ok}
+    return {
+        "tba": tba_ok,
+        "frc": frc_ok,
+        "statbotics": sb_ok,
+        "circuit_breakers": {
+            "tba": tba_breaker.state.value,
+            "frc": frc_breaker.state.value,
+            "statbotics": statbotics_breaker.state.value,
+            "gatool": gatool_breaker.state.value,
+        },
+    }

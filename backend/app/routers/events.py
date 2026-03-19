@@ -8,6 +8,8 @@ from ..services import world_record_service
 from ..services.tba_client import get_tba_client
 from ..services.frc_client import get_frc_client
 from ..services.alliance_service import get_alliances_with_stats
+from ..services.gatool_client import get_gatool_client
+from ..services.error_utils import raise_api_error
 
 router = APIRouter()
 
@@ -26,24 +28,30 @@ async def world_record():
 async def season_events(year: int, include_offseason: bool = Query(False)):
     try:
         return await event_service.get_season_events(year, include_offseason=include_offseason)
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise_api_error(e, fallback_detail=f"Could not load season {year} events.")
 
 
 @router.get("/{event_key}/info")
 async def event_info(event_key: str):
     try:
         return await event_service.get_event_info(event_key)
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise_api_error(e, fallback_detail=f"Could not load event info for '{event_key}'.")
 
 
 @router.get("/{event_key}/teams")
 async def event_teams(event_key: str):
     try:
         return await event_service.get_event_teams_with_stats(event_key)
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise_api_error(e, fallback_detail=f"Could not load teams for event '{event_key}'.")
 
 
 @router.get("/{event_key}/summary")
@@ -56,15 +64,17 @@ async def event_summary(event_key: str):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise_api_error(e, fallback_detail=f"Could not load summary for event '{event_key}'.")
 
 
 @router.get("/{event_key}/summary/refresh-stats")
 async def event_summary_refresh_stats(event_key: str):
     try:
         return await summary_service.get_event_summary_stats(event_key)
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise_api_error(e, fallback_detail=f"Could not refresh stats for event '{event_key}'.")
 
 
 @router.get("/{event_key}/summary/awards")
@@ -72,8 +82,10 @@ async def event_summary_awards(event_key: str):
     """Deferred: past event champions & previous-season award winners."""
     try:
         return await summary_service.get_event_summary_awards(event_key)
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise_api_error(e, fallback_detail=f"Could not load awards for event '{event_key}'.")
 
 
 @router.get("/{event_key}/summary/advancement")
@@ -81,8 +93,10 @@ async def event_summary_advancement(event_key: str):
     """Deferred: advancement point standings, awards, winners, district rankings."""
     try:
         return await summary_service.get_event_advancement(event_key)
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise_api_error(e, fallback_detail=f"Could not load advancement data for event '{event_key}'.")
 
 
 @router.get("/{event_key}/summary/connections")
@@ -96,8 +110,10 @@ async def event_connections(
             team_numbers = [int(t.strip()) for t in teams.split(",") if t.strip()]
             return await summary_service.get_match_connections(event_key, team_numbers, all_time=all_time)
         return await summary_service.get_event_connections(event_key, all_time=all_time)
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise_api_error(e, fallback_detail=f"Could not load connections for event '{event_key}'.")
 
 
 @router.get("/{event_key}/clear-cache")
@@ -127,8 +143,10 @@ async def fast_rankings(event_key: str):
     """
     try:
         return await event_service.get_fast_rankings(event_key)
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise_api_error(e, fallback_detail=f"Could not load rankings for event '{event_key}'.")
 
 
 @router.get("/{event_key}/compare")
@@ -139,10 +157,10 @@ async def compare_teams(
     """Compare 2-6 teams at an event with enriched stats."""
     try:
         return await event_service.get_team_comparison(event_key, teams)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise_api_error(e, fallback_detail="Could not compare the requested teams.")
 
 
 # ═══════════════════════════════════════════════════════════
@@ -155,8 +173,10 @@ async def regional_pool(season: int):
     try:
         teams = await get_frc_client().get_regional_pool(season)
         return {"season": season, "teams": teams}
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise_api_error(e, fallback_detail=f"Could not load regional pool for season {season}.")
 
 
 @router.get("/regional-pool/{season}/{event_code}")
@@ -164,8 +184,10 @@ async def regional_pool_event(season: int, event_code: str):
     """Per-event regional advancement detail."""
     try:
         return await get_frc_client().get_regional_pool_event(season, event_code)
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise_api_error(e, fallback_detail=f"Could not load regional pool for event '{event_code}'.")
 
 
 # ═══════════════════════════════════════════════════════════
@@ -192,5 +214,24 @@ async def event_history(event_key: str):
     """Return the full history of a recurring event (awards, winners, timeline)."""
     try:
         return await region_service.get_event_history(event_key)
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise_api_error(e, fallback_detail=f"Could not load history for event '{event_key}'.")
+
+
+@router.get("/{event_key}/gatool-updates")
+async def gatool_updates(event_key: str):
+    """Return gatool community updates (sponsors, notes, etc.) for all teams at an event.
+
+    Data provided by the FIRST Game Announcer Tool API (gatool.org).
+    """
+    try:
+        year = int(event_key[:4])
+        event_code = event_key[4:]
+        client = get_gatool_client()
+        return await client.get_event_community_updates(year, event_code)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise_api_error(e, fallback_detail=f"Could not load GATool updates for event '{event_key}'.")

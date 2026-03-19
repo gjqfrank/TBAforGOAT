@@ -8,6 +8,7 @@ from ..services.tba_client import get_tba_client
 from ..services.frc_client import get_frc_client
 from ..services.statbotics_client import get_epa_map, get_match_predictions
 from ..services import world_record_service
+from ..services.error_utils import raise_api_error
 
 router = APIRouter()
 
@@ -300,8 +301,10 @@ async def get_all_matches(event_key: str):
             "total_matches": len(result),
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise_api_error(e, fallback_detail=f"Could not load matches for event '{event_key}'.")
 
 
 @router.get("/{event_key}/scores")
@@ -386,8 +389,10 @@ async def get_fast_scores(event_key: str):
 
         return {"event_key": event_key, "scores": results}
 
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise_api_error(e, fallback_detail=f"Could not load scores for event '{event_key}'.")
 
 
 @router.get("/match/{match_key}/breakdown")
@@ -417,7 +422,7 @@ async def get_match_breakdown(match_key: str):
             else:
                 return await _breakdown_from_frc(match_key, game_year)
         except Exception:
-            raise HTTPException(status_code=400, detail=str(e))
+            raise_api_error(e, fallback_detail=f"Could not load breakdown for match '{match_key}'.")
 
 
 # ── Comp level mapping ──────────────────────────────────────
@@ -1115,8 +1120,10 @@ async def get_playoff_matches(event_key: str):
 
         return {"event_key": event_key, "matches": result}
 
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise_api_error(e, fallback_detail=f"Could not load playoff data for event '{event_key}'.")
 
 
 # ── Playoff-firsts: detect first-time playoff / finals teams ──────
@@ -1210,5 +1217,7 @@ async def get_playoff_firsts(event_key: str):
         _playoff_firsts_cache[event_key] = out
         return out
 
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise_api_error(e, fallback_detail=f"Could not load playoff firsts for event '{event_key}'.")

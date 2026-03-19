@@ -9,6 +9,9 @@ from pathlib import Path
 
 from .tba_client import get_tba_client
 
+# Concurrency limit for outbound API calls within this module
+_API_SEMAPHORE = asyncio.Semaphore(10)
+
 
 def _normalize_name(s: str) -> str:
     """Normalize a name for comparison: lowercase, strip combining marks (İ→i)."""
@@ -123,7 +126,8 @@ for _canonical, _aliases in _EVENT_CODE_ALIASES.items():
 
 async def _safe(coro):
     try:
-        return await coro
+        async with _API_SEMAPHORE:
+            return await coro
     except Exception:
         return None
 
@@ -156,10 +160,14 @@ async def get_event_history(event_key: str) -> dict:
     # Find all historical instances of this event
     all_instances: list[dict] = []
 
-    # Scan from 1992 (first FRC season) through current year
+    # Scan from 1992 (first FRC season) through current year, with concurrency limit
+    async def _fetch_year(year: int):
+        async with _API_SEMAPHORE:
+            return await client.get_events_by_year(year)
+
     year_tasks = []
     for year in range(1992, current_year + 1):
-        year_tasks.append((year, client.get_events_by_year(year)))
+        year_tasks.append((year, _fetch_year(year)))
 
     year_results = await asyncio.gather(*[t[1] for t in year_tasks])
 

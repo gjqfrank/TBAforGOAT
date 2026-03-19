@@ -6,10 +6,14 @@ from .tba_client import get_tba_client
 from .frc_client import get_frc_client
 from .statbotics_client import get_epa_map
 
+# Concurrency limit for outbound API calls within this module
+_API_SEMAPHORE = asyncio.Semaphore(10)
+
 
 async def _safe(coro):
     try:
-        return await coro
+        async with _API_SEMAPHORE:
+            return await coro
     except Exception:
         return None
 

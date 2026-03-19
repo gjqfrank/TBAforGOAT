@@ -7,6 +7,9 @@ from .region_service import _load_region_stats, get_event_history
 from .tba_client import get_tba_client
 from .statbotics_client import get_epa_map
 
+# Concurrency limit for outbound API calls within this module
+_API_SEMAPHORE = asyncio.Semaphore(10)
+
 
 # ── Static HoF / Impact lookup (built once from region_stats.json) ───
 _HOF_BY_NUM: dict[int, dict] | None = None
@@ -40,7 +43,8 @@ def _ensure_award_lookups():
 
 async def _safe(coro):
     try:
-        return await coro
+        async with _API_SEMAPHORE:
+            return await coro
     except Exception:
         return None
 
@@ -477,10 +481,13 @@ async def _build_regional_advancement(
             # Determine qualification method
             award_name = td.get("qualifiedFirstCmpAwardName")
             status = td.get("championshipStatus", "")
+            week = td.get("qualifiedFirstCmpEventWeek")
             if award_name:
                 method = award_name
             elif "Ranking" in status:
                 method = "Directly Qualified"
+            elif week is not None:
+                method = f"Pool W{week}"
             else:
                 method = "Qualified"
 

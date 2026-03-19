@@ -8,6 +8,7 @@ from typing import Any, Optional
 import httpx
 
 from ..config import FRC_EVENTS_API_TOKEN
+from .circuit_breaker import frc_breaker
 
 FRC_BASE = "https://frc-api.firstinspires.org/v3.0"
 FRC_BASE_V32 = "https://frc-api.firstinspires.org/v3.2"
@@ -63,9 +64,12 @@ class FRCClient:
             if now - ts < ttl:
                 return data
 
-        resp = await self._client().get(endpoint)
-        resp.raise_for_status()
-        data = resp.json()
+        async def _do_request():
+            resp = await self._client().get(endpoint)
+            resp.raise_for_status()
+            return resp.json()
+
+        data = await frc_breaker.call(_do_request)
         self._cache[endpoint] = (now, data)
         return data
 
@@ -147,9 +151,12 @@ class FRCClient:
             if now - ts < self.REGIONAL_POOL_TTL:
                 return data
 
-        resp = await self._client_v32().get(endpoint)
-        resp.raise_for_status()
-        teams = resp.json().get("teams", [])
+        async def _do_request():
+            resp = await self._client_v32().get(endpoint)
+            resp.raise_for_status()
+            return resp.json().get("teams", [])
+
+        teams = await frc_breaker.call(_do_request)
         self._cache[cache_key] = (now, teams)
         return teams
 
@@ -165,9 +172,12 @@ class FRCClient:
             if now - ts < self.REGIONAL_POOL_TTL:
                 return data
 
-        resp = await self._client_v32().get(endpoint)
-        resp.raise_for_status()
-        data = resp.json()
+        async def _do_request():
+            resp = await self._client_v32().get(endpoint)
+            resp.raise_for_status()
+            return resp.json()
+
+        data = await frc_breaker.call(_do_request)
         self._cache[cache_key] = (now, data)
         return data
 

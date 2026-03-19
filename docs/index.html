@@ -63,6 +63,16 @@
                         <span class="toggle-label">Show Win Predictions (Statbotics)</span>
                     </label>
                     <label class="settings-toggle">
+                        <input type="checkbox" id="toggle-gatool-sponsors" onchange="toggleGatoolSponsors(this.checked)">
+                        <span class="toggle-slider"></span>
+                        <span class="toggle-label">Show Sponsors (GATool)</span>
+                    </label>
+                    <label class="settings-toggle" id="sponsor-first-only-row" style="display:none">
+                        <input type="checkbox" id="toggle-sponsor-first-only" onchange="toggleSponsorFirstOnly(this.checked)">
+                        <span class="toggle-slider"></span>
+                        <span class="toggle-label">Hide Sponsors After First Appearance</span>
+                    </label>
+                    <label class="settings-toggle">
                         <input type="checkbox" id="toggle-world-record" onchange="toggleWorldRecord(this.checked)" checked>
                         <span class="toggle-slider"></span>
                         <span class="toggle-label">Show Season High Score</span>
@@ -744,11 +754,6 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
             Team Lookup
         </button>
-        <hr style="border:none;border-top:1px solid var(--border);margin:.2rem 0">
-        <a class="mob-more-item" href="/about">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-            Guide
-        </a>
     </div>
 
     <!-- ═══ Landscape Orientation Hint ═══ -->
@@ -783,25 +788,26 @@
     <footer class="site-footer">
         <div class="footer-top">
             <span>Built by Gürsel &amp; <span class="team-9020">Team 9020</span> for FIRST Community</span>
-            <span class="footer-sep footer-guide-sep">·</span>
+            <span class="footer-sep">·</span>
             <a href="/about" class="footer-about-link">Guide</a>
             <span class="footer-sep">·</span>
             <span class="footer-version">v1.2</span>
         </div>
         <div class="footer-attribution" id="footer-status">
             <span class="status-item" id="status-tba" title="The Blue Alliance API">
-                <span class="status-dot status-checking"></span>
                 Powered by <a href="https://www.thebluealliance.com" target="_blank" rel="noopener">The Blue Alliance</a>
             </span>
             <span class="footer-sep">·</span>
             <span class="status-item" id="status-frc" title="FIRST FRC Events API">
-                <span class="status-dot status-checking"></span>
                 Event Data provided by <a href="https://frc-events.firstinspires.org/services/API" target="_blank" rel="noopener"><em>FIRST</em></a>
             </span>
             <span class="footer-sep">·</span>
             <span class="status-item" id="status-statbotics" title="Statbotics API">
-                <span class="status-dot status-checking"></span>
                 EPA by <a href="https://www.statbotics.io" target="_blank" rel="noopener">Statbotics</a>
+            </span>
+            <span class="footer-sep">·</span>
+            <span class="status-item" title="FIRST Game Announcer Tool API">
+                Sponsor data by <a href="https://gatool.org" target="_blank" rel="noopener">GATool</a>
             </span>
         </div>
     </footer>

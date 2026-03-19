@@ -7,7 +7,31 @@ const API = {
         const resp = await fetch(`/api${path}`);
         if (!resp.ok) {
             const body = await resp.json().catch(() => ({}));
-            throw new Error(body.detail || `HTTP ${resp.status}`);
+            const detail = body.detail || '';
+            // Build a user-friendly message based on status code
+            let message;
+            switch (resp.status) {
+                case 429:
+                    message = detail || 'Too many requests — please wait a moment and try again.';
+                    break;
+                case 502:
+                    message = detail || 'Could not reach the data source. It may be temporarily down.';
+                    break;
+                case 503:
+                    message = detail || 'A data source is temporarily unavailable. Please try again shortly.';
+                    break;
+                case 504:
+                    message = detail || 'The request timed out. The data source may be slow — please try again.';
+                    break;
+                case 404:
+                    message = detail || 'The requested resource was not found.';
+                    break;
+                default:
+                    message = detail || `Request failed (HTTP ${resp.status}). Please try again.`;
+            }
+            const err = new Error(message);
+            err.status = resp.status;
+            throw err;
         }
         return resp.json();
     },
@@ -54,7 +78,8 @@ const API = {
     regionFacts:  (name) => API.get(`/events/region/${encodeURIComponent(name)}/facts`),
     regionsList:  ()     => API.get('/events/regions/list'),
     eventHistory: (ek)   => API.get(`/events/${ek}/history`),
-
+    // ── GATool Community Updates ────────────────────────────
+    gatoolUpdates: (ek)  => API.get(`/events/${ek}/gatool-updates`),
     // ── Regional Advancement Pool ───────────────────────
     regionalPool:      (season) => API.get(`/events/regional-pool/${season}`),
     regionalPoolEvent: (season, code) => API.get(`/events/regional-pool/${season}/${code}`),

@@ -10,6 +10,8 @@ from typing import Any, Optional
 
 import httpx
 
+from .circuit_breaker import statbotics_breaker
+
 STATBOTICS_BASE = "https://api.statbotics.io/v3"
 CACHE_TTL = 300  # 5 minutes — same cadence as TBA cache
 
@@ -36,9 +38,12 @@ class StatboticsClient:
             if now - ts < CACHE_TTL:
                 return data
 
-        resp = await self._client().get(endpoint)
-        resp.raise_for_status()
-        data = resp.json()
+        async def _do_request():
+            resp = await self._client().get(endpoint)
+            resp.raise_for_status()
+            return resp.json()
+
+        data = await statbotics_breaker.call(_do_request)
         self._cache[endpoint] = (now, data)
         return data
 

@@ -3104,6 +3104,35 @@ input.input-loading {
 .pbp-awards-slot:empty { display: none; }
 .pbp-awards-slot { margin-top: 0; padding: 0; }
 
+/* ── PBP GATool Sponsors ────────────────────────────────── */
+.pbp-sponsors-slot:empty { display: none; }
+.pbp-sponsors-slot { margin-top: .25rem; padding: 0; }
+.pbp-sponsors {
+    display: inline-flex;
+    align-items: center;
+    gap: .3rem;
+    padding: .2rem .55rem;
+    background: color-mix(in srgb, var(--text-muted, #94a3b8) 10%, transparent);
+    border-radius: 999px;
+    font-size: .68rem;
+    color: var(--text-muted, #94a3b8);
+    line-height: 1.35;
+    word-break: break-word;
+}
+.pbp-sponsors-icon {
+    width: 11px;
+    height: 11px;
+    flex-shrink: 0;
+    color: var(--text-muted, #94a3b8);
+    opacity: .6;
+}
+.pbp-sponsors-text {
+    font-size: .68rem;
+    color: var(--text-muted, #94a3b8);
+    line-height: 1.35;
+    word-break: break-word;
+}
+
 /* ── Playoff-firsts badges ─────────────────────────────────── */
 .pbp-firsts-slot:empty { display: none; }
 .pbp-firsts-slot {
@@ -4705,29 +4734,6 @@ tr:hover .compare-cb,
     text-decoration: underline;
     color: var(--primary-hover);
 }
-.status-dot {
-    width: .5rem;
-    height: .5rem;
-    border-radius: 50%;
-    flex-shrink: 0;
-}
-.status-dot.status-ok {
-    background: #22c55e;
-    box-shadow: 0 0 4px rgba(34, 197, 94, .5);
-}
-.status-dot.status-down {
-    background: #ef4444;
-    box-shadow: 0 0 4px rgba(239, 68, 68, .5);
-}
-.status-dot.status-checking {
-    background: var(--text-muted);
-    opacity: .5;
-    animation: statusPulse 1.2s ease-in-out infinite;
-}
-@keyframes statusPulse {
-    0%, 100% { opacity: .3; }
-    50% { opacity: .7; }
-}
 
 /* ═══ SCROLLBAR ═══════════════════════════════════════════ */
 ::-webkit-scrollbar {
@@ -4922,6 +4928,7 @@ tr:hover .compare-cb,
     /* Hide stats, awards, highscore in portrait */
     .pbp-team-stats,
     .pbp-awards-slot,
+    .pbp-sponsors-slot,
     .pbp-team-highscore {
         display: none;
     }
@@ -5363,6 +5370,7 @@ tr:hover .compare-cb,
     /* Phone landscape: hide stats, show full team identity instead */
     .pbp-team-stats { display: none !important; }
     .pbp-awards-slot { display: none !important; }
+    .pbp-sponsors-slot { display: none !important; }
     .pbp-team-highscore { display: none !important; }
     .pbp-alliance-score { font-size: 1.2rem; }
     .pbp-alliance-header {

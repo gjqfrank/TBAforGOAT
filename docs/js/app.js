@@ -208,6 +208,7 @@ let allianceShowAvatars = true;  // toggle: show team avatars
 let allianceShowNames = false;    // toggle: show team nicknames
 let pbpShowAwards = false;        // toggle: show blue banners + awards in PBP
 let showPredictions = false;       // settings: show Statbotics win predictions in PBP
+let showGatoolSponsors = false;    // settings: show GATool cloud sponsors in PBP
 let eventCountry = '';         // home country of the currently loaded event
 let eventRegion  = '';         // resolved region name for the loaded event
 let historyData  = null;       // cached event history data
@@ -358,6 +359,103 @@ function toggleShowPredictions(on) {
         });
     }
 })();
+
+// ── GATool Sponsors Toggle ─────────────────────────────────
+let _gatoolUpdatesCache = {};  // event_key -> {teamNumber: updates}
+let sponsorFirstOnly = false;  // hide sponsors after team's first appearance
+let _sponsorsShownTeams = new Set();  // tracks teams whose sponsors were already displayed
+
+function toggleGatoolSponsors(on) {
+    showGatoolSponsors = on;
+    localStorage.setItem('showGatoolSponsors', on ? 'true' : 'false');
+    // Show/hide the sub-toggle
+    const row = document.getElementById('sponsor-first-only-row');
+    if (row) row.style.display = on ? '' : 'none';
+    _sponsorsShownTeams.clear();
+    if (pbpData && pbpData.matches && pbpData.matches.length) {
+        renderPbpMatch();
+    }
+}
+
+function toggleSponsorFirstOnly(on) {
+    sponsorFirstOnly = on;
+    localStorage.setItem('sponsorFirstOnly', on ? 'true' : 'false');
+    _sponsorsShownTeams.clear();
+    if (pbpData && pbpData.matches && pbpData.matches.length) {
+        renderPbpMatch();
+    }
+}
+
+// Restore saved GATool sponsors preference on load
+(function initGatoolSponsors() {
+    const saved = localStorage.getItem('showGatoolSponsors');
+    if (saved === 'true') {
+        showGatoolSponsors = true;
+        document.addEventListener('DOMContentLoaded', () => {
+            const cb = document.getElementById('toggle-gatool-sponsors');
+            if (cb) cb.checked = true;
+            const row = document.getElementById('sponsor-first-only-row');
+            if (row) row.style.display = '';
+        });
+    }
+    const savedFirst = localStorage.getItem('sponsorFirstOnly');
+    if (savedFirst === 'true') {
+        sponsorFirstOnly = true;
+        document.addEventListener('DOMContentLoaded', () => {
+            const cb = document.getElementById('toggle-sponsor-first-only');
+            if (cb) cb.checked = true;
+        });
+    }
+})();
+
+async function _fetchGatoolUpdates(eventKey) {
+    if (_gatoolUpdatesCache[eventKey]) return _gatoolUpdatesCache[eventKey];
+    try {
+        const data = await API.gatoolUpdates(eventKey);
+        _gatoolUpdatesCache[eventKey] = data || {};
+        return _gatoolUpdatesCache[eventKey];
+    } catch {
+        _gatoolUpdatesCache[eventKey] = {};
+        return {};
+    }
+}
+
+async function _injectGatoolSponsors(teams, matchIdx) {
+    if (!currentEvent) return;
+    const updates = await _fetchGatoolUpdates(currentEvent);
+    // Guard: user may have navigated to a different match during the fetch
+    if (pbpIndex !== matchIdx) return;
+
+    // Build set of teams that appeared in earlier matches (for first-appearance mode)
+    if (sponsorFirstOnly && pbpData?.matches) {
+        _sponsorsShownTeams.clear();
+        for (let i = 0; i < matchIdx; i++) {
+            const pm = pbpData.matches[i];
+            for (const t of [...(pm.red?.teams || []), ...(pm.blue?.teams || [])]) {
+                const td = updates[t.team_number];
+                if (td && td.topSponsorsLocal) _sponsorsShownTeams.add(t.team_number);
+            }
+        }
+    }
+
+    for (const t of teams) {
+        // Skip if already shown in an earlier match
+        if (sponsorFirstOnly && _sponsorsShownTeams.has(t.team_number)) continue;
+
+        const teamData = updates[t.team_number];
+        if (!teamData) continue;
+        const sponsors = teamData.topSponsorsLocal || '';
+        if (!sponsors) continue;
+
+        const slot = document.querySelector(`.pbp-sponsors-slot[data-sponsors-team="${t.team_number}"]`);
+        if (!slot) continue;
+
+        slot.innerHTML = `<div class="pbp-sponsors" title="Sponsors (via GATool)">
+            <svg class="pbp-sponsors-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+            <span class="pbp-sponsors-text">${sponsors}</span>
+        </div>`;
+    }
+}
 
 function applyForeignHighlight() {
     document.querySelectorAll('[data-country]').forEach(el => {
@@ -520,7 +618,8 @@ document.querySelectorAll('.tab').forEach(btn => {
             }
         } else if (btn.dataset.tab === 'breakdown' && currentEvent && !renderedTabs.breakdown) {
             if (bdData?.matches?.length) {
-                bdIndex = 0;
+                bdIndex = _pendingBdIndex != null ? _pendingBdIndex : 0;
+                _pendingBdIndex = null;
                 bdCache = {};
                 hide('bd-empty');
                 hideSkeleton('bd-loading');
@@ -556,6 +655,12 @@ document.querySelectorAll('.tab').forEach(btn => {
 
         // Re-entering breakdown tab after it was already loaded — resume timers
         if (btn.dataset.tab === 'breakdown' && renderedTabs.breakdown && bdData) {
+            if (_pendingBdIndex != null) {
+                bdIndex = _pendingBdIndex;
+                _pendingBdIndex = null;
+                if ($('bd-match-select')) $('bd-match-select').value = bdIndex;
+                loadBdMatch();
+            }
             startBdListRefresh();
             // If current match still has no breakdown, resume polling
             const cm = bdData.matches[bdIndex];
@@ -756,32 +861,6 @@ function loading(on) {
         if (badge) badge.classList.remove('loading');
     }
 }
-
-// ── API Status Polling ────────────────────────────────────
-async function checkApiStatus() {
-    try {
-        const resp = await fetch('/api/status');
-        const data = await resp.json();
-
-        const tbaDot = document.querySelector('#status-tba .status-dot');
-        const frcDot = document.querySelector('#status-frc .status-dot');
-        const sbDot  = document.querySelector('#status-statbotics .status-dot');
-        if (tbaDot) {
-            tbaDot.className = 'status-dot ' + (data.tba ? 'status-ok' : 'status-down');
-        }
-        if (frcDot) {
-            frcDot.className = 'status-dot ' + (data.frc ? 'status-ok' : 'status-down');
-        }
-        if (sbDot) {
-            sbDot.className = 'status-dot ' + (data.statbotics ? 'status-ok' : 'status-down');
-        }
-    } catch {
-        document.querySelectorAll('.status-dot').forEach(d => d.className = 'status-dot status-down');
-    }
-}
-// Check on load, then every 60 seconds
-checkApiStatus();
-setInterval(checkApiStatus, 60000);
 
 // ── World Record in footer ────────────────────────────────
 let _worldRecord = null;
@@ -1215,6 +1294,12 @@ function _rpQualMethod(t) {
     if (status.includes('ranking')) return 'Directly Qualified';
     if (status.includes('award')) return 'By Award';
     if (status.includes('waitlist')) return 'Waitlist';
+    if (status.includes('pool') && t.qualifiedFirstCmpEventWeek != null) {
+        return `Pool W${t.qualifiedFirstCmpEventWeek}`;
+    }
+    if (t.qualifiedFirstCmpEventWeek != null) {
+        return `Pool W${t.qualifiedFirstCmpEventWeek}`;
+    }
     return 'Qualified';
 }
 
@@ -1422,6 +1507,8 @@ async function loadEvent(eventKey) {
     _pbpConnCache = {};
     _pbpConnAllTime = false;
     _pbpAwardsCache = {};
+    _gatoolUpdatesCache = {};
+    _sponsorsShownTeams.clear();
     _playoffFirstsCache = null;
     _h2hAllTime = false;
     _loadingAwards = false;
@@ -1668,6 +1755,8 @@ async function loadSavedEvent(eventKey) {
     stopBdPolling(); stopBdListRefresh(); stopPbpRefresh(); stopPlayoffRefresh();
     _pbpConnCache = {}; _pbpConnAllTime = false;
     _pbpAwardsCache = {};
+    _gatoolUpdatesCache = {};
+    _sponsorsShownTeams.clear();
     _playoffFirstsCache = null;
     _h2hAllTime = false;
     _loadingAwards = false;
@@ -3800,6 +3889,12 @@ function renderPbpMatch() {
         _injectPbpAwards(allTeams, pbpIndex);
     }
 
+    // If GATool sponsors toggle is on, fetch and inject sponsors asynchronously
+    if (showGatoolSponsors) {
+        const allTeams = [...m.red.teams, ...m.blue.teams];
+        _injectGatoolSponsors(allTeams, pbpIndex);
+    }
+
     // Inject playoff-firsts badges for playoff matches
     if (m.comp_level && m.comp_level !== 'qm') {
         const allTeams = [...m.red.teams, ...m.blue.teams];
@@ -4042,6 +4137,7 @@ function renderPbpTeam(t, sideCls) {
             </div>
         </div>
         <div class="pbp-awards-slot" data-team="${t.team_number}"></div>
+        <div class="pbp-sponsors-slot" data-sponsors-team="${t.team_number}"></div>
     </div>`;
 }
 
@@ -4353,7 +4449,8 @@ async function loadBreakdownTab() {
             pbpData = data;
         }
         bdData = pbpData;
-        bdIndex = 0;
+        bdIndex = _pendingBdIndex != null ? _pendingBdIndex : 0;
+        _pendingBdIndex = null;
         bdCache = {};
         hideSkeleton('bd-loading');
         if (!bdData?.matches?.length) {
@@ -5415,18 +5512,16 @@ document.addEventListener('keydown', e => {
 });
 
 // ── Auto-compare from PBP match ────────────────────────────
+let _pendingBdIndex = null;  // set by goToBreakdownFromPbp before tab click
+
 function goToBreakdownFromPbp() {
     if (!pbpData || !pbpData.matches.length) return;
-    // Sync breakdown index to the current PBP match
+    // Save desired index before the tab handler potentially resets bdIndex
+    _pendingBdIndex = pbpIndex;
     bdIndex = pbpIndex;
     // Navigate to breakdown tab
     const tabBtn = document.querySelector('.tab[data-tab="breakdown"]');
     if (tabBtn) tabBtn.click();
-    // If breakdown already loaded, jump to the same match
-    if ($('bd-match-select')) {
-        $('bd-match-select').value = bdIndex;
-        if (typeof loadBdMatch === 'function') loadBdMatch();
-    }
 }
 
 async function compareCurrentMatch() {

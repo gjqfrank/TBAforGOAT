@@ -7,6 +7,9 @@ from .tba_client import get_tba_client
 from .frc_client import get_frc_client
 from .statbotics_client import get_epa_map
 
+# Concurrency limit for outbound API calls within this module
+_API_SEMAPHORE = asyncio.Semaphore(10)
+
 # TBA event types to exclude from the season dropdown (off-season, preseason, unlabeled)
 _EXCLUDE_TYPES = {99, 100, -1}
 
@@ -204,11 +207,12 @@ async def get_event_teams_with_stats(event_key: str) -> list[dict]:
 
     epa_data = epa_data or {}
 
-    # Fetch avatars for all teams in parallel
-    avatar_tasks = {
-        t["key"]: _safe(client.get_team_media(t["key"], year))
-        for t in teams
-    }
+    # Fetch avatars for all teams in parallel (with concurrency limit)
+    async def _fetch_avatar(tk: str):
+        async with _API_SEMAPHORE:
+            return await _safe(client.get_team_media(tk, year))
+
+    avatar_tasks = {t["key"]: _fetch_avatar(t["key"]) for t in teams}
     avatar_keys = list(avatar_tasks.keys())
     avatar_results = await asyncio.gather(*avatar_tasks.values())
     avatar_map: dict[str, str | None] = {}
