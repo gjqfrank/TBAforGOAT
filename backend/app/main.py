@@ -11,6 +11,7 @@ from pathlib import Path
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
+from .config import TRUSTED_API_KEYS
 from .routers import events, matches, alliances, teams
 
 log = logging.getLogger(__name__)
@@ -30,6 +31,10 @@ _RATE_WINDOW = 60          # seconds
 _RATE_LIMIT_GENERAL = 60   # requests per window for normal endpoints
 _RATE_LIMIT_HEAVY = 10     # requests per window for heavy endpoints
 
+# Trusted consumers get higher ceilings but aren't unlimited
+_RATE_LIMIT_TRUSTED_GENERAL = 180
+_RATE_LIMIT_TRUSTED_HEAVY = 30
+
 # Endpoints that fan out to many upstream calls
 _HEAVY_PATTERNS = {
     "/summary/connections", "/summary/awards", "/history",
@@ -48,19 +53,26 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if not request.url.path.startswith("/api/"):
             return await call_next(request)
 
-        client_ip = request.client.host if request.client else "unknown"
-        now = time.time()
-        key = client_ip
-        cutoff = now - _RATE_WINDOW
+        # Trusted API consumers get elevated limits (keyed by API key)
+        api_key = request.headers.get("X-API-Key", "")
+        trusted = api_key and api_key in TRUSTED_API_KEYS
 
+        client_ip = request.client.host if request.client else "unknown"
+        key = f"trusted:{api_key}" if trusted else client_ip
+
+        now = time.time()
+        cutoff = now - _RATE_WINDOW
         heavy = _is_heavy(request.url.path)
+
+        limit_general = _RATE_LIMIT_TRUSTED_GENERAL if trusted else _RATE_LIMIT_GENERAL
+        limit_heavy = _RATE_LIMIT_TRUSTED_HEAVY if trusted else _RATE_LIMIT_HEAVY
 
         # Prune old entries in both buckets
         _rate_buckets_general[key] = [t for t in _rate_buckets_general[key] if t > cutoff]
         _rate_buckets_heavy[key] = [t for t in _rate_buckets_heavy[key] if t > cutoff]
 
         if heavy:
-            if len(_rate_buckets_heavy[key]) >= _RATE_LIMIT_HEAVY:
+            if len(_rate_buckets_heavy[key]) >= limit_heavy:
                 return JSONResponse(
                     status_code=429,
                     content={
@@ -69,7 +81,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 )
             _rate_buckets_heavy[key].append(now)
         else:
-            if len(_rate_buckets_general[key]) >= _RATE_LIMIT_GENERAL:
+            if len(_rate_buckets_general[key]) >= limit_general:
                 return JSONResponse(
                     status_code=429,
                     content={
