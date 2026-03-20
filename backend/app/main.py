@@ -24,22 +24,31 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=[
+        "Retry-After",
+        "X-RateLimit-Limit",
+        "X-RateLimit-Remaining",
+        "X-RateLimit-Reset",
+    ],
 )
 
 # ── Rate-limiter middleware (in-memory, per-IP) ─────────────
 _RATE_WINDOW = 60          # seconds
 _RATE_LIMIT_GENERAL = 60   # requests per window for normal endpoints
-_RATE_LIMIT_HEAVY = 10     # requests per window for heavy endpoints
+_RATE_LIMIT_HEAVY = 20     # requests per window for heavy endpoints (raised from 10)
 
 # Trusted consumers get higher ceilings but aren't unlimited
-_RATE_LIMIT_TRUSTED_GENERAL = 300
-_RATE_LIMIT_TRUSTED_HEAVY = 60
+_RATE_LIMIT_TRUSTED_GENERAL = 600   # raised from 300
+_RATE_LIMIT_TRUSTED_HEAVY = 300     # raised from 60
 
 # Endpoints that fan out to many upstream calls
 _HEAVY_PATTERNS = {
     "/summary/connections", "/summary/awards", "/history",
     "/world-record", "/alliances/",
 }
+# Paths that are exempt from rate limiting
+_RATE_EXEMPT_PATHS = {"/api/health", "/api/status"}
+
 _rate_buckets_general: dict[str, list[float]] = defaultdict(list)
 _rate_buckets_heavy: dict[str, list[float]] = defaultdict(list)
 
@@ -53,9 +62,20 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if not request.url.path.startswith("/api/"):
             return await call_next(request)
 
+        # Skip rate limiting for health checks and CORS preflight
+        if request.method == "OPTIONS" or request.url.path in _RATE_EXEMPT_PATHS:
+            return await call_next(request)
+
         # Trusted API consumers get elevated limits (keyed by API key)
         api_key = request.headers.get("X-API-Key", "")
         trusted = api_key and api_key in TRUSTED_API_KEYS
+
+        if api_key and not trusted:
+            log.warning(
+                "Unrecognized API key from %s: %s…",
+                request.client.host if request.client else "unknown",
+                api_key[:8],
+            )
 
         client_ip = request.client.host if request.client else "unknown"
         key = f"trusted:{api_key}" if trusted else client_ip
@@ -71,26 +91,43 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         _rate_buckets_general[key] = [t for t in _rate_buckets_general[key] if t > cutoff]
         _rate_buckets_heavy[key] = [t for t in _rate_buckets_heavy[key] if t > cutoff]
 
-        if heavy:
-            if len(_rate_buckets_heavy[key]) >= limit_heavy:
-                return JSONResponse(
-                    status_code=429,
-                    content={
-                        "detail": "Too many requests — please slow down and try again in a moment."
-                    },
-                )
-            _rate_buckets_heavy[key].append(now)
-        else:
-            if len(_rate_buckets_general[key]) >= limit_general:
-                return JSONResponse(
-                    status_code=429,
-                    content={
-                        "detail": "Too many requests — please slow down and try again in a moment."
-                    },
-                )
-            _rate_buckets_general[key].append(now)
+        bucket = _rate_buckets_heavy[key] if heavy else _rate_buckets_general[key]
+        limit = limit_heavy if heavy else limit_general
+        bucket_name = "heavy" if heavy else "general"
 
-        return await call_next(request)
+        if len(bucket) >= limit:
+            retry_after = max(1, int(bucket[0] + _RATE_WINDOW - now) + 1)
+            log.warning(
+                "Rate limit hit: client=%s trusted=%s bucket=%s limit=%d "
+                "path=%s retry_after=%ds",
+                key, trusted, bucket_name, limit, request.url.path,
+                retry_after,
+            )
+            return JSONResponse(
+                status_code=429,
+                content={
+                    "detail": "Too many requests — please slow down and try again in a moment.",
+                    "retry_after": retry_after,
+                    "limit": limit,
+                    "bucket": bucket_name,
+                },
+                headers={
+                    "Retry-After": str(retry_after),
+                    "X-RateLimit-Limit": str(limit),
+                    "X-RateLimit-Remaining": "0",
+                    "X-RateLimit-Reset": str(retry_after),
+                },
+            )
+
+        bucket.append(now)
+        remaining = max(0, limit - len(bucket))
+        reset = max(1, int(bucket[0] + _RATE_WINDOW - now))
+
+        response = await call_next(request)
+        response.headers["X-RateLimit-Limit"] = str(limit)
+        response.headers["X-RateLimit-Remaining"] = str(remaining)
+        response.headers["X-RateLimit-Reset"] = str(reset)
+        return response
 
 
 app.add_middleware(RateLimitMiddleware)
