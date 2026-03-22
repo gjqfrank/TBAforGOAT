@@ -153,6 +153,11 @@ async def get_event_summary_awards(event_key: str) -> dict:
     This is intentionally separated from the main summary so the UI can
     render the lightweight demographics / HoF / OPR data immediately and
     lazy-load this heavier section in the background.
+
+    For championship divisions (event_type 3/4) the payload is different:
+    instead of recurring-event champions and previous-season awards, we
+    return current-season winners, impact recipients, and returning
+    Einstein contenders.
     """
     client = get_tba_client()
     year = int(event_key[:4])
@@ -168,6 +173,11 @@ async def get_event_summary_awards(event_key: str) -> dict:
     if not teams:
         return {"past_event_champions": [], "past_season_awards": []}
 
+    # ── Championship division: specialised payload ──────────
+    if current_event_type in _CHAMPIONSHIP_EVENT_TYPES:
+        return await _build_champs_awards(client, teams, year)
+
+    # ── Regular event flow ──────────────────────────────────
     # Fetch alliances for every historical event instance (parallel, nearly
     # free — piggybacked on the already-cached year scan inside get_event_history).
     alliance_cache: dict[str, list] = {}
@@ -194,7 +204,6 @@ async def get_event_summary_awards(event_key: str) -> dict:
     )
     past_season_awards = await _build_past_season_awards(
         client, teams, prev_award_results, prev_year,
-        include_champs=current_event_type in _CHAMPIONSHIP_EVENT_TYPES,
     )
 
     return {
@@ -653,7 +662,8 @@ def _extract_past_event_champions(
         alliances_raw = alliance_cache.get(ek, [])
         if alliances_raw:
             for al in alliances_raw:
-                al_num = al.get("number") or al.get("name", "").split()[-1]
+                name_parts = (al.get("name") or "").split()
+                al_num = al.get("number") or (name_parts[-1] if name_parts else "")
                 backup_in = (al.get("backup") or {}).get("in")
                 for idx, tk in enumerate(al.get("picks", [])):
                     if idx < len(_PICK_LABELS):
@@ -694,6 +704,163 @@ _AWARD_TYPE_IMPACT = 0
 _AWARD_TYPE_WINNER = 1
 _AWARD_TYPE_FINALIST = 2
 _CHAMPIONSHIP_EVENT_TYPES = {3, 4}  # Championship Division / Finals
+_EINSTEIN_EVENT_TYPE = 4             # Championship Finals (Einstein)
+
+
+async def _build_champs_awards(
+    client, teams: list[dict], year: int,
+) -> dict:
+    """Build the awards payload for a championship division event.
+
+    Returns three lists instead of the normal past-event/past-season pair:
+    * **season_winners** — teams that won a regional/district event this season
+    * **season_impact** — teams that won the Impact Award this season
+    * **einstein_contenders** — teams that competed on Einstein in a prior year
+    """
+    _PICK_LABELS = ['Captain', '1st Pick', '2nd Pick', '3rd Pick', 'Backup']
+    name_map = {t["team_number"]: t.get("nickname", "") for t in teams}
+    team_nums = {t["team_number"] for t in teams}
+
+    # ── 1) Current-season awards for every team (parallel) ──
+    award_results = await asyncio.gather(
+        *[_safe(client.get_team_awards_year(f"frc{t['team_number']}", year))
+          for t in teams]
+    )
+
+    winners: dict[int, list[dict]] = {}   # team_num -> [{event_key, event_name, pick, alliance}]
+    impact: dict[int, list[dict]] = {}    # team_num -> [{event_key, event_name}]
+    alliance_event_keys: set[str] = set()
+    award_event_keys: set[str] = set()
+
+    for t, awards in zip(teams, award_results):
+        if not awards:
+            continue
+        num = t["team_number"]
+        for a in awards:
+            atype = a.get("award_type")
+            ek = a.get("event_key", "")
+            if atype == _AWARD_TYPE_IMPACT:
+                impact.setdefault(num, []).append({"event_key": ek})
+                award_event_keys.add(ek)
+            elif atype == _AWARD_TYPE_WINNER:
+                winners.setdefault(num, []).append({"event_key": ek})
+                award_event_keys.add(ek)
+                alliance_event_keys.add(ek)
+
+    # Batch-fetch event info + alliances for winner events
+    ek_list = sorted(award_event_keys)
+    alliance_ek_list = sorted(alliance_event_keys)
+    info_results, *alliance_results = await asyncio.gather(
+        asyncio.gather(*[_safe(client.get_event(ek)) for ek in ek_list]),
+        *[_safe(client.get_event_alliances(ek)) for ek in alliance_ek_list],
+    )
+
+    event_names: dict[str, str] = {}
+    event_types: dict[str, int] = {}
+    for ek, info in zip(ek_list, info_results):
+        if info:
+            event_names[ek] = info.get("short_name") or info.get("name", ek)
+            event_types[ek] = info.get("event_type", -1)
+        else:
+            event_names[ek] = ek
+            event_types[ek] = -1
+
+    # Build pick maps (team_key -> {pick, alliance}) for winner events
+    pick_maps: dict[str, dict[str, dict]] = {}
+    for ek, alliances in zip(alliance_ek_list, alliance_results):
+        if not alliances:
+            continue
+        pm: dict[str, dict] = {}
+        for al in alliances:
+            name_parts = (al.get("name") or "").split()
+            al_num = al.get("number") or (name_parts[-1] if name_parts else "")
+            backup_in = (al.get("backup") or {}).get("in")
+            for idx, tk in enumerate(al.get("picks", [])):
+                if idx < len(_PICK_LABELS):
+                    label = "Backup" if tk == backup_in else _PICK_LABELS[idx]
+                    pm[tk] = {"pick": label, "alliance": al_num}
+        pick_maps[ek] = pm
+
+    # Assemble season_winners (exclude champs-level wins)
+    season_winners = []
+    for num in sorted(winners):
+        entries = []
+        for w in winners[num]:
+            ek = w["event_key"]
+            if event_types.get(ek) in _CHAMPIONSHIP_EVENT_TYPES:
+                continue
+            info = pick_maps.get(ek, {}).get(f"frc{num}", {})
+            entry: dict = {
+                "type": "winner",
+                "event_key": ek,
+                "event_name": event_names.get(ek, ek),
+            }
+            if info.get("pick"):
+                entry["pick"] = info["pick"]
+                entry["alliance"] = info.get("alliance", "")
+            entries.append(entry)
+        if entries:
+            season_winners.append({
+                "team_number": num,
+                "nickname": name_map.get(num, ""),
+                "awards": entries,
+            })
+
+    # Assemble season_impact (exclude champs-level)
+    season_impact = []
+    for num in sorted(impact):
+        entries = []
+        for a in impact[num]:
+            ek = a["event_key"]
+            if event_types.get(ek) in _CHAMPIONSHIP_EVENT_TYPES:
+                continue
+            entries.append({
+                "type": "impact",
+                "event_key": ek,
+                "event_name": event_names.get(ek, ek),
+            })
+        if entries:
+            season_impact.append({
+                "team_number": num,
+                "nickname": name_map.get(num, ""),
+                "awards": entries,
+            })
+
+    # ── 2) Returning Einstein contenders ────────────────────
+    # Find all Einstein (type 4) events from the previous year, then
+    # check which of *this division's* teams competed there.
+    prev_year = year - 1
+    prev_events = await _safe(client.get_events_by_year(prev_year))
+    einstein_keys = [
+        ev["key"] for ev in (prev_events or [])
+        if ev.get("event_type") == _EINSTEIN_EVENT_TYPE
+    ]
+
+    einstein_contenders: list[dict] = []
+    if einstein_keys:
+        einstein_team_results = await asyncio.gather(
+            *[_safe(client.get_event_teams(ek)) for ek in einstein_keys]
+        )
+        prev_einstein_teams: set[int] = set()
+        for ek_teams in einstein_team_results:
+            if ek_teams:
+                for et in ek_teams:
+                    num = et.get("team_number")
+                    if num:
+                        prev_einstein_teams.add(num)
+
+        for num in sorted(team_nums & prev_einstein_teams):
+            einstein_contenders.append({
+                "team_number": num,
+                "nickname": name_map.get(num, ""),
+            })
+
+    return {
+        "is_championship": True,
+        "season_winners": season_winners,
+        "season_impact": season_impact,
+        "einstein_contenders": einstein_contenders,
+    }
 
 
 async def _build_past_season_awards(
@@ -754,7 +921,8 @@ async def _build_past_season_awards(
             continue
         pm: dict[str, dict] = {}
         for al in alliances:
-            al_num = al.get("number") or al.get("name", "").split()[-1]
+            name_parts = (al.get("name") or "").split()
+            al_num = al.get("number") or (name_parts[-1] if name_parts else "")
             backup_in = (al.get("backup") or {}).get("in")
             for idx, tk in enumerate(al.get("picks", [])):
                 if idx < len(_PICK_LABELS):

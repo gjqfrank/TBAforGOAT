@@ -2480,6 +2480,18 @@ async function loadSummaryAwards() {
         const data = await API.eventSummaryAwards(eventKey);
         if (currentEvent !== eventKey || !summaryData) return; // user switched events
 
+        // ── Championship division: special payload ─────────
+        if (data.is_championship) {
+            summaryData.is_championship = true;
+            summaryData.season_winners = data.season_winners || [];
+            summaryData.season_impact = data.season_impact || [];
+            summaryData.einstein_contenders = data.einstein_contenders || [];
+            _renderChampsSummaryAwards(data);
+            autoCacheTab('summary', summaryData);
+            return;
+        }
+
+        // ── Regular event flow ─────────────────────────────
         summaryData.past_event_champions = data.past_event_champions || [];
         summaryData.past_season_awards = data.past_season_awards || [];
 
@@ -2515,6 +2527,73 @@ async function loadSummaryAwards() {
         if (isRateLimit) setTimeout(() => { _loadingAwards = false; loadSummaryAwards(); }, 5000);
     } finally {
         _loadingAwards = false;
+    }
+}
+
+/** Render championship-specific awards into the two summary card slots. */
+function _renderChampsSummaryAwards(data) {
+    const champsEl = $('summary-past-champs');
+    const awardsEl = $('summary-past-awards');
+
+    // ── Left card: Season Winners + Impact ─────────────────
+    const hasWinners = data.season_winners && data.season_winners.length > 0;
+    const hasImpact = data.season_impact && data.season_impact.length > 0;
+    if (hasWinners || hasImpact) {
+        // Override the card title
+        champsEl.querySelector('h3').textContent = `${currentEventYear} Season Winners & Impact`;
+        const rows = [];
+        for (const t of (data.season_winners || [])) {
+            const chips = t.awards.map(a => {
+                const front = `\u{1F3C6} Winner @ ${_esc(a.event_name)}`;
+                if (a.pick) {
+                    const alLabel = a.alliance ? `A${a.alliance} ` : '';
+                    return `<span class="past-award-chip past-award-chip-winner pick-flip" onclick="this.classList.toggle('flipped')">
+                        <span class="pick-flip-inner">
+                            <span class="pick-flip-front">${front}</span>
+                            <span class="pick-flip-back">${alLabel}${a.pick}</span>
+                        </span>
+                    </span>`;
+                }
+                return `<span class="past-award-chip past-award-chip-winner">${front}</span>`;
+            }).join('');
+            rows.push(`<div class="summary-hof-team past-award-row">
+                <span class="summary-hof-num">${t.team_number}</span>
+                <span class="summary-hof-name">${t.nickname}</span>
+                <div class="past-award-chips">${chips}</div>
+            </div>`);
+        }
+        for (const t of (data.season_impact || [])) {
+            const chips = t.awards.map(a =>
+                `<span class="past-award-chip past-award-chip-impact">\u2B50 Impact @ ${_esc(a.event_name)}</span>`
+            ).join('');
+            rows.push(`<div class="summary-hof-team past-award-row">
+                <span class="summary-hof-num">${t.team_number}</span>
+                <span class="summary-hof-name">${t.nickname}</span>
+                <div class="past-award-chips">${chips}</div>
+            </div>`);
+        }
+        $('summary-past-champs-list').innerHTML = rows.join('');
+        champsEl.classList.remove('hidden');
+    } else {
+        champsEl.classList.add('hidden');
+    }
+
+    // ── Right card: Returning Einstein Contenders ──────────
+    const hasEinstein = data.einstein_contenders && data.einstein_contenders.length > 0;
+    if (hasEinstein) {
+        awardsEl.querySelector('h3').textContent = 'Returning Einstein Contenders';
+        // Hide filter bar (not applicable)
+        const filterBar = awardsEl.querySelector('.past-awards-filter-bar');
+        if (filterBar) filterBar.classList.add('hidden');
+        $('summary-past-awards-list').innerHTML = data.einstein_contenders.map(t =>
+            `<div class="summary-hof-team">
+                <span class="summary-hof-num">${t.team_number}</span>
+                <span class="summary-hof-name">${t.nickname}</span>
+            </div>`
+        ).join('');
+        awardsEl.classList.remove('hidden');
+    } else {
+        awardsEl.classList.add('hidden');
     }
 }
 
@@ -2833,31 +2912,43 @@ function renderSummary(data) {
     }
 
     // Returning Event Champions & Finalists — lazy-load
+    // (Championship divisions use a different payload — handled by _renderChampsSummaryAwards)
     const pastChampsEl = $('summary-past-champs');
-    pastChampsEl.classList.remove('hidden');
-    if (data.past_event_champions && data.past_event_champions.length > 0) {
-        renderPastEventChampions(data.past_event_champions);
-    } else if (!data.past_event_champions) {
-        $('summary-past-champs-list').innerHTML = '<p class="empty" style="margin:.5rem 0;font-size:.82rem">Loading…</p>';
-    } else {
-        pastChampsEl.classList.add('hidden');
-    }
-
-    // Past Season Award Winners — lazy-load
     const pastAwardsEl = $('summary-past-awards');
-    pastAwardsEl.classList.remove('hidden');
-    if (data.past_season_awards && data.past_season_awards.length > 0) {
-        renderPastSeasonAwards(data.past_season_awards);
-    } else if (!data.past_season_awards) {
-        $('summary-past-awards-list').innerHTML = '<p class="empty" style="margin:.5rem 0;font-size:.82rem">Loading…</p>';
+
+    if (data.is_championship) {
+        // Cached championship data — re-render directly
+        _renderChampsSummaryAwards(data);
     } else {
-        pastAwardsEl.classList.add('hidden');
+        // Reset titles in case we're switching from a champs to a regular event
+        pastChampsEl.querySelector('h3').textContent = 'Returning Champions & Finalists';
+        pastAwardsEl.querySelector('h3').textContent = 'Past Season Award Winners';
+        const filterBar = pastAwardsEl.querySelector('.past-awards-filter-bar');
+        if (filterBar) filterBar.classList.remove('hidden');
+
+        pastChampsEl.classList.remove('hidden');
+        if (data.past_event_champions && data.past_event_champions.length > 0) {
+            renderPastEventChampions(data.past_event_champions);
+        } else if (!data.past_event_champions) {
+            $('summary-past-champs-list').innerHTML = '<p class="empty" style="margin:.5rem 0;font-size:.82rem">Loading\u2026</p>';
+        } else {
+            pastChampsEl.classList.add('hidden');
+        }
+
+        pastAwardsEl.classList.remove('hidden');
+        if (data.past_season_awards && data.past_season_awards.length > 0) {
+            renderPastSeasonAwards(data.past_season_awards);
+        } else if (!data.past_season_awards) {
+            $('summary-past-awards-list').innerHTML = '<p class="empty" style="margin:.5rem 0;font-size:.82rem">Loading\u2026</p>';
+        } else {
+            pastAwardsEl.classList.add('hidden');
+        }
     }
 
     // If awards haven't been loaded yet (undefined) or came back empty
     // (possibly due to a transient API failure), retry the fetch.
-    const _noChamps = !data.past_event_champions || data.past_event_champions.length === 0;
-    const _noAwards = !data.past_season_awards  || data.past_season_awards.length === 0;
+    const _noChamps = !data.is_championship && (!data.past_event_champions || data.past_event_champions.length === 0);
+    const _noAwards = !data.is_championship && (!data.past_season_awards  || data.past_season_awards.length === 0);
     if (_noChamps && _noAwards) {
         loadSummaryAwards();
     }
