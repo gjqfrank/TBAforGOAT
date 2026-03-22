@@ -5727,6 +5727,12 @@ tr:hover .compare-cb,
     margin-top: 0;
 }
 
+/* Scrollable list for long championship award sections */
+#summary-past-champs-list {
+    max-height: 420px;
+    overflow-y: auto;
+}
+
 /* ── Shared row styles (HoF, past champs, past awards) ── */
 .summary-hof-team {
     display: flex;

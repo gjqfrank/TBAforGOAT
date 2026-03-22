@@ -2539,8 +2539,14 @@ function _renderChampsSummaryAwards(data) {
     const hasWinners = data.season_winners && data.season_winners.length > 0;
     const hasImpact = data.season_impact && data.season_impact.length > 0;
     if (hasWinners || hasImpact) {
-        // Override the card title
         champsEl.querySelector('h3').textContent = `${currentEventYear} Season Winners & Impact`;
+
+        // Show filter bar and reset to "all"
+        const filterBar = $('champs-filter-bar');
+        filterBar.classList.remove('hidden');
+        filterBar.querySelectorAll('.past-awards-filter-btn').forEach(b => b.classList.remove('active'));
+        filterBar.querySelector('[data-champs-filter="all"]').classList.add('active');
+
         const rows = [];
         for (const t of (data.season_winners || [])) {
             const chips = t.awards.map(a => {
@@ -2556,7 +2562,7 @@ function _renderChampsSummaryAwards(data) {
                 }
                 return `<span class="past-award-chip past-award-chip-winner">${front}</span>`;
             }).join('');
-            rows.push(`<div class="summary-hof-team past-award-row">
+            rows.push(`<div class="summary-hof-team past-award-row" data-champs-type="winner">
                 <span class="summary-hof-num">${t.team_number}</span>
                 <span class="summary-hof-name">${t.nickname}</span>
                 <div class="past-award-chips">${chips}</div>
@@ -2566,7 +2572,7 @@ function _renderChampsSummaryAwards(data) {
             const chips = t.awards.map(a =>
                 `<span class="past-award-chip past-award-chip-impact">\u2B50 Impact @ ${_esc(a.event_name)}</span>`
             ).join('');
-            rows.push(`<div class="summary-hof-team past-award-row">
+            rows.push(`<div class="summary-hof-team past-award-row" data-champs-type="impact">
                 <span class="summary-hof-num">${t.team_number}</span>
                 <span class="summary-hof-name">${t.nickname}</span>
                 <div class="past-award-chips">${chips}</div>
@@ -2582,7 +2588,6 @@ function _renderChampsSummaryAwards(data) {
     const hasEinstein = data.einstein_contenders && data.einstein_contenders.length > 0;
     if (hasEinstein) {
         awardsEl.querySelector('h3').textContent = 'Returning Einstein Contenders';
-        // Hide filter bar (not applicable)
         const filterBar = awardsEl.querySelector('.past-awards-filter-bar');
         if (filterBar) filterBar.classList.add('hidden');
         $('summary-past-awards-list').innerHTML = data.einstein_contenders.map(t =>
@@ -2595,6 +2600,15 @@ function _renderChampsSummaryAwards(data) {
     } else {
         awardsEl.classList.add('hidden');
     }
+}
+
+/** Filter championship Season Winners & Impact rows by type */
+function filterChampsAwards(type, btn) {
+    $('champs-filter-bar').querySelectorAll('.past-awards-filter-btn').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    $('summary-past-champs-list').querySelectorAll('[data-champs-type]').forEach(row => {
+        row.style.display = (type === 'all' || row.dataset.champsType === type) ? '' : 'none';
+    });
 }
 
 /** Lazy-load advancement data (point standings, awards, district rankings) */
@@ -2925,6 +2939,8 @@ function renderSummary(data) {
         pastAwardsEl.querySelector('h3').textContent = 'Past Season Award Winners';
         const filterBar = pastAwardsEl.querySelector('.past-awards-filter-bar');
         if (filterBar) filterBar.classList.remove('hidden');
+        const champsFilterBar = $('champs-filter-bar');
+        if (champsFilterBar) champsFilterBar.classList.add('hidden');
 
         pastChampsEl.classList.remove('hidden');
         if (data.past_event_champions && data.past_event_champions.length > 0) {

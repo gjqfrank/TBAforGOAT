@@ -302,6 +302,11 @@
                             <span id="past-champs-toggle-icon" class="collapse-toggle"><span class="collapse-toggle-label">Hide</span><span class="collapse-toggle-arrow">▼</span></span>
                         </div>
                         <div id="summary-past-champs-body" class="summary-collapse-body">
+                            <div id="champs-filter-bar" class="past-awards-filter-bar hidden">
+                                <button class="past-awards-filter-btn active" data-champs-filter="all" onclick="event.stopPropagation(); filterChampsAwards('all', this)">All</button>
+                                <button class="past-awards-filter-btn" data-champs-filter="winner" onclick="event.stopPropagation(); filterChampsAwards('winner', this)">Winner</button>
+                                <button class="past-awards-filter-btn" data-champs-filter="impact" onclick="event.stopPropagation(); filterChampsAwards('impact', this)">Impact</button>
+                            </div>
                             <div id="summary-past-champs-list"></div>
                         </div>
                     </div>
