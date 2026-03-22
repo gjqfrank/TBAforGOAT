@@ -157,11 +157,13 @@ async def get_event_summary_awards(event_key: str) -> dict:
     client = get_tba_client()
     year = int(event_key[:4])
 
-    # Parallel: event history + team list (teams needed for cross-reference)
-    event_history, teams = await asyncio.gather(
+    # Parallel: event history + team list + event info (for type detection)
+    event_history, teams, event_info = await asyncio.gather(
         _safe(get_event_history(event_key)),
         client.get_event_teams_full(event_key),
+        _safe(client.get_event(event_key)),
     )
+    current_event_type = (event_info or {}).get("event_type", -1)
 
     if not teams:
         return {"past_event_champions": [], "past_season_awards": []}
@@ -192,6 +194,7 @@ async def get_event_summary_awards(event_key: str) -> dict:
     )
     past_season_awards = await _build_past_season_awards(
         client, teams, prev_award_results, prev_year,
+        include_champs=current_event_type in _CHAMPIONSHIP_EVENT_TYPES,
     )
 
     return {
@@ -695,10 +698,12 @@ _CHAMPIONSHIP_EVENT_TYPES = {3, 4}  # Championship Division / Finals
 
 async def _build_past_season_awards(
     client, teams: list[dict], prev_award_results: list, prev_year: int,
+    *, include_champs: bool = False,
 ) -> list[dict]:
     """Given per-team award results for the previous season, return a list
-    of teams that earned Impact / Winner / Finalist at a regional or
-    district event."""
+    of teams that earned Impact / Winner / Finalist.  Championship-level
+    awards are included when *include_champs* is True (i.e. the current
+    event is itself a championship division or finals)."""
     _PICK_LABELS = ['Captain', '1st Pick', '2nd Pick', '3rd Pick', 'Backup']
     name_map = {t["team_number"]: t.get("nickname", "") for t in teams}
     team_award_map: dict[int, list[dict]] = {}
@@ -762,7 +767,7 @@ async def _build_past_season_awards(
         filtered = []
         for a in team_award_map[num]:
             ek = a["event_key"]
-            if event_types.get(ek) in _CHAMPIONSHIP_EVENT_TYPES:
+            if not include_champs and event_types.get(ek) in _CHAMPIONSHIP_EVENT_TYPES:
                 continue
             info = {}
             if a["type"] in ("winner", "finalist"):

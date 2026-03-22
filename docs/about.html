@@ -233,7 +233,7 @@
                 </div>
                 <div class="feature-card">
                     <h3>Play by Play</h3>
-                    <p>Match-by-match view with per-team stats (rank, OPR, EPA, record), inline comparison, and quick navigation between matches.</p>
+                    <p>Match-by-match view with per-team stats (rank, OPR, EPA, record), Statbotics delta indicator, win/loss streak badges, inline comparison, and quick navigation between matches.</p>
                 </div>
                 <div class="feature-card">
                     <h3>Breakdown</h3>
@@ -281,6 +281,54 @@
                 <li><strong>Save events</strong>: Click the save icon on the event bar to cache data for instant reloading.</li>
                 <li><strong>Toggle settings</strong>: Use the gear icon to switch themes, highlight international teams, or include offseason events in data.</li>
             </ul>
+        </div>
+
+        <!-- ── Color Legend ─────────────────────────────── -->
+        <div class="about-section">
+            <h2>Color Legend</h2>
+            <p>Stats are color-coded across Rankings, Play by Play, and Alliances to help you quickly spot standout teams.</p>
+            <table class="kbd-table">
+                <thead>
+                    <tr><th>Color</th><th>Stat</th><th>Meaning</th></tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span style="color:#6b7394; font-weight:700">&#9632;</span></td>
+                        <td>OPR / EPA</td>
+                        <td>Below event average (dimmed)</td>
+                    </tr>
+                    <tr>
+                        <td><span style="color:#e8ecf4; font-weight:700">&#9632;</span></td>
+                        <td>OPR / EPA</td>
+                        <td>Above event average</td>
+                    </tr>
+                    <tr>
+                        <td><span style="color:#34d399; font-weight:700">&#9632;</span></td>
+                        <td>OPR</td>
+                        <td>Top 25% at the event</td>
+                    </tr>
+                    <tr>
+                        <td><span style="color:#818cf8; font-weight:700">&#9632;</span></td>
+                        <td>EPA</td>
+                        <td>Top 25% at the event</td>
+                    </tr>
+                    <tr>
+                        <td><span style="color:#f59e0b; font-weight:700">&#9632;</span></td>
+                        <td>Rank</td>
+                        <td>Top 8 (alliance captains)</td>
+                    </tr>
+                    <tr>
+                        <td><span style="color:#34d399; font-weight:700">&#8593;</span></td>
+                        <td>Delta</td>
+                        <td>Outperforming Statbotics EPA predictions by &gt;15%</td>
+                    </tr>
+                    <tr>
+                        <td><span style="color:#f87171; font-weight:700">&#8595;</span></td>
+                        <td>Delta</td>
+                        <td>Underperforming Statbotics EPA predictions by &gt;15%</td>
+                    </tr>
+                </tbody>
+            </table>
         </div>
 
         <!-- ── Keyboard Shortcuts ──────────────────────── -->

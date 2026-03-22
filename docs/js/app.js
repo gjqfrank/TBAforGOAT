@@ -507,8 +507,8 @@ document.querySelectorAll('.tab').forEach(btn => {
         btn.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
         document.getElementById(`tab-${btn.dataset.tab}`).classList.add('active');
 
-        // Update URL hash (without triggering hashchange)
-        history.replaceState(null, '', `#${btn.dataset.tab}`);
+        // Update URL with current tab
+        _syncUrl({ tab: btn.dataset.tab });
 
         // Stop breakdown polling when leaving the breakdown tab
         if (btn.dataset.tab !== 'breakdown') { stopBdPolling(); stopBdListRefresh(); }
@@ -620,6 +620,12 @@ document.querySelectorAll('.tab').forEach(btn => {
             }
         } else if (btn.dataset.tab === 'breakdown' && currentEvent && !renderedTabs.breakdown) {
             if (bdData?.matches?.length) {
+                // Check pending match key from URL deep-link
+                if (_pendingMatchKey && !_pendingBdIndex) {
+                    const mi = bdData.matches.findIndex(m => m.key && m.key.includes(_pendingMatchKey));
+                    if (mi >= 0) { _pendingBdIndex = mi; }
+                    _pendingMatchKey = null;
+                }
                 bdIndex = _pendingBdIndex != null ? _pendingBdIndex : 0;
                 _pendingBdIndex = null;
                 bdCache = {};
@@ -688,26 +694,37 @@ document.querySelectorAll('.tab').forEach(btn => {
 document.getElementById('event-year')?.addEventListener('keydown', e => { if (e.key === 'Enter') loadEvent(); });
 document.getElementById('event-code')?.addEventListener('keydown', e => { if (e.key === 'Enter') loadEvent(); });
 
-// ── Restore last event on page load ───────────────────────
+// ── Restore event from URL params or localStorage ─────────
 (function restoreEvent() {
-    const saved = localStorage.getItem('selectedEvent');
-    if (!saved) return;
-    try {
-        const { year, eventCode } = JSON.parse(saved);
-        if (!year || !eventCode) return;
-        const apply = () => {
-            const yEl = document.getElementById('event-year');
-            const cEl = document.getElementById('event-code');
-            if (yEl) yEl.value = year;
-            if (cEl) cEl.value = eventCode;
-            loadEvent();
-        };
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', apply);
-        } else {
-            apply();
-        }
-    } catch (_) { /* ignore corrupt data */ }
+    // URL ?event= takes priority over localStorage (shareable links)
+    const urlParams = new URLSearchParams(location.search);
+    const urlEvent = urlParams.get('event');
+    let year, eventCode;
+
+    if (urlEvent && /^\d{4}[a-z0-9]+$/i.test(urlEvent)) {
+        year = urlEvent.substring(0, 4);
+        eventCode = urlEvent.substring(4);
+    } else {
+        const saved = localStorage.getItem('selectedEvent');
+        if (!saved) return;
+        try {
+            ({ year, eventCode } = JSON.parse(saved));
+            if (!year || !eventCode) return;
+        } catch (_) { return; }
+    }
+
+    const apply = () => {
+        const yEl = document.getElementById('event-year');
+        const cEl = document.getElementById('event-code');
+        if (yEl) yEl.value = year;
+        if (cEl) cEl.value = eventCode;
+        loadEvent();
+    };
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', apply);
+    } else {
+        apply();
+    }
 })();
 document.getElementById('team-number')?.addEventListener('keydown', e => { if (e.key === 'Enter') loadTeam(); });
 document.getElementById('h2h-team-b')?.addEventListener('keydown', e => { if (e.key === 'Enter') loadH2H(); });
@@ -775,13 +792,49 @@ document.addEventListener('keydown', e => {
     }
 });
 
-// ── Restore tab from URL hash on load ──────────────────────
-// ── Store pending tab from URL hash (restored after event loads) ──
+// ── Restore tab from URL on load ──────────────────────────
 let _pendingTabHash = null;
-(function captureTabHash() {
+let _pendingUrlState = null;
+(function captureUrlState() {
+    const params = new URLSearchParams(location.search);
     const hash = location.hash.replace('#', '');
     if (hash && hash !== 'event') _pendingTabHash = hash;
+    // Also capture tab from ?tab= param (takes priority)
+    const tabParam = params.get('tab');
+    if (tabParam) _pendingTabHash = tabParam;
+    // Capture other state for deferred restoration
+    _pendingUrlState = {
+        match: params.get('match'),
+        compare: params.get('compare'),
+        sort: params.get('sort'),
+    };
 })();
+
+/** Build the current shareable URL from app state */
+function _buildShareUrl(overrides = {}) {
+    const params = new URLSearchParams();
+    const event = overrides.event ?? currentEvent;
+    if (event) params.set('event', event);
+    // Tab: use hash
+    const tab = overrides.tab ?? document.querySelector('.tab.active')?.dataset.tab;
+    // Match (PBP or Breakdown)
+    const matchKey = overrides.match !== undefined ? overrides.match : null;
+    if (matchKey) params.set('match', matchKey);
+    // Comparison teams
+    const compare = overrides.compare !== undefined ? overrides.compare : null;
+    if (compare) params.set('compare', compare);
+    // Sort column
+    const sort = overrides.sort !== undefined ? overrides.sort : null;
+    if (sort) params.set('sort', sort);
+    const qs = params.toString();
+    return `${location.pathname}${qs ? '?' + qs : ''}${tab ? '#' + tab : ''}`;
+}
+
+/** Update the browser URL to reflect current state (replaceState) */
+function _syncUrl(overrides = {}) {
+    const url = _buildShareUrl(overrides);
+    history.replaceState(null, '', url);
+}
 
 /** Restore the tab from URL hash after event data is available. */
 function restorePendingTab() {
@@ -791,6 +844,61 @@ function restorePendingTab() {
     const btn = document.querySelector(`.tab[data-tab="${tab}"]`);
     if (btn) requestAnimationFrame(() => btn.click());
 }
+
+/** Restore deferred URL state (match, compare, sort) after event + tab are ready */
+function _restorePendingUrlState() {
+    if (!_pendingUrlState) return;
+    const st = _pendingUrlState;
+    _pendingUrlState = null;
+
+    // Sort column
+    if (st.sort && teamsData) {
+        requestAnimationFrame(() => sortTeams(st.sort));
+    }
+
+    // Match navigation (deferred until PBP data loads)
+    if (st.match) {
+        _pendingMatchKey = st.match;
+    }
+
+    // Comparison (deferred until rankings data loads)
+    if (st.compare) {
+        const teamNums = st.compare.split(',').map(s => s.trim()).filter(Boolean);
+        const teamKeys = teamNums.map(n => `frc${n}`);
+        if (teamKeys.length > 0) {
+            requestAnimationFrame(() => showComparison(teamKeys, {}));
+        }
+    }
+}
+
+let _pendingMatchKey = null;
+/** Navigate to a match by key (e.g. 'qm42', 'sf1m1') — called after PBP data loads */
+function _navigateToMatchByKey(matchKey) {
+    if (!pbpData || !pbpData.matches) return false;
+    const idx = pbpData.matches.findIndex(m => m.key && m.key.includes(matchKey));
+    if (idx >= 0) {
+        pbpIndex = idx;
+        renderPbpMatch();
+        return true;
+    }
+    return false;
+}
+
+// ── Handle browser back/forward navigation ─────────────────
+window.addEventListener('popstate', () => {
+    const params = new URLSearchParams(location.search);
+    const urlEvent = params.get('event');
+    if (urlEvent && /^\d{4}[a-z0-9]+$/i.test(urlEvent) && urlEvent !== currentEvent) {
+        loadEvent(urlEvent);
+    }
+    const hash = location.hash.replace('#', '');
+    if (hash) {
+        const btn = document.querySelector(`.tab[data-tab="${hash}"]`);
+        if (btn) btn.click();
+    }
+    const matchParam = params.get('match');
+    if (matchParam) _navigateToMatchByKey(matchParam);
+});
 
 
 // ── Helpers ────────────────────────────────────────────────
@@ -1284,7 +1392,11 @@ function renderRegionalPool() {
 
 function _isPoolQualified(t) {
     const s = (t.championshipStatus || '').toLowerCase();
-    return s.includes('pool');
+    // Check explicit "pool" in status, OR if they have a qualifying event week
+    // (which indicates pool-based qualification even when status says "Qualified")
+    if (s.includes('pool')) return true;
+    if (t.qualifiedFirstCmpEventWeek != null && !s.includes('ranking') && !t.qualifiedFirstCmpAwardName) return true;
+    return false;
 }
 
 function _rpQualMethod(t) {
@@ -1307,6 +1419,8 @@ function clearActiveEvent() {
     currentEventYear = null;
     currentEventStatus = null;
     localStorage.removeItem('selectedEvent');
+    // Clear URL params
+    history.replaceState(null, '', location.pathname);
     stopRankingsPolling();
     stopPbpRefresh();
     stopPlayoffRefresh();
@@ -1545,6 +1659,13 @@ async function loadEvent(eventKey) {
         eventInfoData = info;
         localStorage.setItem('selectedEvent', JSON.stringify({ year, eventCode }));
 
+        // Update URL with event key for shareable links
+        if (new URLSearchParams(location.search).get('event') !== code) {
+            history.pushState(null, '', _buildShareUrl({ event: code }));
+        } else {
+            _syncUrl({ event: code });
+        }
+
         // Disable breakdown tab for pre-2025 events
         updateBreakdownTabState();
 
@@ -1652,6 +1773,7 @@ async function loadEvent(eventKey) {
 
         // Restore tab from URL hash now that the event is loaded
         restorePendingTab();
+        _restorePendingUrlState();
 
         // Matches (feeds PBP + Breakdown)
         API.allMatches(code).then(matchData => {
@@ -1661,7 +1783,11 @@ async function loadEvent(eventKey) {
                 bdData  = matchData;
                 autoCacheTab('matches', matchData);
             }
-        }).catch(() => {}).finally(phase2Check);
+        }).catch(err => {
+            if (currentEvent === code && err && err.status === 429) setTimeout(() => {
+                API.allMatches(code).then(md => { if (currentEvent === code && md) { pbpData = md; bdData = md; autoCacheTab('matches', md); } }).catch(() => {});
+            }, 5000);
+        }).finally(phase2Check);
 
         // Playoffs
         API.playoffMatches(code).then(playoffResult => {
@@ -1669,7 +1795,11 @@ async function loadEvent(eventKey) {
             if (playoffResult && playoffResult.matches) {
                 playoffData = playoffResult.matches;
             }
-        }).catch(() => {}).finally(phase2Check);
+        }).catch(err => {
+            if (currentEvent === code && err && err.status === 429) setTimeout(() => {
+                API.playoffMatches(code).then(pr => { if (currentEvent === code && pr && pr.matches) playoffData = pr.matches; }).catch(() => {});
+            }, 5000);
+        }).finally(phase2Check);
 
         // Alliances
         API.alliances(code).then(allianceResult => {
@@ -1678,7 +1808,11 @@ async function loadEvent(eventKey) {
                 allianceData = allianceResult;
                 autoCacheTab('alliances', allianceResult);
             }
-        }).catch(() => {}).finally(phase2Check);
+        }).catch(err => {
+            if (currentEvent === code && err && err.status === 429) setTimeout(() => {
+                API.alliances(code).then(ar => { if (currentEvent === code && ar) { allianceData = ar; autoCacheTab('alliances', ar); } }).catch(() => {});
+            }, 5000);
+        }).finally(phase2Check);
 
     } catch (err) {
         if (btn) { btn.disabled = false; btn.textContent = btn.dataset.origText || 'Load Event'; btn.classList.remove('btn-loading'); }
@@ -1795,6 +1929,9 @@ async function loadSavedEvent(eventKey) {
         eventInfoData = data.info;
         localStorage.setItem('selectedEvent', JSON.stringify({ year, eventCode }));
 
+        // Update URL with event key for shareable links
+        _syncUrl({ event: eventKey });
+
         // Disable breakdown tab for pre-2025 events
         updateBreakdownTabState();
 
@@ -1910,6 +2047,7 @@ async function loadSavedEvent(eventKey) {
 
         // Restore tab from URL hash now that the saved event is loaded
         restorePendingTab();
+        _restorePendingUrlState();
 
         // For ongoing events, do a background refresh
         if (currentEventStatus === 'ongoing') {
@@ -2191,11 +2329,18 @@ function renderTeamTable(teams, sortCol, asc) {
                 ${th('record', 'Record')}
                 ${th('opr', 'OPR')}
                 ${compact ? '' : th('epa', 'EPA')}
-                ${th('ranking_points', 'RP')}
+                <th class="sortable-th col-ranking_points${teamsSortCol === 'ranking_points' ? ' sorted' : ''}" onclick="sortTeams('ranking_points')"><span class="rp-header-note" title="Unofficial, calculated by TBA">RP*</span>${teamsSortCol === 'ranking_points' ? arrow : ''}</th>
             </tr>
         </thead>
         <tbody>
-            ${teams.map(t => {
+            ${(() => {
+                const oprVals = teams.map(t => parseFloat(t.opr)).filter(v => !isNaN(v)).sort((a, b) => a - b);
+                const avgOPR = oprVals.length > 0 ? oprVals.reduce((a, b) => a + b, 0) / oprVals.length : 0;
+                const p75OPR = oprVals.length > 0 ? oprVals[Math.floor(oprVals.length * 0.75)] : 0;
+                const epaVals = teams.map(t => parseFloat(t.epa)).filter(v => !isNaN(v)).sort((a, b) => a - b);
+                const avgEPA = epaVals.length > 0 ? epaVals.reduce((a, b) => a + b, 0) / epaVals.length : 0;
+                const p75EPA = epaVals.length > 0 ? epaVals[Math.floor(epaVals.length * 0.75)] : 0;
+                return teams.map(t => {
                 const loc = [t.city, t.state_prov, t.country].filter(Boolean).join(', ');
                 const name = formatTeamName(t.nickname);
                 const avatarImg = t.avatar
@@ -2204,6 +2349,10 @@ function renderTeamTable(teams, sortCol, asc) {
                 const checked = compareSelection.has(t.team_key) ? 'checked' : '';
                 const isIntl = highlightForeign && t.country && eventCountry && t.country !== eventCountry;
                 const isRookie = highlightRookie && t.rookie_year && currentEventYear && t.rookie_year >= currentEventYear;
+                const oprVal = parseFloat(t.opr);
+                const oprAboveCls = !isNaN(oprVal) && oprVal >= p75OPR ? ' opr-top25-rank' : (!isNaN(oprVal) && oprVal > avgOPR ? ' opr-above-avg-rank' : '');
+                const epaVal = parseFloat(t.epa);
+                const epaAboveCls = !isNaN(epaVal) && epaVal >= p75EPA ? ' epa-top25-rank' : (!isNaN(epaVal) && epaVal > avgEPA ? ' epa-above-avg-rank' : '');
                 return `
             <tr class="${isIntl ? 'foreign-team-row' : ''}${isRookie ? ' rookie-team-row' : ''}" data-team-key="${t.team_key}" data-country="${t.country || ''}" data-rookie-year="${t.rookie_year || ''}">
                 <td class="compare-td"><input type="checkbox" class="compare-cb" data-team="${t.team_key}" ${checked} onclick="toggleCompareTeam('${t.team_key}')"></td>
@@ -2214,11 +2363,12 @@ function renderTeamTable(teams, sortCol, asc) {
                 ${compact ? '' : `<td class="location">${loc}</td>`}
                 ${school ? `<td class="location">${t.school_name || ''}</td>` : ''}
                 <td class="stat">${t.wins}-${t.losses}-${t.ties}</td>
-                <td class="stat stat-opr">${t.opr}</td>
-                ${compact ? '' : `<td class="stat stat-epa">${t.epa != null ? t.epa : '\u2013'}</td>`}
+                <td class="stat stat-opr${oprAboveCls}">${t.opr}</td>
+                ${compact ? '' : `<td class="stat stat-epa${epaAboveCls}">${t.epa != null ? t.epa : '\u2013'}</td>`}
                 <td class="stat">${t.ranking_points != null ? t.ranking_points : '\u2013'}</td>
             </tr>`;
-            }).join('')}
+            }).join('');
+            })()}
         </tbody>
     </table>`;
 }
@@ -2233,6 +2383,12 @@ function formatTeamName(name) {
     });
 }
 
+function _ordinal(n) {
+    const s = ['th','st','nd','rd'];
+    const v = n % 100;
+    return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+
 function sortTeams(col) {
     if (!teamsData) return;
     if (teamsSortCol === col) {
@@ -2244,6 +2400,7 @@ function sortTeams(col) {
 
     sortTeamsData();
     $('event-teams').innerHTML = renderTeamTable(teamsData, teamsSortCol, teamsSortAsc);
+    _syncUrl({ sort: col });
 }
 
 
@@ -2300,8 +2457,14 @@ async function loadSummaryConnections() {
         }
         // Persist connections into cache alongside the summary
         autoCacheTab('summary', summaryData);
-    } catch {
-        $('summary-history-list').innerHTML = '<p class="empty" style="margin:.5rem 0;font-size:.82rem">Could not load connections.</p>';
+    } catch (err) {
+        if (currentEvent !== eventKey) return;
+        const isRateLimit = err && (err.status === 429 || /429|rate.?limit/i.test(err.message));
+        const msg = isRateLimit
+            ? 'Rate limited by API — retrying shortly\u2026'
+            : 'Could not load connections.';
+        $('summary-history-list').innerHTML = `<p class="empty" style="margin:.5rem 0;font-size:.82rem">${msg}</p>`;
+        if (isRateLimit) setTimeout(() => { _loadingConnections = false; loadSummaryConnections(); }, 5000);
     } finally {
         _loadingConnections = false;
     }
@@ -2339,12 +2502,17 @@ async function loadSummaryAwards() {
         // Persist awards into the cached summary so tab switches
         // and saved-event loads don't need to re-fetch from the API.
         autoCacheTab('summary', summaryData);
-    } catch {
+    } catch (err) {
         // Don't hide sections — leave summaryData fields unset so the next
         // re-render (tab switch) can retry the fetch automatically.
         if (currentEvent !== eventKey) return;
-        $('summary-past-champs-list').innerHTML = '<p class="empty" style="margin:.5rem 0;font-size:.82rem">Could not load — switch tabs to retry.</p>';
-        $('summary-past-awards-list').innerHTML = '<p class="empty" style="margin:.5rem 0;font-size:.82rem">Could not load — switch tabs to retry.</p>';
+        const isRateLimit = err && (err.status === 429 || /429|rate.?limit/i.test(err.message));
+        const msg = isRateLimit
+            ? 'Rate limited by API — retrying shortly\u2026'
+            : 'Could not load — switch tabs to retry.';
+        $('summary-past-champs-list').innerHTML = `<p class="empty" style="margin:.5rem 0;font-size:.82rem">${msg}</p>`;
+        $('summary-past-awards-list').innerHTML = `<p class="empty" style="margin:.5rem 0;font-size:.82rem">${msg}</p>`;
+        if (isRateLimit) setTimeout(() => { _loadingAwards = false; loadSummaryAwards(); }, 5000);
     } finally {
         _loadingAwards = false;
     }
@@ -2362,9 +2530,14 @@ async function loadSummaryAdvancement() {
         summaryData.advancement = data;
         renderAdvancement(data);
         autoCacheTab('summary', summaryData);
-    } catch {
+    } catch (err) {
         if (currentEvent !== eventKey) return;
-        $('summary-advancement-content').innerHTML = '<p class="empty" style="margin:.5rem 0;font-size:.82rem">Could not load advancement data.</p>';
+        const isRateLimit = err && (err.status === 429 || /429|rate.?limit/i.test(err.message));
+        const msg = isRateLimit
+            ? 'Rate limited by API — retrying shortly\u2026'
+            : 'Could not load advancement data.';
+        $('summary-advancement-content').innerHTML = `<p class="empty" style="margin:.5rem 0;font-size:.82rem">${msg}</p>`;
+        if (isRateLimit) setTimeout(() => { _loadingAdvancement = false; loadSummaryAdvancement(); }, 5000);
     } finally {
         _loadingAdvancement = false;
     }
@@ -2392,7 +2565,6 @@ function renderAdvancement(data) {
     // ── Direct Qualifications ───────────────────────────────
     if (hasQualified) {
         html += '<div class="adv-section">';
-        html += '<h4 class="adv-section-title">Championship Qualifications</h4>';
         html += '<div class="adv-qual-list">';
         data.qualified_teams.forEach(t => {
             const m = (t.method || '').toLowerCase();
@@ -3062,17 +3234,19 @@ function renderBracketTree() {
         const redWon  = m.winning_alliance === 'red';
         const blueWon = m.winning_alliance === 'blue';
         const upcoming = m.red.score < 0 && m.blue.score < 0;
+        const redLost = blueWon;
+        const blueLost = redWon;
         const replay = m.match_number > 1 ? ` <span class="bkt-replay">R${m.match_number}</span>` : '';
         const redSeed  = m.red.alliance_number  ? `<span class="bkt-seed">#${m.red.alliance_number}</span>` : '';
         const blueSeed = m.blue.alliance_number ? `<span class="bkt-seed">#${m.blue.alliance_number}</span>` : '';
         return `<div class="bkt-slot ${upcoming ? 'bkt-upcoming' : ''} ${redWon || blueWon ? 'bkt-decided' : ''}">
                     <div class="bkt-slot-header">${label}${replay}</div>
-                    <div class="bkt-row bkt-red ${redWon ? 'bkt-won' : ''}">
+                    <div class="bkt-row bkt-red ${redWon ? 'bkt-won' : ''}${redLost ? ' bkt-lost' : ''}">
                         ${redSeed}
                         <span class="bkt-teams">${_teamsHtml(m.red.team_numbers)}</span>
                         <span class="bkt-score">${upcoming ? '–' : m.red.score}</span>
                     </div>
-                    <div class="bkt-row bkt-blue ${blueWon ? 'bkt-won' : ''}">
+                    <div class="bkt-row bkt-blue ${blueWon ? 'bkt-won' : ''}${blueLost ? ' bkt-lost' : ''}">
                         ${blueSeed}
                         <span class="bkt-teams">${_teamsHtml(m.blue.team_numbers)}</span>
                         <span class="bkt-score">${upcoming ? '–' : m.blue.score}</span>
@@ -3135,14 +3309,21 @@ function renderBracketTree() {
             </div>
             <!-- Finals column already spans into this row -->
         </div>
-        <div class="bracket-scroll-arrow-wrapper">
-            <button class="bracket-scroll-arrow" id="bracket-scroll-finals" onclick="scrollBracketToFinals()" title="Scroll to Finals">
-                Finals
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-            </button>
-        </div>
         ${_buildMobileBracket(slot, finalNums)}
     `;
+
+    // Append scroll-to-finals button to tab-playoff (outside the scroll container)
+    let arrowWrapper = document.getElementById('bracket-scroll-wrapper');
+    if (!arrowWrapper) {
+        arrowWrapper = document.createElement('div');
+        arrowWrapper.id = 'bracket-scroll-wrapper';
+        arrowWrapper.className = 'bracket-scroll-arrow-wrapper';
+        arrowWrapper.innerHTML = `<button class="bracket-scroll-arrow" id="bracket-scroll-finals" onclick="scrollBracketToFinals()" title="Scroll to Finals">
+                Finals
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>`;
+        $('tab-playoff').appendChild(arrowWrapper);
+    }
 
     // Set up scroll-based visibility for the arrow
     _setupBracketScrollArrow();
@@ -3172,6 +3353,82 @@ function _setupBracketScrollArrow() {
     container.addEventListener('scroll', updateArrow, { passive: true });
     // Also update on resize
     new ResizeObserver(updateArrow).observe(container);
+
+    // ── Parent-match highlighting on hover ─────────────────
+    _setupBracketHover();
+}
+
+/* FRC double-elim bracket parent map: match → its feeder matches */
+const _BKT_PARENTS = {
+    7: [1, 2],   8: [3, 4],          // Upper R2 from Upper R1
+    5: [1, 2],   6: [3, 4],          // Lower R2 from losers of Upper R1
+    9: [5, 7],   10: [6, 8],         // Lower R3
+    11: [7, 8],                       // Upper R4
+    12: [9, 10],                      // Lower R4
+    13: [11, 12],                     // Lower R5
+    'f1': [11, 13],                   // Final from upper winner + lower winner
+};
+
+function _setupBracketHover() {
+    const container = $('playoff-bracket');
+    if (!container) return;
+
+    // Build a map from set_number/label → DOM element
+    const slotEls = container.querySelectorAll('.bkt-slot');
+    const slotMap = {};
+    slotEls.forEach(el => {
+        const header = el.querySelector('.bkt-slot-header');
+        if (!header) return;
+        const text = header.textContent.trim();
+        // Parse "M1", "M7", "Final 1" etc.
+        const mMatch = text.match(/^M(\d+)/);
+        const fMatch = text.match(/^Final\s*(\d+)/i);
+        if (mMatch) slotMap[parseInt(mMatch[1])] = el;
+        else if (fMatch) slotMap['f' + fMatch[1]] = el;
+    });
+
+    slotEls.forEach(el => {
+        el.addEventListener('mouseenter', () => {
+            const header = el.querySelector('.bkt-slot-header');
+            if (!header) return;
+            const text = header.textContent.trim();
+            const mMatch = text.match(/^M(\d+)/);
+            const fMatch = text.match(/^Final\s*(\d+)/i);
+            const key = mMatch ? parseInt(mMatch[1]) : (fMatch ? 'f' + fMatch[1] : null);
+            if (key == null) return;
+
+            // Collect direct parent matches only (not grandparents)
+            const parents = new Set();
+            const direct = _BKT_PARENTS[key];
+            if (direct) direct.forEach(p => parents.add(p));
+
+            if (parents.size === 0) return;
+
+            // Dim all slots, highlight parents
+            slotEls.forEach(s => {
+                const h = s.querySelector('.bkt-slot-header');
+                if (!h) return;
+                const t = h.textContent.trim();
+                const mm = t.match(/^M(\d+)/);
+                const fm = t.match(/^Final\s*(\d+)/i);
+                const sk = mm ? parseInt(mm[1]) : (fm ? 'f' + fm[1] : null);
+                if (sk === key) return; // don't modify the hovered slot
+                if (parents.has(sk)) {
+                    s.classList.add('bkt-highlight-parent');
+                    s.classList.remove('bkt-dim');
+                } else {
+                    s.classList.add('bkt-dim');
+                    s.classList.remove('bkt-highlight-parent');
+                }
+            });
+        });
+
+        el.addEventListener('mouseleave', () => {
+            slotEls.forEach(s => {
+                s.classList.remove('bkt-highlight-parent', 'bkt-dim');
+            });
+        });
+    });
 }
 
 /* ── Mobile bracket: vertical stacked rounds ────────────── */
@@ -3293,6 +3550,21 @@ function renderAlliances(data) {
     if (tb) tb.classList.remove('hidden');
 
     const roleLabels = ['Captain', '1st Pick', '2nd Pick', '3rd Pick', 'Backup'];
+    // At non-championship events alliances have 4 teams; idx 3 is the backup
+    const getRoleLabel = (idx, teamCount) => {
+        if (idx === 3 && teamCount <= 4) return 'Backup';
+        return roleLabels[idx] || '';
+    };
+
+    // Compute event-average OPR and EPA for highlighting
+    const allOPRs = alliances.flatMap(a => a.teams.map(t => parseFloat(t.opr))).filter(v => !isNaN(v));
+    allOPRs.sort((a, b) => a - b);
+    const avgEventOPR = allOPRs.length > 0 ? allOPRs.reduce((s, v) => s + v, 0) / allOPRs.length : 0;
+    const p75EventOPR = allOPRs.length > 0 ? allOPRs[Math.floor(allOPRs.length * 0.75)] : 0;
+    const allEPAs = alliances.flatMap(a => a.teams.map(t => parseFloat(t.epa))).filter(v => !isNaN(v));
+    allEPAs.sort((a, b) => a - b);
+    const avgEventEPA = allEPAs.length > 0 ? allEPAs.reduce((s, v) => s + v, 0) / allEPAs.length : 0;
+    const p75EventEPA = allEPAs.length > 0 ? allEPAs[Math.floor(allEPAs.length * 0.75)] : 0;
 
     $('alliance-grid').innerHTML = alliances.map(a => {
         const strengthPct = max_combined_opr ? Math.round((a.combined_opr / max_combined_opr) * 100) : 0;
@@ -3309,9 +3581,13 @@ function renderAlliances(data) {
         // Combined stats
         const epaHtml = allianceShowEpa
             ? `<span class="combined-epa">Σ EPA ${a.combined_epa != null ? a.combined_epa : '\u2013'}</span>`
+            : '';
+        const epaDetailHtml = allianceShowEpa
+            ? `<div class="alliance-epa-detail-row">`
               + `<span class="combined-epa-detail">Auto ${a.combined_epa_auto != null ? a.combined_epa_auto : '\u2013'}</span>`
               + `<span class="combined-epa-detail">Teleop ${a.combined_epa_teleop != null ? a.combined_epa_teleop : '\u2013'}</span>`
               + `<span class="combined-epa-detail">Endgame ${a.combined_epa_endgame != null ? a.combined_epa_endgame : '\u2013'}</span>`
+              + `</div>`
             : '';
 
         // Collect all partnerships for this alliance into a summary section
@@ -3343,8 +3619,11 @@ function renderAlliances(data) {
                     ${ribbonHtml}
                 </div>
                 <div class="alliance-header-stats">
-                    <span class="combined-opr">Σ OPR ${a.combined_opr}</span>
-                    ${epaHtml}
+                    <div class="alliance-header-stats-row-1">
+                        <span class="combined-opr">Σ OPR ${a.combined_opr}</span>
+                        ${epaHtml}
+                    </div>
+                    ${epaDetailHtml}
                 </div>
             </div>
             <div class="alliance-strength-bar"><div class="alliance-strength-fill" style="width:${strengthPct}%"></div></div>
@@ -3353,26 +3632,31 @@ function renderAlliances(data) {
                     const avatarHtml = allianceShowAvatars
                         ? (t.avatar
                             ? `<img class="alliance-team-avatar" src="${t.avatar}" alt="">`
-                            : `<div class="alliance-team-avatar-placeholder"></div>`)
+                            : `<div class="alliance-team-avatar-placeholder">FRC</div>`)
                         : '';
 
                     const isIntl = highlightForeign && t.country && eventCountry && t.country !== eventCountry;
                     const isRookie = highlightRookie && t.rookie_year && currentEventYear && t.rookie_year >= currentEventYear;
 
+                    const oprVal = parseFloat(t.opr);
+                    const oprCls = !isNaN(oprVal) && oprVal >= p75EventOPR ? ' opr-top25' : (!isNaN(oprVal) && oprVal > avgEventOPR ? ' opr-above-avg' : '');
+
+                    const epaVal = parseFloat(t.epa);
+                    const epaCls = !isNaN(epaVal) && epaVal >= p75EventEPA ? ' epa-top25' : (!isNaN(epaVal) && epaVal > avgEventEPA ? ' epa-above-avg' : '');
                     const teamEpaHtml = allianceShowEpa
-                        ? `<span class="stat-epa">EPA ${t.epa != null ? t.epa : '\u2013'}</span>`
+                        ? `<span class="stat-epa${epaCls}">EPA ${t.epa != null ? t.epa : '\u2013'}</span>`
                         : '';
 
                     return `
                     <div class="alliance-team-row${isIntl ? ' foreign-team-row' : ''}${isRookie ? ' rookie-team-row' : ''}" data-country="${t.country || ''}" data-rookie-year="${t.rookie_year || ''}">
-                        <span class="team-role">${roleLabels[idx] || ''}</span>
+                        <span class="team-role">${getRoleLabel(idx, a.teams.length)}</span>
                         ${avatarHtml}
                         <span class="team-num has-tooltip">${t.team_number}${t.nickname ? `<span class="custom-tooltip">${t.nickname}</span>` : ''}</span>
                         ${allianceShowNames ? `<span class="team-nick">${t.nickname || ''}</span>` : ''}
                         <div class="team-stats-mini">
                             <span${Number(t.rank) >= 1 && Number(t.rank) <= 8 ? ' class="rank-top8"' : ''}>Rank ${t.rank}</span>
                             <span>${t.wins}-${t.losses}-${t.ties}</span>
-                            <span class="stat-opr">OPR ${t.opr}</span>
+                            <span class="stat-opr${oprCls}">OPR ${t.opr}</span>
                             ${teamEpaHtml}
                         </div>
                     </div>`;
@@ -3763,7 +4047,12 @@ async function loadPlayByPlay() {
         hide('pbp-empty');
         show('pbp-container');
         buildPbpSelector();
-        renderPbpMatch();
+        if (_pendingMatchKey) {
+            _navigateToMatchByKey(_pendingMatchKey);
+            _pendingMatchKey = null;
+        } else {
+            renderPbpMatch();
+        }
         fadeIn('pbp-container');
         startPbpRefresh();
         updateTabDots();
@@ -3776,7 +4065,7 @@ async function loadPlayByPlay() {
 function buildPbpSelector() {
     const sel = $('pbp-match-select');
     sel.innerHTML = pbpData.matches.map((m, i) =>
-        `<option value="${i}">${m.label}</option>`
+        `<option value="${i}">${(m.label || '').replace(/^Qualification\s*/i, 'Qual ')}</option>`
     ).join('');
     sel.value = pbpIndex;
 }
@@ -3802,11 +4091,88 @@ function pbpNext() {
     }
 }
 
+/** Enrich PBP team objects with streak info and OPR-above-avg flag */
+function _enrichPbpTeams(m) {
+    // Compute event-wide averages from teamsData (all event teams)
+    let avgOpr = 0, p75Opr = 0, avgEpa = 0, p75Epa = 0;
+    if (teamsData && teamsData.length) {
+        const ov = teamsData.map(t => parseFloat(t.opr)).filter(v => !isNaN(v)).sort((a, b) => a - b);
+        if (ov.length) {
+            avgOpr = ov.reduce((a, b) => a + b, 0) / ov.length;
+            p75Opr = ov[Math.floor(ov.length * 0.75)] || avgOpr;
+        }
+        const ev = teamsData.map(t => parseFloat(t.epa)).filter(v => !isNaN(v)).sort((a, b) => a - b);
+        if (ev.length) {
+            avgEpa = ev.reduce((a, b) => a + b, 0) / ev.length;
+            p75Epa = ev[Math.floor(ev.length * 0.75)] || avgEpa;
+        }
+    } else {
+        // Fallback: use only match teams
+        const allT = [...(m.red.teams || []), ...(m.blue.teams || [])];
+        const ov = allT.map(t => parseFloat(t.opr)).filter(v => !isNaN(v));
+        avgOpr = ov.length ? ov.reduce((a, b) => a + b, 0) / ov.length : 0;
+        p75Opr = avgOpr;
+        const ev = allT.map(t => parseFloat(t.epa)).filter(v => !isNaN(v));
+        avgEpa = ev.length ? ev.reduce((a, b) => a + b, 0) / ev.length : 0;
+        p75Epa = avgEpa;
+    }
+
+    // Compute streaks from match history (if available from pbpData)
+    const matchesBefore = pbpData.matches.slice(0, pbpIndex);
+    const allTeams = [...(m.red.teams || []), ...(m.blue.teams || [])];
+
+    for (const t of allTeams) {
+        // OPR tiers
+        const opr = parseFloat(t.opr);
+        t._opr_above_avg = !isNaN(opr) && opr > avgOpr;
+        t._opr_top25 = !isNaN(opr) && opr >= p75Opr;
+
+        // EPA tiers
+        const epa = parseFloat(t.epa);
+        t._epa_above_avg = !isNaN(epa) && epa > avgEpa;
+        t._epa_top25 = !isNaN(epa) && epa >= p75Epa;
+
+        // Delta: (OPR - EPA) / avgOpr × 100  — positive = outperforming predictions
+        t._delta = null;
+        if (!isNaN(opr) && !isNaN(epa) && avgOpr > 0) {
+            t._delta = ((opr - epa) / avgOpr) * 100;
+        }
+
+        // Streak: count consecutive Ws or Ls up to the current match
+        let streakType = null;
+        let streakCount = 0;
+        for (let i = matchesBefore.length - 1; i >= 0; i--) {
+            const pm = matchesBefore[i];
+            const onRed = pm.red.teams.some(rt => rt.team_number === t.team_number);
+            const onBlue = pm.blue.teams.some(bt => bt.team_number === t.team_number);
+            if (!onRed && !onBlue) continue;
+            const won = (onRed && pm.winning_alliance === 'red') || (onBlue && pm.winning_alliance === 'blue');
+            const lost = (onRed && pm.winning_alliance === 'blue') || (onBlue && pm.winning_alliance === 'red');
+            if (!won && !lost) break; // tie or unplayed
+            const type = won ? 'W' : 'L';
+            if (streakType === null) streakType = type;
+            if (type !== streakType) break;
+            streakCount++;
+        }
+        t._streak_type = streakType;
+        t._streak_count = streakCount;
+    }
+}
+
 function renderPbpMatch() {
     if (!pbpData || !pbpData.matches.length) return;
     const m = pbpData.matches[pbpIndex];
 
-    $('pbp-match-label').textContent = m.label;
+    // Sync URL with current match key
+    if (m.key) {
+        const shortKey = m.key.replace(currentEvent + '_', '');
+        _syncUrl({ match: shortKey });
+    }
+
+    // Enrich teams with streak and OPR-above-average data
+    _enrichPbpTeams(m);
+
+    $('pbp-match-label').textContent = (m.label || '').replace(/^Qualification\s*/i, 'Qual ');
     $('pbp-match-select').value = pbpIndex;
 
     const redWon = m.winning_alliance === 'red';
@@ -3857,7 +4223,6 @@ function renderPbpMatch() {
         <div class="pbp-alliance red-side ${redWon ? 'pbp-alliance-won' : ''}">
             <div class="pbp-alliance-header">
                 <span class="pbp-alliance-title">${redTitle}</span>
-                <span class="pbp-alliance-opr">Σ OPR ${m.red.total_opr}</span>
                 <div class="pbp-score-group">
                     ${redWon ? '<span class="pbp-winner-label">WINNER</span>' : ''}
                     <span class="pbp-alliance-score">${upcoming ? '–' : m.red.score}</span>
@@ -3873,7 +4238,6 @@ function renderPbpMatch() {
                     <span class="pbp-alliance-score">${upcoming ? '–' : m.blue.score}</span>
                     ${blueWon ? '<span class="pbp-winner-label">WINNER</span>' : ''}
                 </div>
-                <span class="pbp-alliance-opr">Σ OPR ${m.blue.total_opr}</span>
                 <span class="pbp-alliance-title">${blueTitle}</span>
             </div>
             <div class="pbp-team-cards">
@@ -4095,6 +4459,33 @@ function renderPbpTeam(t, sideCls) {
     const foreignCls = highlightForeign && t.country && eventCountry && t.country !== eventCountry ? 'foreign-team' : '';
     const rookieCls = highlightRookie && t.rookie_year && currentEventYear && t.rookie_year >= currentEventYear ? 'rookie-team' : '';
 
+    // Streak indicator
+    let streakHtml = '';
+    if (t.wins != null && t.losses != null) {
+        const totalPlayed = t.wins + t.losses + (t.ties || 0);
+        if (totalPlayed > 0 && t._streak_type && t._streak_count > 1) {
+            const cls = t._streak_type === 'W' ? 'pbp-streak-win' : 'pbp-streak-loss';
+            const ord = _ordinal(t._streak_count);
+            const streakWord = t._streak_type === 'W' ? 'win' : 'loss';
+            streakHtml = `<span class="pbp-streak-badge ${cls}" title="${ord} consecutive ${streakWord}">${t._streak_type}${t._streak_count}</span>`;
+        }
+    }
+
+    // OPR/EPA highlighting (top-25% colored, above-avg white, default muted)
+    const oprCls = t._opr_top25 ? ' opr-top25' : (t._opr_above_avg ? ' opr-above-avg' : '');
+    const epaCls = t._epa_top25 ? ' epa-top25' : (t._epa_above_avg ? ' epa-above-avg' : '');
+
+    // Delta indicator: (OPR - EPA) / avgEventOPR × 100 — positive = outperforming
+    let deltaHtml = '';
+    if (t._delta != null && (t._delta > 15 || t._delta < -15)) {
+        const pct = Math.round(Math.abs(t._delta));
+        if (t._delta > 15) {
+            deltaHtml = `<span class="pbp-delta pbp-delta-up" title="Outperforming Statbotics predictions by ${pct}%">\u2191</span>`;
+        } else {
+            deltaHtml = `<span class="pbp-delta pbp-delta-down" title="Underperforming Statbotics predictions by ${pct}%">\u2193</span>`;
+        }
+    }
+
     return `
     <div class="pbp-team ${foreignCls} ${rookieCls}" data-country="${t.country || ''}" data-rookie-year="${t.rookie_year || ''}">
         <div class="pbp-team-top">
@@ -4115,20 +4506,17 @@ function renderPbpTeam(t, sideCls) {
                 <div class="pbp-stat-value${Number(t.rank) >= 1 && Number(t.rank) <= 8 ? ' rank-top8' : ''}">${t.rank}</div>
             </div>
             <div class="pbp-stat">
-                <div class="pbp-stat-label">Qual Avg</div>
-                <div class="pbp-stat-value">${t.qual_average}</div>
-            </div>
-            <div class="pbp-stat">
-                <div class="pbp-stat-label">W-L-T</div>
+                <div class="pbp-stat-label">W-L-T${streakHtml}</div>
                 <div class="pbp-stat-value">${t.wins}-${t.losses}-${t.ties}</div>
             </div>
+            <div class="pbp-stat-group-gap"></div>
             <div class="pbp-stat">
                 <div class="pbp-stat-label">OPR</div>
-                <div class="pbp-stat-value opr-val">${t.opr}</div>
+                <div class="pbp-stat-value opr-val${oprCls}">${t.opr}</div>
             </div>
             <div class="pbp-stat">
-                <div class="pbp-stat-label">EPA</div>
-                <div class="pbp-stat-value epa-val">${t.epa != null ? t.epa : '\u2013'}</div>
+                <div class="pbp-stat-label">EPA${deltaHtml}</div>
+                <div class="pbp-stat-value epa-val${epaCls}">${t.epa != null ? t.epa : '\u2013'}</div>
             </div>
             <div class="pbp-stat">
                 <div class="pbp-stat-label">Avg RP</div>
@@ -4509,7 +4897,7 @@ function buildBdSelector() {
     const sel = $('bd-match-select');
     sel.innerHTML = bdData.matches.map((m, i) => {
         const hasBd = m.has_breakdown;
-        return `<option value="${i}" ${hasBd ? 'class="has-breakdown" style="color:#22c55e"' : ''}>${hasBd ? '● ' : '○ '}${m.label}</option>`;
+        return `<option value="${i}" ${hasBd ? 'class="has-breakdown" style="color:#22c55e"' : ''}>${hasBd ? '● ' : '○ '}${(m.label || '').replace(/^Qualification\s*/i, 'Qual ')}</option>`;
     }).join('');
     sel.value = bdIndex;
 }
@@ -4540,8 +4928,14 @@ async function loadBdMatch() {
     stopBdPolling();
     closeSpotlight();  // clear spotlight when switching matches
     const m = bdData.matches[bdIndex];
-    $('bd-match-label').textContent = m.label;
+    $('bd-match-label').textContent = (m.label || '').replace(/^Qualification\s*/i, 'Qual ');
     $('bd-match-select').value = bdIndex;
+
+    // Sync URL with current breakdown match key
+    if (m.key) {
+        const shortKey = m.key.replace(currentEvent + '_', '');
+        _syncUrl({ match: shortKey });
+    }
 
     // Use client-side cache if available (instant render, no API call)
     if (bdCache[m.key] && bdCache[m.key].available) {
@@ -4802,7 +5196,7 @@ function renderBdRobot(robot, nickMap, statsMap, color) {
         'DeepCage': { label: 'Deep Cage', cls: 'deep' },
         'ShallowCage': { label: 'Shallow Cage', cls: 'shallow' },
         'Parked': { label: 'Parked', cls: 'parked' },
-        'None': { label: 'None', cls: 'no' },
+        'None': { label: '–', cls: 'no' },
     };
     const eg = endGameMap[robot.endGame] || { label: robot.endGame, cls: '' };
     const num = robot.team_number || '?';
@@ -5044,11 +5438,11 @@ function renderBdAlliance2026(alliance, color, won, nickMap, statsMap, allianceN
 function renderBdRobot2026(robot, nickMap, statsMap, color) {
     const autoVal = robot.autoTower || 'None';
     const autoCls = autoVal === 'Leave' ? 'yes' : 'no';
-    const autoLabel = autoVal === 'None' ? 'None' : autoVal;
+    const autoLabel = autoVal === 'None' ? '–' : autoVal;
 
     const endVal = robot.endGameTower || 'None';
     const endMap = {
-        'None':   { label: 'None',   cls: 'no' },
+        'None':   { label: '–',       cls: 'no' },
         'Park':   { label: 'Park',   cls: 'parked' },
         'Shallow':{ label: 'Shallow', cls: 'shallow' },
         'Deep':   { label: 'Deep',   cls: 'deep' },
@@ -5287,9 +5681,10 @@ function _renderSpotlightContent(panel, perf, robot, gameYear, color, nick, team
             for (const pm of perf.matches) {
                 const isCurrent = pm.matchLevel === frcLevel && pm.matchNumber === currentMatchNum;
                 const rowCls = isCurrent ? 'current-match' : '';
-                const score = pm.allianceScore != null ? `${pm.allianceScore}-${pm.opponentScore}` : '–';
+                const desc = (pm.description || '').replace(/Qualification\s*/gi, 'Qual ');
+                const score = pm.allianceScore != null ? `<span class="mh-score-bold">${pm.allianceScore}</span>-${pm.opponentScore}` : '–';
                 rows += `<tr class="${rowCls}">
-                    <td>${pm.description}</td>
+                    <td>${desc}</td>
                     <td><span class="result-badge result-${pm.result}">${pm.result}</span></td>
                     <td>${score}</td>
                     <td>${_towerBadge(pm.autoTower)}</td>
@@ -5299,8 +5694,9 @@ function _renderSpotlightContent(panel, perf, robot, gameYear, color, nick, team
 
             html += `
             <div class="spotlight-section spotlight-collapsible collapsed">
-                <button type="button" class="spotlight-collapse-btn" onclick="const p=this.parentElement;p.classList.toggle('collapsed');this.textContent=p.classList.contains('collapsed')?'View Match History (${perf.matches.length})':'Hide Match History'">
-                    View Match History (${perf.matches.length})
+                <button type="button" class="spotlight-collapse-btn" onclick="const p=this.parentElement;p.classList.toggle('collapsed');const c=this.querySelector('.spot-chevron');if(c)c.classList.toggle('spot-chevron-up');this.querySelector('.spot-btn-text').textContent=p.classList.contains('collapsed')?'View Match History (${perf.matches.length})':'Hide Match History'">
+                    <svg class="spot-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                    <span class="spot-btn-text">View Match History (${perf.matches.length})</span>
                 </button>
                 <div class="spotlight-collapse-body">
                     <table class="spotlight-matches-table">
@@ -5320,7 +5716,7 @@ function _renderSpotlightContent(panel, perf, robot, gameYear, color, nick, team
             'DeepCage': { label: 'Deep Cage', cls: 'deep' },
             'ShallowCage': { label: 'Shallow Cage', cls: 'shallow' },
             'Parked': { label: 'Parked', cls: 'parked' },
-            'None': { label: 'None', cls: 'no' },
+            'None': { label: '–', cls: 'no' },
         };
         const eg = endGameMap[robot.endGame] || { label: robot.endGame, cls: '' };
 
@@ -5412,7 +5808,7 @@ function _renderSpotlightFallback(panel, robot, gameYear, color, nick, teamNum, 
             'DeepCage': { label: 'Deep Cage', cls: 'deep' },
             'ShallowCage': { label: 'Shallow Cage', cls: 'shallow' },
             'Parked': { label: 'Parked', cls: 'parked' },
-            'None': { label: 'None', cls: 'no' },
+            'None': { label: '–', cls: 'no' },
         };
         const eg = endGameMap[robot.endGame] || { label: robot.endGame, cls: '' };
 
@@ -5472,6 +5868,13 @@ function openCompare() {
 function closeCompare() {
     hide('compare-overlay');
     document.body.style.overflow = '';
+    // Clear compare from URL
+    const params = new URLSearchParams(location.search);
+    if (params.has('compare')) {
+        params.delete('compare');
+        const qs = params.toString();
+        history.replaceState(null, '', `${location.pathname}${qs ? '?' + qs : ''}${location.hash}`);
+    }
 }
 
 // Close on Escape or Q
@@ -5484,6 +5887,10 @@ document.addEventListener('keydown', e => {
     if (!dismiss) return;
 
     if (compareSelection.size > 0) {
+        // Also close the lookup overlay if it's open (from ranking selection)
+        if (!$('lookup-overlay')?.classList.contains('hidden')) {
+            closeLookup();
+        }
         clearCompareSelection();
         return;
     }
@@ -5649,8 +6056,7 @@ async function launchLookupFromSelection() {
     $('lookup-body').innerHTML = '<p class="loading-msg">Loading team data\u2026</p>';
 
     try {
-        const year = currentEventYear || null;
-        const data = await API.teamStats(num, year);
+        const data = await API.teamStats(num, null);
         $('lookup-body').innerHTML = renderTeamStats(data);
     } catch (err) {
         $('lookup-body').innerHTML = `<p class="empty">Error: ${err.message}</p>`;
@@ -5803,16 +6209,18 @@ function renderMatchHistoryPanel(perf, teamNum, nick) {
     if (perf.matches && perf.matches.length > 0) {
         let rows = '';
         for (const pm of perf.matches) {
-            const score = pm.allianceScore != null ? `${pm.allianceScore}-${pm.opponentScore}` : '–';
+            const desc = (pm.description || '').replace(/Qualification\s*/gi, 'Qual ');
+            const score = pm.allianceScore != null ? `<span class="mh-score-bold">${pm.allianceScore}</span>-${pm.opponentScore}` : '–';
             const colorCls = pm.allianceColor === 'Red' ? 'mh-color-red' : 'mh-color-blue';
+            const allyCls = pm.allianceColor === 'Red' ? 'mh-ally-red' : 'mh-ally-blue';
             const allies = (pm.allianceTeams || []).map(n =>
-                `<span class="mh-team-link" title="${nickLookup[n] || ''}" onclick="lookupTeamFromMatchHistory(${n})">${n}</span>`
+                `<span class="mh-team-link ${allyCls}" title="${nickLookup[n] || ''}" onclick="lookupTeamFromMatchHistory(${n})">${n}</span>`
             ).join(', ');
             const opps = (pm.opponentTeams || []).map(n =>
                 `<span class="mh-team-link" title="${nickLookup[n] || ''}" onclick="lookupTeamFromMatchHistory(${n})">${n}</span>`
             ).join(', ');
             rows += `<tr>
-                <td>${pm.description}</td>
+                <td>${desc}</td>
                 <td><span class="mh-alliance-dot ${colorCls}"></span></td>
                 <td><span class="result-badge result-${pm.result}">${pm.result}</span></td>
                 <td>${score}</td>
@@ -5838,8 +6246,7 @@ function lookupTeamFromMatchHistory(teamNum) {
     openLookup();
     $('lookup-title').textContent = `Team Lookup · ${teamNum}`;
     $('lookup-body').innerHTML = '<p class="loading-msg">Loading team data\u2026</p>';
-    const year = currentEventYear || null;
-    API.teamStats(teamNum, year).then(data => {
+    API.teamStats(teamNum, null).then(data => {
         $('lookup-body').innerHTML = renderTeamStats(data);
     }).catch(err => {
         $('lookup-body').innerHTML = `<p class="empty">Error: ${err.message}</p>`;
@@ -6000,6 +6407,7 @@ document.addEventListener('keydown', e => {
 // ── Core comparison renderer ───────────────────────────────
 async function showComparison(teamKeys, opts = {}) {
     openCompare();
+    _syncUrl({ compare: teamKeys.map(k => k.replace('frc','')).join(',') });
     $('compare-body').innerHTML = '<p class="loading-msg">Fetching comparison data\u2026</p>';
     $('compare-title').textContent = opts.matchLabel
         ? `Match Comparison: ${opts.matchLabel}`
@@ -6049,25 +6457,32 @@ function renderComparison(data, opts) {
         { key: 'rank',         label: 'Rank',       fmt: v => v === '-' ? '–' : `#${v}`, lower: true },
         { key: 'opr',          label: 'OPR',        fmt: v => v.toFixed(2) },
         { key: 'epa',          label: 'EPA',        fmt: v => v != null ? v.toFixed(2) : '\u2013' },
-        { key: 'wins',         label: 'Wins',       fmt: v => v },
-        { key: 'losses',       label: 'Losses',     fmt: v => v, lower: true },
         { key: 'qual_average', label: 'Avg Score',  fmt: v => v.toFixed(1) },
         { key: 'high_score',   label: 'High Score', fmt: v => v },
         { key: 'avg_rp',       label: 'Avg RP',     fmt: v => v.toFixed(2) },
     ];
 
-    // Compute max values for bar widths
+    // Compute max absolute values for bar widths
     const maxVals = {};
     stats.forEach(s => {
         const vals = teams.map(t => {
             const v = t[s.key];
-            return typeof v === 'number' ? v : 0;
+            return typeof v === 'number' ? Math.abs(v) : 0;
         });
         maxVals[s.key] = Math.max(...vals, 0.01);
     });
 
+    const isH2H = teams.length === 2;
+
+    // Compute event-average OPR for delta indicator
+    let avgEventOpr = 0;
+    if (teamsData && teamsData.length) {
+        const ov = teamsData.map(x => parseFloat(x.opr)).filter(v => !isNaN(v));
+        avgEventOpr = ov.length ? ov.reduce((a, b) => a + b, 0) / ov.length : 0;
+    }
+
     // Header
-    let html = '<div class="compare-grid" style="--cols:' + teams.length + '">';
+    let html = '<div class="compare-grid" style="--cols:' + (teams.length + (isH2H ? 1 : 0)) + '">';
 
     // Team header row
     html += '<div class="comp-label comp-corner"></div>';
@@ -6076,6 +6491,7 @@ function renderComparison(data, opts) {
         if (redKeys.has(t.team_key)) sideCls = 'comp-red';
         else if (blueKeys.has(t.team_key)) sideCls = 'comp-blue';
         const loc = [t.state_prov, t.country].filter(Boolean).join(', ');
+
         html += `
         <div class="comp-header ${sideCls}">
             <div class="comp-team-num">${t.team_number}</div>
@@ -6084,6 +6500,7 @@ function renderComparison(data, opts) {
             ${loc ? `<div class="comp-team-loc">${loc}</div>` : ''}
         </div>`;
     });
+    if (isH2H) html += '<div class="comp-header comp-delta-header">Δ</div>';
 
     // Stat rows
     stats.forEach(s => {
@@ -6099,9 +6516,10 @@ function renderComparison(data, opts) {
         teams.forEach((t, i) => {
             const raw = t[s.key];
             const v = typeof raw === 'number' ? raw : 0;
-            const display = s.fmt(raw);
-            const isBest = teams.length > 1 && v === best && (v !== 0 || s.key === 'losses');
-            const pct = maxVals[s.key] > 0 ? Math.round((v / maxVals[s.key]) * 100) : 0;
+            const isNull = raw == null || raw === '-' || raw === '–';
+            const display = isNull ? '–' : s.fmt(raw);
+            const isBest = teams.length > 1 && !isNull && v === best && (v !== 0 || s.key === 'losses');
+            const pct = (!isNull && maxVals[s.key] > 0) ? Math.round((Math.abs(v) / maxVals[s.key]) * 100) : 0;
 
             let sideCls = '';
             if (redKeys.has(t.team_key)) sideCls = 'comp-red';
@@ -6115,11 +6533,22 @@ function renderComparison(data, opts) {
                 <span class="comp-val">${display}</span>
             </div>`;
         });
+        // Delta column for H2H mode
+        if (isH2H) {
+            const v0 = typeof teams[0][s.key] === 'number' ? teams[0][s.key] : 0;
+            const v1 = typeof teams[1][s.key] === 'number' ? teams[1][s.key] : 0;
+            const diff = v0 - v1;
+            const sign = diff > 0 ? '+' : '';
+            const cls = diff > 0 ? 'positive' : diff < 0 ? 'negative' : 'neutral';
+            const fmt = s.key === 'rank' || s.key === 'wins' || s.key === 'losses' || s.key === 'high_score' ? `${sign}${diff}` : `${sign}${diff.toFixed(2)}`;
+            html += `<div class="comp-delta ${cls}">${fmt}</div>`;
+        }
     });
 
-    // EPA Breakdown stacked bar row
+    // EPA Breakdown stacked bar row (visual only) + number rows
     const hasEpaBreakdown = teams.some(t => t.epa_auto != null || t.epa_teleop != null || t.epa_endgame != null);
     if (hasEpaBreakdown) {
+        // Visual bar row
         html += '<div class="comp-label">EPA Breakdown</div>';
         teams.forEach(t => {
             const a = t.epa_auto ?? 0;
@@ -6144,12 +6573,45 @@ function renderComparison(data, opts) {
                         <div class="epa-seg epa-seg-teleop" style="width:${tpPct}%" title="Teleop: ${tp.toFixed(1)}"></div>
                         <div class="epa-seg epa-seg-endgame" style="width:${egPct}%" title="Endgame: ${eg.toFixed(1)}"></div>
                     </div>
-                    <div class="epa-breakdown-labels">
-                        <span class="epa-lbl epa-lbl-auto">A ${a.toFixed(1)}</span>
-                        <span class="epa-lbl epa-lbl-teleop">T ${tp.toFixed(1)}</span>
-                        <span class="epa-lbl epa-lbl-endgame">E ${eg.toFixed(1)}</span>
-                    </div>
                 </div>`;
+            }
+        });
+        if (isH2H) html += '<div class="comp-delta"></div>';
+
+        // Separate number rows for Auto, Teleop, Endgame
+        const epaParts = [
+            { key: 'epa_auto',    label: 'Auto EPA',    color: 'epa-lbl-auto' },
+            { key: 'epa_teleop',  label: 'Teleop EPA',  color: 'epa-lbl-teleop' },
+            { key: 'epa_endgame', label: 'Endgame EPA', color: 'epa-lbl-endgame' },
+        ];
+        epaParts.forEach(ep => {
+            const vals = teams.map(t => typeof t[ep.key] === 'number' ? t[ep.key] : 0);
+            const absVals = vals.map(v => Math.abs(v));
+            const best = Math.max(...vals);
+            const maxV = Math.max(...absVals, 0.01);
+            html += `<div class="comp-label"><span class="${ep.color}">${ep.label}</span></div>`;
+            teams.forEach((t, i) => {
+                const raw = t[ep.key];
+                const v = typeof raw === 'number' ? raw : 0;
+                const display = typeof raw === 'number' ? raw.toFixed(1) : '\u2013';
+                const isBest = teams.length > 1 && v === best && v > 0;
+                const pct = maxV > 0 ? Math.round((Math.abs(v) / maxV) * 100) : 0;
+                let sideCls = '';
+                if (redKeys.has(t.team_key)) sideCls = 'comp-red';
+                else if (blueKeys.has(t.team_key)) sideCls = 'comp-blue';
+                html += `
+                <div class="comp-cell ${sideCls} ${isBest ? 'comp-best' : ''}">
+                    <div class="comp-bar-bg"><div class="comp-bar" style="width:${pct}%"></div></div>
+                    <span class="comp-val">${display}</span>
+                </div>`;
+            });
+            if (isH2H) {
+                const v0 = typeof teams[0][ep.key] === 'number' ? teams[0][ep.key] : 0;
+                const v1 = typeof teams[1][ep.key] === 'number' ? teams[1][ep.key] : 0;
+                const diff = v0 - v1;
+                const sign = diff > 0 ? '+' : '';
+                const cls = diff > 0 ? 'positive' : diff < 0 ? 'negative' : 'neutral';
+                html += `<div class="comp-delta ${cls}">${sign}${diff.toFixed(1)}</div>`;
             }
         });
     }
@@ -6158,48 +6620,35 @@ function renderComparison(data, opts) {
     if (isMatchMode) {
         const allianceStats = ['opr', 'epa'];
         html += '<div class="comp-divider" style="grid-column: 1 / -1"></div>';
+
+        const redTeamsList = teams.filter(t => redKeys.has(t.team_key));
+        const blueTeamsList = teams.filter(t => blueKeys.has(t.team_key));
+        const redSpan = redTeamsList.length;
+        const blueSpan = blueTeamsList.length;
+
         allianceStats.forEach(key => {
             const label = key.toUpperCase();
-            const redSum = teams.filter(t => redKeys.has(t.team_key)).reduce((s, t) => s + (t[key] || 0), 0);
-            const blueSum = teams.filter(t => blueKeys.has(t.team_key)).reduce((s, t) => s + (t[key] || 0), 0);
+            const redSum = redTeamsList.reduce((s, t) => s + (t[key] || 0), 0);
+            const blueSum = blueTeamsList.reduce((s, t) => s + (t[key] || 0), 0);
             const maxSum = Math.max(redSum, blueSum, 0.01);
-
-            html += `<div class="comp-label comp-label-total">Σ ${label}</div>`;
-
-            // Red teams cells + blue teams cells for the sum row
-            const redTeamCount = teams.filter(t => redKeys.has(t.team_key)).length;
-            const blueTeamCount = teams.filter(t => blueKeys.has(t.team_key)).length;
-
-            // Red sum spans across red columns
             const redPct = Math.round((redSum / maxSum) * 100);
             const bluePct = Math.round((blueSum / maxSum) * 100);
             const redBest = redSum >= blueSum;
             const blueBest = !redBest;
 
-            // Output one cell per team, but show the sum only in the middle cell of each alliance
-            teams.forEach((t, i) => {
-                const isRed = redKeys.has(t.team_key);
-                const isBlue = blueKeys.has(t.team_key);
-                const redTeams = teams.filter(t2 => redKeys.has(t2.team_key));
-                const blueTeams = teams.filter(t2 => blueKeys.has(t2.team_key));
-                const midRedIdx = teams.indexOf(redTeams[Math.floor(redTeams.length / 2)]);
-                const midBlueIdx = teams.indexOf(blueTeams[Math.floor(blueTeams.length / 2)]);
+            html += `<div class="comp-label comp-label-total">Σ ${label}</div>`;
 
-                if (i === midRedIdx) {
-                    html += `<div class="comp-cell comp-red comp-total ${redBest ? 'comp-best' : ''}">
-                        <div class="comp-bar-bg"><div class="comp-bar" style="width:${redPct}%"></div></div>
-                        <span class="comp-val">${redSum.toFixed(2)}</span>
-                    </div>`;
-                } else if (i === midBlueIdx) {
-                    html += `<div class="comp-cell comp-blue comp-total ${blueBest ? 'comp-best' : ''}">
-                        <div class="comp-bar-bg"><div class="comp-bar" style="width:${bluePct}%"></div></div>
-                        <span class="comp-val">${blueSum.toFixed(2)}</span>
-                    </div>`;
-                } else {
-                    const cls = isRed ? 'comp-red' : isBlue ? 'comp-blue' : '';
-                    html += `<div class="comp-cell ${cls} comp-total-empty"></div>`;
-                }
-            });
+            // Red alliance spanning cell
+            html += `<div class="comp-cell comp-red comp-total comp-total-span ${redBest ? 'comp-best' : ''}" style="grid-column: span ${redSpan}">
+                <div class="comp-bar-bg"><div class="comp-bar" style="width:${redPct}%"></div></div>
+                <span class="comp-val">${redSum.toFixed(2)}</span>
+            </div>`;
+
+            // Blue alliance spanning cell
+            html += `<div class="comp-cell comp-blue comp-total comp-total-span ${blueBest ? 'comp-best' : ''}" style="grid-column: span ${blueSpan}">
+                <div class="comp-bar-bg"><div class="comp-bar" style="width:${bluePct}%"></div></div>
+                <span class="comp-val">${blueSum.toFixed(2)}</span>
+            </div>`;
         });
     }
 
@@ -6425,6 +6874,8 @@ function mobileNavTo(tabName) {
     // Close the more menu if open
     const moreMenu = document.getElementById('mob-more-menu');
     if (moreMenu) moreMenu.classList.remove('open');
+    const scrim = document.getElementById('mob-more-scrim');
+    if (scrim) scrim.classList.remove('open');
 
     // Use the existing tab switching mechanism
     const tabBtn = document.querySelector(`.tab[data-tab="${tabName}"]`);
@@ -6453,7 +6904,9 @@ function syncMobileNav(tabName) {
 
 function toggleMobileMore() {
     const menu = document.getElementById('mob-more-menu');
+    const scrim = document.getElementById('mob-more-scrim');
     menu.classList.toggle('open');
+    if (scrim) scrim.classList.toggle('open', menu.classList.contains('open'));
 }
 
 // Close more menu on outside click
@@ -6462,6 +6915,8 @@ document.addEventListener('click', e => {
     if (!menu || !menu.classList.contains('open')) return;
     if (!e.target.closest('#mob-more-menu') && !e.target.closest('.mob-nav-btn[data-tab="more"]')) {
         menu.classList.remove('open');
+        const scrim = document.getElementById('mob-more-scrim');
+        if (scrim) scrim.classList.remove('open');
     }
 });
 
