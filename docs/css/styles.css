@@ -1133,7 +1133,12 @@ input.input-loading {
     box-shadow: 0 0 0 3px var(--primary-glow);
 }
 [data-theme="light"] .season-filter-row select {
-    background: #fff;
+    background: #eef0f4;
+    border-color: rgba(0,0,0,.13);
+}
+[data-theme="light"] input[type="text"] {
+    background: #eef0f4;
+    border-color: rgba(0,0,0,.13);
 }
 .season-search-wrap {
     position: relative;
@@ -3688,6 +3693,10 @@ input.input-loading {
     color: var(--primary);
     margin-bottom: .5rem;
 }
+.red-side .bd-section-title  { color: #e57373; }
+.blue-side .bd-section-title { color: #7baaf7; }
+[data-theme="light"] .red-side .bd-section-title  { color: #c62828; }
+[data-theme="light"] .blue-side .bd-section-title { color: #1565c0; }
 
 /* Robot rows (per-team fields) */
 .bd-robots {
@@ -3720,8 +3729,8 @@ input.input-loading {
     border-top: 1px solid var(--border);
 }
 
-.bd-robot-label { color: var(--text-muted); }
-.bd-robot-value { font-weight: 600; }
+.bd-robot-label { color: var(--text-muted); font-weight: 400; }
+.bd-robot-value { font-weight: 700; color: var(--text); }
 .bd-robot-value.yes { color: #22c55e; }
 .bd-robot-value.no  { color: var(--text-muted); }
 .bd-robot-value.deep { color: #a855f7; }
@@ -3743,8 +3752,8 @@ input.input-loading {
     border-bottom: 1px dotted rgba(99,102,241,.1);
 }
 
-.bd-stat-label { color: var(--text-muted); }
-.bd-stat-value { font-weight: 600; font-family: var(--mono); }
+.bd-stat-label { color: var(--text-muted); font-weight: 400; }
+.bd-stat-value { font-weight: 700; font-family: var(--mono); font-size: .9em; color: var(--text); }
 
 /* Reef grid visualization */
 .bd-reef {
@@ -3843,7 +3852,7 @@ input.input-loading {
     flex-direction: column;
     align-items: center;
     gap: .15rem;
-    opacity: .35;
+    opacity: .45;
     transition: opacity .15s;
 }
 .bd-fuel-phase.active {
@@ -3852,11 +3861,14 @@ input.input-loading {
 .bd-fuel-bar-track {
     width: 100%;
     height: 50px;
-    background: rgba(255,255,255,.04);
+    background: rgba(255,255,255,.10);
     border-radius: 4px;
     display: flex;
     align-items: flex-end;
     overflow: hidden;
+}
+[data-theme="light"] .bd-fuel-bar-track {
+    background: rgba(0,0,0,.06);
 }
 .bd-fuel-bar-fill {
     width: 100%;
@@ -3909,8 +3921,8 @@ input.input-loading {
 }
 
 .bd-foul-item { display: flex; gap: .3rem; align-items: baseline; }
-.bd-foul-label { color: var(--text-muted); }
-.bd-foul-value { font-weight: 600; font-family: var(--mono); }
+.bd-foul-label { color: var(--text-muted); font-weight: 400; }
+.bd-foul-value { font-weight: 700; font-family: var(--mono); color: var(--text); }
 
 /* Match total bar */
 .bd-total-bar {
@@ -3939,8 +3951,8 @@ input.input-loading {
     font-size: .8rem;
     margin-top: .3rem;
 }
-.bd-trough-label { color: var(--text-muted); }
-.bd-trough-value { font-weight: 600; font-family: var(--mono); }
+.bd-trough-label { color: var(--text-muted); font-weight: 400; }
+.bd-trough-value { font-weight: 700; font-family: var(--mono); color: var(--text); }
 
 /* ═══ TEAM COMPARISON ═════════════════════════════════════ */
 

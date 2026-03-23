@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import re as _re
 from fastapi import APIRouter, HTTPException
 from ..services.tba_client import get_tba_client
@@ -11,6 +12,7 @@ from ..services import world_record_service
 from ..services.error_utils import raise_api_error
 
 router = APIRouter()
+log = logging.getLogger(__name__)
 
 # FRC double-elimination bracket structure (8-alliance, 2023+)
 # set_number → (round, bracket)
@@ -787,6 +789,66 @@ async def get_team_performance(event_key: str, team_number: int):
 
     all_scores = (qual_scores or []) + (playoff_scores or [])
     all_matches = (qual_matches or []) + (playoff_matches or [])
+
+    # ── TBA fallback: if the FRC Events API returned no matches, use TBA ──
+    _used_tba_fallback = False
+    if not all_matches:
+        log.info("FRC API returned no matches for %s/%s — trying TBA fallback", event_key, team_number)
+        tba_client = get_tba_client()
+        tba_matches_raw = await _safe(
+            tba_client.get_team_event_matches(f"frc{team_number}", event_key)
+        )
+        if tba_matches_raw:
+            _used_tba_fallback = True
+            # Convert TBA match format into a list compatible with the FRC format
+            _COMP_LEVEL_TO_TOURNAMENT = {"qm": "Qualification", "ef": "Playoff",
+                                         "qf": "Playoff", "sf": "Playoff", "f": "Playoff"}
+            _COMP_LEVEL_LABELS_FB = {"qm": "Qualification", "ef": "Eighths",
+                                     "qf": "Quarterfinal", "sf": "Semifinal", "f": "Final"}
+            for tm in tba_matches_raw:
+                cl = tm.get("comp_level", "qm")
+                mn = tm.get("match_number", 0)
+                sn = tm.get("set_number", 0)
+                tournament_level = _COMP_LEVEL_TO_TOURNAMENT.get(cl, "Qualification")
+                if cl == "qm":
+                    desc = f"Qualification {mn}"
+                elif cl == "f":
+                    desc = f"Final {mn}"
+                else:
+                    desc = f"{_COMP_LEVEL_LABELS_FB.get(cl, cl)} {sn}"
+                    if mn > 1:
+                        desc += f" (Match {mn})"
+
+                team_key = f"frc{team_number}"
+                red_keys = tm.get("alliances", {}).get("red", {}).get("team_keys", [])
+                blue_keys = tm.get("alliances", {}).get("blue", {}).get("team_keys", [])
+                if team_key in red_keys:
+                    alliance_color = "Red"
+                    station = f"Red{red_keys.index(team_key) + 1}"
+                elif team_key in blue_keys:
+                    alliance_color = "Blue"
+                    station = f"Blue{blue_keys.index(team_key) + 1}"
+                else:
+                    continue
+
+                red_nums = [int(k.replace("frc", "")) for k in red_keys]
+                blue_nums = [int(k.replace("frc", "")) for k in blue_keys]
+                red_score = tm.get("alliances", {}).get("red", {}).get("score")
+                blue_score = tm.get("alliances", {}).get("blue", {}).get("score")
+
+                synthetic = {
+                    "tournamentLevel": tournament_level,
+                    "matchNumber": mn if cl == "qm" else sn * 100 + mn,
+                    "description": desc,
+                    "teams": [],
+                    "scoreRedFinal": red_score,
+                    "scoreBlueFinal": blue_score,
+                }
+                for i, num in enumerate(red_nums, 1):
+                    synthetic["teams"].append({"teamNumber": num, "station": f"Red{i}", "dq": False})
+                for i, num in enumerate(blue_nums, 1):
+                    synthetic["teams"].append({"teamNumber": num, "station": f"Blue{i}", "dq": False})
+                all_matches.append(synthetic)
 
     # Build a lookup: (level, matchNumber) → match result (with team stations)
     match_lookup: dict[tuple[str, int], dict] = {}
