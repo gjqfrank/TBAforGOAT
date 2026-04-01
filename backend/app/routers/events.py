@@ -88,6 +88,17 @@ async def event_summary_awards(event_key: str):
         raise_api_error(e, fallback_detail=f"Could not load awards for event '{event_key}'.")
 
 
+@router.get("/{event_key}/summary/season-awards")
+async def event_season_awards(event_key: str):
+    """Current-season Impact/Winner/Finalist awards earned at prior events for teams at this event."""
+    try:
+        return await summary_service.get_current_season_awards(event_key)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise_api_error(e, fallback_detail=f"Could not load season awards for event '{event_key}'.")
+
+
 @router.get("/{event_key}/summary/advancement")
 async def event_summary_advancement(event_key: str):
     """Deferred: advancement point standings, awards, winners, district rankings."""

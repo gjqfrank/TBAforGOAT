@@ -3118,9 +3118,12 @@ async function loadSummaryAwards() {
 
         const awardsEl = $('summary-past-awards');
         if (data.past_season_awards && data.past_season_awards.length > 0) {
-            renderPastSeasonAwards(data.past_season_awards);
+            // Only render if past-season tab is active (or no season toggle visible)
+            if (currentAwardSeason === 'past') {
+                renderPastSeasonAwards(data.past_season_awards);
+            }
             awardsEl.classList.remove('hidden');
-        } else {
+        } else if (currentAwardSeason === 'past') {
             awardsEl.classList.add('hidden');
         }
 
@@ -3140,6 +3143,79 @@ async function loadSummaryAwards() {
         if (isRateLimit) setTimeout(() => { _loadingAwards = false; loadSummaryAwards(); }, 5000);
     } finally {
         _loadingAwards = false;
+    }
+}
+
+/** Lazy-load current-season Award Winners (Impact/Winner/Finalist from other events this year). */
+let _loadingSeasonAwards = false;
+async function loadSeasonAwards() {
+    if (!currentEvent || !summaryData || _loadingSeasonAwards) return;
+    _loadingSeasonAwards = true;
+    const eventKey = currentEvent;
+    try {
+        const data = await API.eventSeasonAwards(eventKey);
+        if (currentEvent !== eventKey || !summaryData) return;
+        summaryData.season_awards = data.season_awards || [];
+        // Only render if current season tab is still selected
+        if (currentAwardSeason === 'current') {
+            if (summaryData.season_awards.length > 0) {
+                renderPastSeasonAwards(summaryData.season_awards);
+                $('summary-past-awards').classList.remove('hidden');
+            } else if (summaryData.past_season_awards && summaryData.past_season_awards.length > 0) {
+                // No current season awards — auto-switch to past tab
+                currentAwardSeason = 'past';
+                const toggle = $('award-season-toggle');
+                if (toggle) toggle.querySelectorAll('.award-season-btn').forEach(b =>
+                    b.classList.toggle('active', b.dataset.season === 'past'));
+                renderPastSeasonAwards(summaryData.past_season_awards);
+                $('summary-past-awards').classList.remove('hidden');
+            } else if (!summaryData.past_season_awards) {
+                // Past data still loading — show placeholder
+                $('summary-past-awards-list').innerHTML = '<p class="empty" style="margin:.5rem 0;font-size:.82rem">Loading\u2026</p>';
+            } else {
+                $('summary-past-awards').classList.add('hidden');
+            }
+        }
+        autoCacheTab('summary', summaryData);
+    } catch (err) {
+        if (currentEvent !== eventKey) return;
+        if (currentAwardSeason === 'current') {
+            const isRateLimit = err && (err.status === 429 || /429|rate.?limit/i.test(err.message));
+            $('summary-past-awards-list').innerHTML = `<p class="empty" style="margin:.5rem 0;font-size:.82rem">${
+                isRateLimit ? 'Rate limited — retrying shortly\u2026' : 'Could not load — switch tabs to retry.'
+            }</p>`;
+            if (isRateLimit) setTimeout(() => { _loadingSeasonAwards = false; loadSeasonAwards(); }, 5000);
+        }
+    } finally {
+        _loadingSeasonAwards = false;
+    }
+}
+
+let currentAwardSeason = 'current';
+
+function switchAwardSeason(season, btn) {
+    currentAwardSeason = season;
+    currentAwardFilter = 'all';
+    // Update season toggle
+    const bar = btn.parentNode;
+    bar.querySelectorAll('.award-season-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    // Reset filter buttons
+    const body = $('summary-past-awards-body');
+    if (body) body.querySelectorAll('.past-awards-filter-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.awardFilter === 'all');
+    });
+    // Get appropriate data
+    const awards = season === 'current'
+        ? summaryData?.season_awards
+        : (summaryData?.past_season_awards || summaryData?.ftc_past_season_awards);
+    if (awards && awards.length > 0) {
+        renderPastSeasonAwards(awards);
+    } else if (season === 'current' && !summaryData?.season_awards) {
+        $('summary-past-awards-list').innerHTML = '<p class="empty" style="margin:.5rem 0;font-size:.82rem">Loading\u2026</p>';
+        loadSeasonAwards();
+    } else {
+        $('summary-past-awards-list').innerHTML = '<p class="empty" style="margin:.5rem 0;font-size:.82rem">No award winners found.</p>';
     }
 }
 
@@ -3434,16 +3510,22 @@ let currentAwardFilter = 'all';
 
 function filterPastAwards(filter, btn) {
     currentAwardFilter = filter;
-    document.querySelectorAll('.past-awards-filter-btn').forEach(b => b.classList.remove('active'));
+    const body = $('summary-past-awards-body');
+    if (body) body.querySelectorAll('.past-awards-filter-btn').forEach(b => b.classList.remove('active'));
     if (btn) btn.classList.add('active');
-    // Support both FRC (past_season_awards) and FTC (ftc_past_season_awards)
-    const awards = summaryData?.past_season_awards || summaryData?.ftc_past_season_awards;
+    // Use data from the active season
+    let awards;
+    if (isFTCMode()) {
+        awards = summaryData?.ftc_past_season_awards;
+    } else if (currentAwardSeason === 'current') {
+        awards = summaryData?.season_awards;
+    } else {
+        awards = summaryData?.past_season_awards;
+    }
     if (awards) renderPastSeasonAwards(awards);
 }
 
 function renderPastSeasonAwards(awards) {
-    const prevYear = currentEventYear ? currentEventYear - 1 : new Date().getFullYear() - 1;
-    $('summary-past-awards-title').textContent = `${prevYear} Award-Winning Teams`;
 
     const filtered = currentAwardFilter === 'all'
         ? awards
@@ -3598,6 +3680,8 @@ function renderSummary(data) {
     if (data.is_championship) {
         // Cached championship data — re-render directly
         _renderChampsSummaryAwards(data);
+        const seasonToggleHideChamps = $('award-season-toggle');
+        if (seasonToggleHideChamps) seasonToggleHideChamps.classList.add('hidden');
     } else if (isFTCMode()) {
         // FTC: Event Winners & Finalists above demographics, full width
         const demoEl = $('summary-demographics');
@@ -3667,6 +3751,9 @@ function renderSummary(data) {
         } else {
             currentAwardsEl.classList.add('hidden');
         }
+        // Hide FRC season toggle in FTC mode
+        const seasonToggleHideFtc = $('award-season-toggle');
+        if (seasonToggleHideFtc) seasonToggleHideFtc.classList.add('hidden');
 
         // FTC: past season awards (right card) — lazy-load
         // Update filter button: "Impact" → "Inspire" for FTC
@@ -3696,12 +3783,15 @@ function renderSummary(data) {
         pastChampsEl.classList.remove('ftc-full-width-card');
         // Reset titles in case we're switching from a champs to a regular event
         pastChampsEl.querySelector('h3').textContent = 'Returning Champions & Finalists';
-        pastAwardsEl.querySelector('h3').textContent = 'Past Season Award Winners';
+        pastAwardsEl.querySelector('h3').textContent = 'Award-Winning Teams';
         const filterBar = pastAwardsEl.querySelector('.past-awards-filter-bar');
         if (filterBar) filterBar.classList.remove('hidden');
         // Reset "Inspire" back to "Impact" for FRC
         const impactBtn = pastAwardsEl.querySelector('[data-award-filter="impact"]');
         if (impactBtn) impactBtn.textContent = 'Impact';
+        // Hide FTC awards card in FRC mode
+        const ftcAwardsElHide = $('summary-current-awards');
+        if (ftcAwardsElHide) ftcAwardsElHide.classList.add('hidden');
         const champsFilterBar = $('champs-filter-bar');
         if (champsFilterBar) champsFilterBar.classList.add('hidden');
 
@@ -3714,8 +3804,38 @@ function renderSummary(data) {
             pastChampsEl.classList.add('hidden');
         }
 
+        // FRC: Award-Winning Teams — season toggle (current year / previous year)
+        const seasonToggle = $('award-season-toggle');
+        if (seasonToggle) {
+            seasonToggle.classList.remove('hidden');
+            const btns = seasonToggle.querySelectorAll('.award-season-btn');
+            btns[0].textContent = String(currentEventYear);
+            btns[1].textContent = String(currentEventYear - 1);
+        }
+        pastAwardsEl.querySelector('h3').textContent = 'Award-Winning Teams';
+        const awardFilterBar = pastAwardsEl.querySelector('.past-awards-filter-bar');
+        if (awardFilterBar) awardFilterBar.classList.remove('hidden');
+
+        // Default to current season tab
+        currentAwardSeason = 'current';
+        currentAwardFilter = 'all';
+        // Reset toggle button active states
+        if (seasonToggle) {
+            seasonToggle.querySelectorAll('.award-season-btn').forEach(b =>
+                b.classList.toggle('active', b.dataset.season === 'current'));
+        }
+
         pastAwardsEl.classList.remove('hidden');
-        if (data.past_season_awards && data.past_season_awards.length > 0) {
+        if (data.season_awards && data.season_awards.length > 0) {
+            renderPastSeasonAwards(data.season_awards);
+        } else if (!data.season_awards) {
+            $('summary-past-awards-list').innerHTML = '<p class="empty" style="margin:.5rem 0;font-size:.82rem">Loading\u2026</p>';
+            loadSeasonAwards();
+        } else if (data.past_season_awards && data.past_season_awards.length > 0) {
+            // No current season awards — fall back to past season tab
+            currentAwardSeason = 'past';
+            if (seasonToggle) seasonToggle.querySelectorAll('.award-season-btn').forEach(b =>
+                b.classList.toggle('active', b.dataset.season === 'past'));
             renderPastSeasonAwards(data.past_season_awards);
         } else if (!data.past_season_awards) {
             $('summary-past-awards-list').innerHTML = '<p class="empty" style="margin:.5rem 0;font-size:.82rem">Loading\u2026</p>';
@@ -3779,7 +3899,11 @@ let currentConnSearch = '';
 let currentConnSort = 'most';
 
 function toggleSummarySection(type) {
-    const bodyId = type === 'past-champs' ? 'summary-past-champs-body' : 'summary-past-awards-body';
+    const bodyMap = {
+        'past-champs': 'summary-past-champs-body',
+        'past-awards': 'summary-past-awards-body',
+    };
+    const bodyId = bodyMap[type] || 'summary-past-awards-body';
     _toggleCollapse(bodyId, type + '-toggle-icon');
 }
 

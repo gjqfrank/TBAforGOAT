@@ -43,6 +43,7 @@ const API = {
     eventSummary:       (ek) => API.get(`/events/${ek}/summary`),
     eventSummaryRefresh:(ek) => API.get(`/events/${ek}/summary/refresh-stats`),
     eventSummaryAwards: (ek) => API.get(`/events/${ek}/summary/awards`),
+    eventSeasonAwards:  (ek) => API.get(`/events/${ek}/summary/season-awards`),
     eventAdvancement:   (ek) => API.get(`/events/${ek}/summary/advancement`),
     eventConnections:   (ek, allTime, teams) => {
         let url = `/events/${ek}/summary/connections?all_time=${allTime ? 'true' : 'false'}`;

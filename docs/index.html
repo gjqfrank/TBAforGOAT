@@ -314,7 +314,11 @@
                     </div>
                     <div id="summary-past-awards" class="summary-card hidden">
                         <div class="summary-card-header" onclick="toggleSummarySection('past-awards')">
-                            <h3 id="summary-past-awards-title">Past Season Award Winners</h3>
+                            <h3 id="summary-past-awards-title">Award-Winning Teams</h3>
+                            <div id="award-season-toggle" class="award-season-toggle hidden" onclick="event.stopPropagation()">
+                                <button class="award-season-btn active" data-season="current" onclick="switchAwardSeason('current', this)">2026</button>
+                                <button class="award-season-btn" data-season="past" onclick="switchAwardSeason('past', this)">2025</button>
+                            </div>
                             <span id="past-awards-toggle-icon" class="collapse-toggle"><span class="collapse-toggle-label">Hide</span><span class="collapse-toggle-arrow">▼</span></span>
                         </div>
                         <div id="summary-past-awards-body" class="summary-collapse-body">

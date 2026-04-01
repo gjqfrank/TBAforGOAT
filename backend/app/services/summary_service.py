@@ -958,6 +958,120 @@ async def _build_past_season_awards(
     return result
 
 
+async def get_current_season_awards(event_key: str) -> dict:
+    """Current-season Impact / Winner / Finalist awards earned at *other*
+    events this year for teams attending this event.
+
+    Returns {"season_awards": [{ team_number, nickname, awards: [{type, event_key, event_name, pick?, alliance?}] }]}
+    """
+    client = get_tba_client()
+    year = int(event_key[:4])
+
+    teams = await client.get_event_teams_full(event_key)
+    if not teams:
+        return {"season_awards": []}
+
+    # Fetch current-year awards for every team (parallel)
+    award_results = await asyncio.gather(
+        *[_safe(client.get_team_awards_year(f"frc{t['team_number']}", year))
+          for t in teams]
+    )
+
+    name_map = {t["team_number"]: t.get("nickname", "") for t in teams}
+    team_award_map: dict[int, list[dict]] = {}
+    award_event_keys: set[str] = set()
+    alliance_event_keys: set[str] = set()
+
+    for t, awards in zip(teams, award_results):
+        if not awards:
+            continue
+        num = t["team_number"]
+        for a in awards:
+            atype = a.get("award_type")
+            if atype not in (_AWARD_TYPE_IMPACT, _AWARD_TYPE_WINNER, _AWARD_TYPE_FINALIST):
+                continue
+            ek = a.get("event_key", "")
+            # Exclude awards from the current event itself
+            if ek == event_key:
+                continue
+            label = {0: "impact", 1: "winner", 2: "finalist"}.get(atype, "")
+            team_award_map.setdefault(num, []).append({"type": label, "event_key": ek})
+            award_event_keys.add(ek)
+            if atype in (_AWARD_TYPE_WINNER, _AWARD_TYPE_FINALIST):
+                alliance_event_keys.add(ek)
+
+    if not team_award_map:
+        return {"season_awards": []}
+
+    # Batch-fetch event names + alliances for pick labels
+    _PICK_LABELS = ['Captain', '1st Pick', '2nd Pick', '3rd Pick', 'Backup']
+    ek_list = list(award_event_keys)
+    alliance_ek_list = list(alliance_event_keys)
+    infos, *alliance_results = await asyncio.gather(
+        asyncio.gather(*[_safe(client.get_event(ek)) for ek in ek_list]),
+        *[_safe(client.get_event_alliances(ek)) for ek in alliance_ek_list],
+    )
+
+    event_names: dict[str, str] = {}
+    for ek, info in zip(ek_list, infos):
+        if info:
+            event_names[ek] = info.get("short_name") or info.get("name", ek)
+        else:
+            event_names[ek] = ek
+
+    # Build pick maps
+    pick_maps: dict[str, dict[str, dict]] = {}
+    for ek, alliances in zip(alliance_ek_list, alliance_results):
+        if not alliances:
+            continue
+        pm: dict[str, dict] = {}
+        for al in alliances:
+            name_parts = (al.get("name") or "").split()
+            al_num = al.get("number") or (name_parts[-1] if name_parts else "")
+            backup_in = (al.get("backup") or {}).get("in")
+            for idx, tk in enumerate(al.get("picks", [])):
+                if idx < len(_PICK_LABELS):
+                    label = "Backup" if tk == backup_in else _PICK_LABELS[idx]
+                    pm[tk] = {"pick": label, "alliance": al_num}
+        pick_maps[ek] = pm
+
+    # Build result — sort: impact first, then winners, then finalists
+    result = []
+    for num in sorted(team_award_map):
+        entries = []
+        for a in team_award_map[num]:
+            ek = a["event_key"]
+            info = {}
+            if a["type"] in ("winner", "finalist"):
+                info = pick_maps.get(ek, {}).get(f"frc{num}", {})
+            entry: dict = {
+                "type": a["type"],
+                "event_key": ek,
+                "event_name": event_names.get(ek, ek),
+            }
+            if info.get("pick"):
+                entry["pick"] = info["pick"]
+                entry["alliance"] = info.get("alliance", "")
+            entries.append(entry)
+        if entries:
+            result.append({
+                "team_number": num,
+                "nickname": name_map.get(num, ""),
+                "awards": entries,
+            })
+
+    def _sort_key(t):
+        types = set(a["type"] for a in t["awards"])
+        if "impact" in types:
+            return 0
+        if "winner" in types:
+            return 1
+        return 2
+    result.sort(key=_sort_key)
+
+    return {"season_awards": result}
+
+
 async def get_event_summary_stats(event_key: str) -> dict:
     """Lighter refresh — just OPR/rankings-based stats (no history scan)."""
     client = get_tba_client()
