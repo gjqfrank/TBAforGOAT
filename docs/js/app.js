@@ -188,6 +188,26 @@ document.addEventListener('dblclick', e => {
     }
 });
 
+// ── Single-click on PbP team number → Team Storyline ──────
+let _pbpTeamClickTimer = null;
+document.addEventListener('click', e => {
+    const el = e.target.closest('.pbp-team-number');
+    if (!el) return;
+    // Only act inside the PbP panel
+    if (!el.closest('#pbp-container')) return;
+    if (!_storylineAvailable || competitionMode !== 'frc') return;
+    // Parse team number (ignore pick-role badge text)
+    const num = parseInt(el.childNodes[0]?.textContent?.trim(), 10);
+    if (!num || num <= 0) return;
+    // Delay to let dblclick fire first — if dblclick fires, cancel storyline
+    clearTimeout(_pbpTeamClickTimer);
+    _pbpTeamClickTimer = setTimeout(() => generatePbpTeamStoryline(num), 250);
+});
+document.addEventListener('dblclick', e => {
+    // Cancel pending single-click team storyline if user actually double-clicked
+    if (e.target.closest('.pbp-team-number')) clearTimeout(_pbpTeamClickTimer);
+}, true);
+
 let currentEvent = null;   // event_key once loaded
 let currentEventYear = null; // numeric year of the loaded event
 let eventInfoData = null;  // cached event info for saving
@@ -210,6 +230,7 @@ let allianceShowNames = false;    // toggle: show team nicknames
 let pbpShowAwards = false;        // toggle: show blue banners + awards in PBP
 let showPredictions = false;       // settings: show Statbotics win predictions in PBP
 let showGatoolSponsors = false;    // settings: show GATool cloud sponsors in PBP
+let _storylineAvailable = false;   // AI storylines feature flag (checked on load)
 let eventCountry = '';         // home country of the currently loaded event
 let eventRegion  = '';         // resolved region name for the loaded event
 let historyData  = null;       // cached event history data
@@ -1047,6 +1068,14 @@ document.getElementById('event-code')?.addEventListener('keydown', e => { if (e.
 document.getElementById('team-number')?.addEventListener('keydown', e => { if (e.key === 'Enter') loadTeam(); });
 document.getElementById('h2h-team-b')?.addEventListener('keydown', e => { if (e.key === 'Enter') loadH2H(); });
 
+// ── Check AI Storyline availability ────────────────────────
+(async function checkStorylineStatus() {
+    try {
+        const res = await API.storylineStatus();
+        _storylineAvailable = res && res.available === true;
+    } catch { _storylineAvailable = false; }
+})();
+
 // ── Arrow key navigation for Play by Play & Score Breakdown ──
 document.addEventListener('keydown', e => {
     // Skip if user is typing in an input/select/textarea
@@ -1085,6 +1114,15 @@ document.addEventListener('keydown', e => {
         if (pbpActive && pbpData && pbpData.matches.length) {
             e.preventDefault();
             goToBreakdownFromPbp();
+        }
+    }
+
+    // S key — Generate AI Storyline on Play by Play
+    if ((e.key === 's' || e.key === 'S') && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        const pbpActive = $('tab-playbyplay')?.classList.contains('active');
+        if (pbpActive && pbpData && pbpData.matches.length && _storylineAvailable) {
+            e.preventDefault();
+            generateMatchStoryline();
         }
     }
 
@@ -5756,6 +5794,7 @@ function buildPbpSelector() {
 
 function pbpGoTo(idx) {
     pbpIndex = parseInt(idx, 10);
+    dismissStoryline('pbp-storyline');
     renderPbpMatch();
 }
 
@@ -5763,6 +5802,7 @@ function pbpPrev() {
     if (pbpIndex > 0) {
         pbpIndex--;
         $('pbp-match-select').value = pbpIndex;
+        dismissStoryline('pbp-storyline');
         renderPbpMatch();
     }
 }
@@ -5771,6 +5811,7 @@ function pbpNext() {
     if (pbpData && pbpIndex < pbpData.matches.length - 1) {
         pbpIndex++;
         $('pbp-match-select').value = pbpIndex;
+        dismissStoryline('pbp-storyline');
         renderPbpMatch();
     }
 }
@@ -5840,6 +5881,164 @@ function _enrichPbpTeams(m) {
         }
         t._streak_type = streakType;
         t._streak_count = streakCount;
+    }
+}
+
+// ── AI Storyline shared render functions ────────────────────
+function showStorylineLoading(containerId) {
+    const el = $(containerId);
+    if (!el) return;
+    el.innerHTML = `
+        <div class="storyline-loading">
+            <div class="storyline-loading-dot"><span></span><span></span><span></span></div>
+            <span class="storyline-loading-text">Crafting your storyline…</span>
+        </div>`;
+}
+
+function renderStoryline(containerId, text, cached, label) {
+    const el = $(containerId);
+    if (!el) return;
+    const title = label ? `AI Storyline — ${label}` : 'AI Storyline';
+    el.innerHTML = `
+        <div class="storyline-panel">
+            <div class="storyline-header">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+                ${title}${cached ? ' <span class="storyline-cached-badge">(cached)</span>' : ''}
+            </div>
+            <div class="storyline-body">
+                <div class="storyline-text">${text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
+                <div class="storyline-actions">
+                    <button class="storyline-action-btn" onclick="copyStoryline(this)" title="Copy to clipboard">Copy</button>
+                    <button class="storyline-action-btn" onclick="dismissStoryline('${containerId}')">Dismiss</button>
+                </div>
+            </div>
+        </div>`;
+}
+
+function showStorylineError(containerId, msg, retryFn) {
+    const el = $(containerId);
+    if (!el) return;
+    el.innerHTML = `
+        <div class="storyline-error">
+            <span>${msg}</span>
+            ${retryFn ? `<button class="storyline-error-retry" onclick="${retryFn}">Retry</button>` : ''}
+        </div>`;
+}
+
+function copyStoryline(btn) {
+    const text = btn.closest('.storyline-panel')?.querySelector('.storyline-text')?.textContent;
+    if (text) {
+        navigator.clipboard.writeText(text).then(() => {
+            btn.textContent = 'Copied!';
+            btn.classList.add('copied');
+            setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1500);
+        });
+    }
+}
+
+const _storylineCache = {};   // key → {text, cached}
+
+function dismissStoryline(containerId) {
+    const el = $(containerId);
+    if (el) el.innerHTML = '';
+}
+
+// ── PbP Storyline generation ───────────────────────────────
+async function generateMatchStoryline() {
+    if (!pbpData || !pbpData.matches.length) return;
+    const m = pbpData.matches[pbpIndex];
+    if (!m.key || !currentEvent) return;
+
+    const cacheKey = `match:${m.key}`;
+    if (_storylineCache[cacheKey]) {
+        const c = _storylineCache[cacheKey];
+        renderStoryline('pbp-storyline', c.text, true);
+        return;
+    }
+
+    const btn = document.querySelector('.pbp-storyline-btn');
+    if (btn) btn.disabled = true;
+
+    showStorylineLoading('pbp-storyline');
+
+    try {
+        const result = await API.generateStoryline({
+            mode: 'match',
+            event_key: currentEvent,
+            match_key: m.key,
+        });
+        _storylineCache[cacheKey] = { text: result.storyline };
+        renderStoryline('pbp-storyline', result.storyline, result.cached);
+    } catch (err) {
+        showStorylineError('pbp-storyline', err.message || 'Failed to generate storyline.', 'generateMatchStoryline()');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+// ── Spotlight Storyline generation ─────────────────────────
+async function generateTeamStoryline(teamNum) {
+    if (!currentEvent) return;
+
+    const cacheKey = `team:${currentEvent}:${teamNum}`;
+    if (_storylineCache[cacheKey]) {
+        const c = _storylineCache[cacheKey];
+        renderStoryline('spotlight-storyline', c.text, true);
+        return;
+    }
+
+    const btn = document.querySelector('.spotlight-storyline-btn');
+    if (btn) btn.disabled = true;
+
+    showStorylineLoading('spotlight-storyline');
+
+    try {
+        const result = await API.generateStoryline({
+            mode: 'team',
+            event_key: currentEvent,
+            team_number: teamNum,
+        });
+        _storylineCache[cacheKey] = { text: result.storyline };
+        renderStoryline('spotlight-storyline', result.storyline, result.cached);
+    } catch (err) {
+        showStorylineError('spotlight-storyline', err.message || 'Failed to generate storyline.', `generateTeamStoryline(${teamNum})`);
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+// ── PbP inline Team Storyline (single-click on team number) ─
+async function generatePbpTeamStoryline(teamNum) {
+    if (!currentEvent) return;
+
+    // Look up nickname from current match data
+    const m = pbpData?.matches?.[pbpIndex];
+    let nickname = '';
+    if (m) {
+        const allTeams = [...(m.red?.teams || []), ...(m.blue?.teams || [])];
+        const t = allTeams.find(t => t.team_number === teamNum);
+        if (t) nickname = t.nickname || '';
+    }
+    const label = nickname ? `${teamNum} ${nickname}` : `Team ${teamNum}`;
+
+    const cacheKey = `team:${currentEvent}:${teamNum}`;
+    if (_storylineCache[cacheKey]) {
+        renderStoryline('pbp-storyline', _storylineCache[cacheKey].text, true, label);
+        return;
+    }
+
+    showStorylineLoading('pbp-storyline');
+
+    try {
+        const result = await API.generateStoryline({
+            mode: 'team',
+            event_key: currentEvent,
+            team_number: teamNum,
+        });
+        _storylineCache[cacheKey] = { text: result.storyline };
+        renderStoryline('pbp-storyline', result.storyline, result.cached, label);
+    } catch (err) {
+        showStorylineError('pbp-storyline', err.message || 'Failed to generate storyline.', `generatePbpTeamStoryline(${teamNum})`);
     }
 }
 
@@ -5950,6 +6149,12 @@ function renderPbpMatch() {
 
     // Footer: event high score + compare button
     const qs = pbpData.event_high_score;
+    const storylineBtn = _storylineAvailable && competitionMode === 'frc'
+        ? `<button class="pbp-storyline-btn" onclick="generateMatchStoryline()" title="Generate AI broadcast storyline for this match">
+               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+               Storyline <kbd class="kbd-desktop">S</kbd>
+           </button>`
+        : '';
     $('pbp-footer').innerHTML = `
         <div class="pbp-footer-actions">
             <button class="pbp-compare-btn" onclick="compareCurrentMatch()" title="Compare all 6 teams side by side">
@@ -5960,6 +6165,7 @@ function renderPbpMatch() {
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
                 Breakdown <kbd class="kbd-desktop">B</kbd>
             </button>
+            ${storylineBtn}
         </div>
         ${qs && qs.score > 0
             ? `<span class="pbp-footer-text">
@@ -7435,6 +7641,10 @@ function toggleSpotlight(teamNum, color) {
 
     const colorLabel = color === 'red' ? 'Red Alliance' : 'Blue Alliance';
 
+    const spotStorylineBtn = _storylineAvailable && competitionMode === 'frc'
+        ? `<button class="spotlight-storyline-btn" onclick="event.stopPropagation(); generateTeamStoryline(${teamNum})" title="Generate AI storyline for this team">✨ Storyline</button>`
+        : '';
+
     // Show loading state with header immediately
     panel.innerHTML = `
         <div class="spotlight-card spotlight-${color}">
@@ -7445,9 +7655,11 @@ function toggleSpotlight(teamNum, color) {
                     <span class="spotlight-alliance-badge spotlight-badge-${color}">${colorLabel}</span>
                     <span class="spotlight-stat-pill">OPR ${oprStr}</span>
                     <span class="spotlight-stat-pill">EPA ${epaStr}</span>
+                    ${spotStorylineBtn}
                 </div>
                 <button class="spotlight-close" onclick="closeSpotlight()" title="Close Spotlight">&times;</button>
             </div>
+            <div id="spotlight-storyline"></div>
             <div class="spotlight-loading">Loading individual performance…</div>
         </div>`;
 
@@ -7666,6 +7878,9 @@ function _renderSpotlightContent(panel, perf, robot, gameYear, color, nick, team
     }
 
     // Re-render the card with real data
+    const spotStoryBtn = _storylineAvailable && competitionMode === 'frc'
+        ? `<button class="spotlight-storyline-btn" onclick="event.stopPropagation(); generateTeamStoryline(${teamNum})" title="Generate AI storyline for this team">✨ Storyline</button>`
+        : '';
     panel.innerHTML = `
         <div class="spotlight-card spotlight-${color}">
             <div class="spotlight-header">
@@ -7675,9 +7890,11 @@ function _renderSpotlightContent(panel, perf, robot, gameYear, color, nick, team
                     <span class="spotlight-alliance-badge spotlight-badge-${color}">${colorLabel}</span>
                     ${oprStr ? `<span class="spotlight-stat-pill">OPR ${oprStr}</span>` : ''}
                     ${epaStr ? `<span class="spotlight-stat-pill">EPA ${epaStr}</span>` : ''}
+                    ${spotStoryBtn}
                 </div>
                 <button class="spotlight-close" onclick="closeSpotlight()" title="Close Spotlight">&times;</button>
             </div>
+            <div id="spotlight-storyline"></div>
             ${html}
         </div>`;
 }
@@ -7733,6 +7950,9 @@ function _renderSpotlightFallback(panel, robot, gameYear, color, nick, teamNum, 
             </div>`;
     }
 
+    const spotStoryBtnFb = _storylineAvailable && competitionMode === 'frc'
+        ? `<button class="spotlight-storyline-btn" onclick="event.stopPropagation(); generateTeamStoryline(${teamNum})" title="Generate AI storyline for this team">✨ Storyline</button>`
+        : '';
     panel.innerHTML = `
         <div class="spotlight-card spotlight-${color}">
             <div class="spotlight-header">
@@ -7740,9 +7960,11 @@ function _renderSpotlightFallback(panel, robot, gameYear, color, nick, teamNum, 
                     <span class="spotlight-team-num">${teamNum}</span>
                     ${nick ? `<span class="spotlight-team-nick">${nick}</span>` : ''}
                     <span class="spotlight-alliance-badge spotlight-badge-${color}">${colorLabel}</span>
+                    ${spotStoryBtnFb}
                 </div>
                 <button class="spotlight-close" onclick="closeSpotlight()" title="Close Spotlight">&times;</button>
             </div>
+            <div id="spotlight-storyline"></div>
             ${html}
         </div>`;
 }

@@ -198,15 +198,15 @@
         <div class="about-hero">
             <h1>Caster's Tool</h1>
             <div class="about-tagline">Events at a glance!</div>
-            <span class="about-version">v1.2</span>
+            <span class="about-version">v1.3</span>
         </div>
 
         <!-- ── What is it ──────────────────────────────── -->
         <div class="about-section">
             <h2>What is Caster's Tool?</h2>
             <p>
-                A real-time companion app for <strong>FIRST Robotics Competition</strong> broadcasters and commentators.
-                It surfaces team stats, alliance breakdowns, playoff brackets, play-by-play data, and historical context.
+                A real-time companion app for <strong>FIRST Robotics Competition</strong> and <strong>FIRST Tech Challenge</strong> broadcasters and commentators.
+                It surfaces team stats, alliance breakdowns, playoff brackets, play-by-play data, AI-generated storylines, and historical context.
                 Everything a caster needs at a glance!
             </p>
         </div>
@@ -260,6 +260,18 @@
                     <p>Select multiple teams from Rankings and compare EPA breakdowns (auto, teleop, endgame) side by side.</p>
                 </div>
                 <div class="feature-card">
+                    <h3>AI Broadcast Storylines</h3>
+                    <p>LLM-powered storylines for matches and individual teams. Builds rich dossiers (awards, travel, trajectory, season results) and generates broadcast-ready 2-sentence narratives. Press <kbd>S</kbd> or click a team number in Play by Play.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>FTC Mode</h3>
+                    <p>Full FIRST Tech Challenge support: events, teams, matches, alliances, season awards, and team lookup. Toggle between FRC and FTC with the header icon.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Current Season Award Winners</h3>
+                    <p>View all award winners from the current season for any loaded event's teams. Filter by season and toggle between FRC and FTC award data.</p>
+                </div>
+                <div class="feature-card">
                     <h3>Collapsible Sections</h3>
                     <p>All data panels in Summary and Events can be collapsed or expanded with visible Show/Hide toggle pills. Keeps the view clean when focusing on specific information.</p>
                 </div>
@@ -273,6 +285,8 @@
                 <li><strong>Load an event</strong>: Pick from the season list, search by name, or enter an event code manually (e.g. <code>TUIS</code>).</li>
                 <li><strong>Navigate tabs</strong>: Switch between Rankings, Summary, Play by Play, Breakdown, Alliances, Playoffs, and History.</li>
                 <li><strong>Compare teams</strong>: Check boxes next to teams in Rankings, then click the floating compare bar (or press <kbd>C</kbd>).</li>
+                <li><strong>AI Storylines</strong>: On Play by Play, press <kbd>S</kbd> to generate a match storyline. Single-click any team number in PbP for a team-specific storyline. Also available via the Storyline button in Quick Lookup spotlight.</li>
+                <li><strong>Switch to FTC</strong>: Click the header icon (hexagon) to toggle between FRC and FTC modes. FTC events, teams, matches, and alliances load from the FIRST FTC Events API and FTCScout.</li>
                 <li><strong>Quick team lookup</strong>: Press <kbd>Q</kbd> to toggle the floating Quick Lookup panel, or select one team and press <kbd>L</kbd>.</li>
                 <li><strong>Double-click any team number</strong>: Anywhere in the app (Rankings, Play by Play, Summary, etc.), double-click a team number to instantly open the floating Team Lookup panel with that team's data.</li>
                 <li><strong>Regional Advancement Pool</strong>: On the Events tab, the pool shows all regional teams ranked by Championship qualification points. Use the search box and "Qualified only" filter to narrow the list.</li>
@@ -342,6 +356,8 @@
                     <tr><td><kbd>C</kbd></td><td>Compare selected teams</td><td>Rankings tab with teams selected</td></tr>
                     <tr><td><kbd>L</kbd></td><td>Quick team lookup</td><td>Rankings tab with 1 team selected</td></tr>
                     <tr><td><kbd>Q</kbd></td><td>Toggle Quick Lookup panel</td><td>Anywhere (not in a text field)</td></tr>
+                    <tr><td><kbd>S</kbd></td><td>Generate AI match storyline</td><td>Play by Play tab</td></tr>
+                    <tr><td>Single-click</td><td>Generate team storyline</td><td>Team number in Play by Play</td></tr>
                     <tr><td><kbd>Esc</kbd></td><td>Close overlay / deselect</td><td>Any overlay open</td></tr>
                     <tr><td><kbd>←</kbd> <kbd>→</kbd></td><td>Previous / Next match</td><td>Play by Play or Breakdown tab</td></tr>
                     <tr><td>Double-click</td><td>Look up a team number</td><td>Any team number in the app</td></tr>
@@ -353,7 +369,7 @@
         <div class="about-section">
             <h2>Data Sources</h2>
             <p>
-                Caster's Tool pulls from two external APIs to provide comprehensive FRC data:
+                Caster's Tool pulls from multiple external APIs to provide comprehensive FRC and FTC data:
             </p>
             <ul>
                 <li><strong><a href="https://www.thebluealliance.com" target="_blank" rel="noopener">The Blue Alliance (TBA)</a></strong>:
@@ -362,6 +378,12 @@
                     Score breakdowns, per-robot match performance, school names, team avatars, and authoritative regional advancement/qualification data via the v3.2 Regional Pool endpoints.</li>
                 <li><strong><a href="https://www.statbotics.io" target="_blank" rel="noopener">Statbotics</a></strong>:
                     EPA (Expected Points Added) ratings and match win predictions.</li>
+                <li><strong><a href="https://ftc-events.firstinspires.org/services/API" target="_blank" rel="noopener">FIRST FTC Events API</a></strong>:
+                    FTC event lists, teams, matches, alliances, and awards.</li>
+                <li><strong><a href="https://api.ftcscout.org" target="_blank" rel="noopener">FTCScout</a></strong>:
+                    FTC OPR data and team statistics.</li>
+                <li><strong><a href="https://www.anthropic.com" target="_blank" rel="noopener">Anthropic Claude</a></strong>:
+                    AI-powered broadcast storyline generation (optional — requires API key).</li>
             </ul>
             <p>
                 Data is cached in-memory on the server and in the browser's IndexedDB for fast reloading. Event snapshots can be saved to disk for instant access.
@@ -401,7 +423,7 @@
         <div class="footer-top">
             <span>Caster's Tool</span>
             <span class="footer-sep">·</span>
-            <span class="footer-version">v1.2</span>
+            <span class="footer-version">v1.3</span>
         </div>
     </footer>
 </body>

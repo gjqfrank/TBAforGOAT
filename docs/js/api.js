@@ -87,4 +87,20 @@ const API = {
 
     // ── Season ──────────────────────────────────────────
     worldRecord:  ()     => API.get('/events/world-record'),
+
+    // ── AI Storylines ───────────────────────────────────
+    storylineStatus: () => API.get('/storylines/status'),
+    generateStoryline: (payload) => fetch('/api/storylines/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    }).then(async resp => {
+        if (!resp.ok) {
+            const body = await resp.json().catch(() => ({}));
+            const err = new Error(body.detail || `Storyline request failed (HTTP ${resp.status})`);
+            err.status = resp.status;
+            throw err;
+        }
+        return resp.json();
+    }),
 };

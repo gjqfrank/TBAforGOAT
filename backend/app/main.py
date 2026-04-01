@@ -12,7 +12,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
 from .config import TRUSTED_API_KEYS
-from .routers import events, matches, alliances, teams
+from .routers import events, matches, alliances, teams, storylines
 from .routers import ftc_events, ftc_matches, ftc_alliances
 
 log = logging.getLogger(__name__)
@@ -45,7 +45,7 @@ _RATE_LIMIT_TRUSTED_HEAVY = 300     # raised from 60
 # Endpoints that fan out to many upstream calls
 _HEAVY_PATTERNS = {
     "/summary/connections", "/summary/awards", "/history",
-    "/world-record", "/alliances/",
+    "/world-record", "/alliances/", "/storylines/",
 }
 # Paths that are exempt from rate limiting
 _RATE_EXEMPT_PATHS = {"/api/health", "/api/status"}
@@ -161,6 +161,8 @@ app.include_router(events.router, prefix="/api/events", tags=["Events"])
 app.include_router(matches.router, prefix="/api/matches", tags=["Matches"])
 app.include_router(alliances.router, prefix="/api/alliances", tags=["Alliances"])
 app.include_router(teams.router, prefix="/api/teams", tags=["Teams"])
+
+app.include_router(storylines.router, prefix="/api/storylines", tags=["Storylines"])
 
 # ── FTC API routers ─────────────────────────────────────────
 app.include_router(ftc_events.router, prefix="/api/ftc/events", tags=["FTC Events"])

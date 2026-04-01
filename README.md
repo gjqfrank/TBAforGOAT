@@ -1,6 +1,6 @@
 # Caster's Tool
 
-A read-only **FIRST Robotics Competition (FRC)** event dashboard, built for broadcasters, commentators and FIRST Community. Displays team stats, alliance breakdowns, playoff brackets, play-by-play data, and historical context. All a caster needs at a glance!
+A read-only **FIRST Robotics Competition (FRC)** and **FIRST Tech Challenge (FTC)** event dashboard, built for broadcasters, commentators and FIRST Community. Displays team stats, alliance breakdowns, playoff brackets, play-by-play data, AI-generated broadcast storylines, and historical context. All a caster needs at a glance!
 
 Built by **Gürsel & [Team 9020](https://www.thebluealliance.com/team/9020)** for the community.
 
@@ -19,8 +19,10 @@ Built by **Gürsel & [Team 9020](https://www.thebluealliance.com/team/9020)** fo
 | **Alliances** | Alliance selection cards with partnership history |
 | **Playoffs** | Double-elimination bracket visualization (new format) |
 | **Team Lookup** | Individual team stats, awards, season achievements & head-to-head playoff history |
+| **AI Storylines** | LLM-powered broadcast-ready narratives for matches and teams — built from award history, travel patterns, season trajectory, and team dossiers (requires Anthropic API key) |
+| **FTC Mode** | Full FIRST Tech Challenge support: events, teams, matches, alliances, season awards, and lookup. Toggle via header icon |
 
-Additional UI: team comparison table (up to 6 teams), international-team highlighting, dark/light theme toggle, API status indicators.
+Additional UI: team comparison table (up to 6 teams), current season award winners, international-team highlighting, dark/light theme toggle, API status indicators.
 
 ---
 
@@ -38,18 +40,22 @@ Additional UI: team comparison table (up to 6 teams), international-team highlig
 │  Async throughout — httpx + asyncio.gather       │
 │  In-memory TTL caches (300s TBA, 120s FRC)       │
 │  Disk snapshots in data/saved_events/            │
-└──────┬────────────────────────┬─────────────────┘
-       │                        │
- ┌─────▼──────┐          ┌──────▼──────┐
- │  TBA API   │          │  FRC Events │
- │  v3        │          │  API v3     │
- └────────────┘          └─────────────┘
+└──┬──────────┬──────────┬──────────┬─────────────┘
+   │          │          │          │
+┌──▼───┐  ┌──▼──────┐ ┌─▼──────┐ ┌─▼────────┐
+│ TBA  │  │FRC Evts │ │Statbot │ │Anthropic │
+│ API  │  │API v3   │ │ics    │ │Claude    │
+└──────┘  └─────────┘ └────────┘ └──────────┘
 ```
 
 **Two external data sources:**
 
 - **The Blue Alliance (TBA) API v3** — event lists, team info, rankings, OPRs, matches, alliances, awards, media
 - **FIRST FRC Events API v3** — score breakdowns, per-robot match performance, school names, avatars
+- **FIRST FTC Events API** — FTC event lists, teams, matches, alliances, and awards
+- **FTCScout API** — FTC OPR data and team statistics
+- **Statbotics** — EPA ratings and match win predictions
+- **Anthropic Claude** — AI-powered broadcast storyline generation (optional)
 
 **Caching strategy:**
 
@@ -57,6 +63,7 @@ Additional UI: team comparison table (up to 6 teams), international-team highlig
 |-------|-----------|-----|
 | Backend — TBA responses | In-memory dict | 300 s |
 | Backend — FRC API responses | In-memory dict | 120 s |
+| Backend — AI Storylines | In-memory dict | 7200 s |
 | Backend — Event snapshots | JSON files on disk (`data/saved_events/`) | Permanent until cleared |
 | Frontend — Full event data | IndexedDB (`casters-tool-cache`) | Session-persistent |
 
@@ -72,6 +79,7 @@ Additional UI: team comparison table (up to 6 teams), international-team highlig
 - **Python 3.10+**
 - A **[TBA API key](https://www.thebluealliance.com/account)** (required)
 - A **FIRST FRC Events API token** (optional — enables score breakdowns, per-robot stats, school names)
+- An **[Anthropic API key](https://console.anthropic.com/)** (optional — enables AI broadcast storylines)
 
 ---
 
@@ -90,7 +98,7 @@ cd casters-tool
 pip install -r requirements.txt
 ```
 
-Dependencies: `fastapi`, `uvicorn[standard]`, `httpx`, `python-dotenv`
+Dependencies: `fastapi`, `uvicorn[standard]`, `httpx`, `python-dotenv`, `anthropic`
 
 ### 3. Configure environment variables
 
@@ -99,12 +107,14 @@ Create a `.env` file in the project root:
 ```env
 TBA_API_KEY=your_tba_api_key_here
 FRC_EVENTS_API_TOKEN=your_base64_encoded_token_here
+ANTHROPIC_API_KEY=your_anthropic_api_key_here
 ```
 
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `TBA_API_KEY` | **Yes** | Your The Blue Alliance read API key |
 | `FRC_EVENTS_API_TOKEN` | No | Base64-encoded `username:authkey` for the FIRST FRC Events API v3. Without this, score breakdowns and some team details will be unavailable. |
+| `ANTHROPIC_API_KEY` | No | Anthropic API key for AI broadcast storylines. Without this, the storyline feature will be disabled. |
 
 ### 4. Run the server
 
@@ -168,6 +178,13 @@ All endpoints return JSON. The backend serves both the API and the static fronte
 |--------|------|-------------|
 | `GET` | `/{event_key}` | Alliance selections with per-team stats, first-time-partner detection, and partnership history |
 
+### Storylines — `/api/storylines`
+
+| Method | Path | Params | Description |
+|--------|------|--------|-------------|
+| `GET` | `/status` | — | Check if AI storylines are available (Anthropic API key configured) |
+| `POST` | `/generate` | `mode`, `event_key`, `match_key`, `team_number` | Generate a broadcast-ready storyline for a match or team |
+
 ---
 
 ## Project Structure
@@ -186,14 +203,22 @@ casters-tool/
 │       │   ├── events.py           # /api/events/* endpoints
 │       │   ├── teams.py            # /api/teams/* endpoints
 │       │   ├── matches.py          # /api/matches/* endpoints
-│       │   └── alliances.py        # /api/alliances/* endpoints
+│       │   ├── alliances.py        # /api/alliances/* endpoints
+│       │   ├── storylines.py       # /api/storylines/* endpoints (AI)
+│       │   ├── ftc_events.py       # /api/ftc/events/* endpoints
+│       │   ├── ftc_matches.py      # /api/ftc/matches/* endpoints
+│       │   └── ftc_alliances.py    # /api/ftc/alliances/* endpoints
 │       └── services/
 │           ├── tba_client.py       # The Blue Alliance API client (async, cached)
 │           ├── frc_client.py       # FIRST FRC Events API client (async, cached)
+│           ├── ftc_client.py       # FIRST FTC Events API client (async, cached)
+│           ├── ftcscout_client.py  # FTCScout API client (async)
+│           ├── statbotics_client.py# Statbotics API client (async)
 │           ├── event_service.py    # Event listing, info, team stats, comparison
 │           ├── team_service.py     # Team profiles, awards, achievements, H2H
 │           ├── alliance_service.py # Alliance stats, partnership history
 │           ├── summary_service.py  # Event demographics, connections, top scorers
+│           ├── storyline_service.py# AI dossier assembly + LLM storyline generation
 │           ├── region_service.py   # Region facts, event history/lineage
 │           └── cache_service.py    # Disk-based event snapshot persistence
 │
@@ -201,8 +226,9 @@ casters-tool/
 │   ├── index.html                  # Single-page app shell
 │   ├── css/styles.css              # Full stylesheet (dark/light themes)
 │   ├── js/
-│   │   ├── app.js                  # UI controller (~5,800 lines)
-│   │   ├── api.js                  # Backend API wrapper
+│   │   ├── app.js                  # UI controller (~6,000 lines)
+│   │   ├── api.js                  # Backend API wrapper (FRC + storylines)
+│   │   ├── ftc-api.js              # Backend API wrapper (FTC)
 │   │   └── cache.js                # IndexedDB event cache
 │   └── data/
 │       ├── region_stats.json       # Pre-computed region statistics
