@@ -12,10 +12,12 @@
 <body>
     <header>
         <div class="header-brand">
-            <svg class="brand-icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5 12 2"/><line x1="12" y1="22" x2="12" y2="15.5"/><polyline points="22 8.5 12 15.5 2 8.5"/><polyline points="2 15.5 12 8.5 22 15.5"/><line x1="12" y1="2" x2="12" y2="8.5"/></svg>
+            <div class="brand-icon-btn" id="mode-toggle-btn" onclick="toggleCompetitionMode()" title="Click to switch between FRC and FTC modes">
+                <svg id="brand-icon-svg" class="brand-icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5 12 2"/><line x1="12" y1="22" x2="12" y2="15.5"/><polyline points="22 8.5 12 15.5 2 8.5"/><polyline points="2 15.5 12 8.5 22 15.5"/><line x1="12" y1="2" x2="12" y2="8.5"/></svg>
+            </div>
             <div class="brand-text">
                 <h1>Caster's Tool</h1>
-                <span class="brand-sub">Events at a glance!</span>
+                <span id="brand-sub" class="brand-sub">Events at a glance!</span>
             </div>
         </div>
         <div class="header-right">
@@ -767,6 +769,7 @@
     </div>
 
     <script src="js/api.js"></script>
+    <script src="js/ftc-api.js"></script>
     <script src="js/cache.js"></script>
     <script src="js/app.js"></script>
 

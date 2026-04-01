@@ -126,5 +126,6 @@ def get_breaker(name: str, **kwargs: Any) -> CircuitBreaker:
 # Pre-configured breakers for each upstream
 tba_breaker = get_breaker("The Blue Alliance", failure_threshold=5, recovery_timeout=30)
 frc_breaker = get_breaker("FRC Events API", failure_threshold=5, recovery_timeout=30)
+ftc_breaker = get_breaker("FTC Events API", failure_threshold=5, recovery_timeout=30)
 statbotics_breaker = get_breaker("Statbotics", failure_threshold=5, recovery_timeout=60)
 gatool_breaker = get_breaker("GATool", failure_threshold=5, recovery_timeout=60)

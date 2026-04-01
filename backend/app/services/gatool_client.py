@@ -37,6 +37,9 @@ class GAToolClient:
         async def _do_request():
             resp = await self._client().get(endpoint)
             resp.raise_for_status()
+            # 204 No Content — return None so callers can handle gracefully
+            if resp.status_code == 204 or not resp.content:
+                return None
             return resp.json()
 
         data = await gatool_breaker.call(_do_request)
@@ -55,6 +58,32 @@ class GAToolClient:
         """
         try:
             raw = await self.get(f"/v3/{year}/communityUpdates/{event_code}")
+        except httpx.HTTPStatusError:
+            return {}
+
+        if not isinstance(raw, list):
+            return {}
+
+        result: dict[int, dict] = {}
+        for entry in raw:
+            try:
+                num = int(entry.get("teamNumber", 0))
+            except (ValueError, TypeError):
+                continue
+            if num and "updates" in entry:
+                result[num] = entry["updates"]
+        return result
+
+    async def get_ftc_event_community_updates(
+        self, year: int, event_code: str
+    ) -> dict[int, dict]:
+        """Fetch community updates for all teams at an FTC event.
+
+        Uses the /ftc/v2/{year}/communityUpdates/{eventCode} GATool endpoint.
+        Returns a dict keyed by team number with the updates payload.
+        """
+        try:
+            raw = await self.get(f"/ftc/v2/{year}/communityUpdates/{event_code}")
         except httpx.HTTPStatusError:
             return {}
 

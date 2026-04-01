@@ -13,6 +13,7 @@ from starlette.responses import Response
 
 from .config import TRUSTED_API_KEYS
 from .routers import events, matches, alliances, teams
+from .routers import ftc_events, ftc_matches, ftc_alliances
 
 log = logging.getLogger(__name__)
 
@@ -161,6 +162,11 @@ app.include_router(matches.router, prefix="/api/matches", tags=["Matches"])
 app.include_router(alliances.router, prefix="/api/alliances", tags=["Alliances"])
 app.include_router(teams.router, prefix="/api/teams", tags=["Teams"])
 
+# ── FTC API routers ─────────────────────────────────────────
+app.include_router(ftc_events.router, prefix="/api/ftc/events", tags=["FTC Events"])
+app.include_router(ftc_matches.router, prefix="/api/ftc/matches", tags=["FTC Matches"])
+app.include_router(ftc_alliances.router, prefix="/api/ftc/alliances", tags=["FTC Alliances"])
+
 # ── No-cache middleware for JS/CSS (prevents stale browser cache) ───
 class NoCacheStaticMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
@@ -207,8 +213,9 @@ async def api_status():
     import asyncio
     from .services.tba_client import get_tba_client
     from .services.frc_client import get_frc_client
+    from .services.ftc_client import get_ftc_client
     from .services.statbotics_client import get_statbotics_client
-    from .services.circuit_breaker import tba_breaker, frc_breaker, statbotics_breaker, gatool_breaker
+    from .services.circuit_breaker import tba_breaker, frc_breaker, ftc_breaker, statbotics_breaker, gatool_breaker
 
     async def check_tba():
         try:
@@ -235,14 +242,26 @@ async def api_status():
         except Exception:
             return False
 
-    tba_ok, frc_ok, sb_ok = await asyncio.gather(check_tba(), check_frc(), check_statbotics())
+    async def check_ftc():
+        try:
+            client = get_ftc_client()
+            resp = await client._client().get("/v2.0")
+            return resp.status_code == 200
+        except Exception:
+            return False
+
+    tba_ok, frc_ok, sb_ok, ftc_ok = await asyncio.gather(
+        check_tba(), check_frc(), check_statbotics(), check_ftc()
+    )
     return {
         "tba": tba_ok,
         "frc": frc_ok,
+        "ftc": ftc_ok,
         "statbotics": sb_ok,
         "circuit_breakers": {
             "tba": tba_breaker.state.value,
             "frc": frc_breaker.state.value,
+            "ftc": ftc_breaker.state.value,
             "statbotics": statbotics_breaker.state.value,
             "gatool": gatool_breaker.state.value,
         },

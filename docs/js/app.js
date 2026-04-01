@@ -201,6 +201,7 @@ let highlightRookie = false;   // settings: highlight rookie teams
 let showOffseason = false;     // settings: show offseason events
 let rankingsCompact = window.innerWidth <= 768;  // default compact on mobile
 let rankingsShowSchool = false;   // toggle: show school/org column
+let rankingsShowAutoTele = false; // toggle: show Auto/TeleOp columns (FTC)
 let rankingsCardView = false;     // toggle: card view on mobile
 let allianceShowEpa = false;      // toggle: show EPA breakdown in alliance cards
 let allianceShowPlayoff = false;  // toggle: show playoff ribbons/status
@@ -242,6 +243,42 @@ let currentEventStatus = null;     // 'ongoing' | 'completed' | 'upcoming' | nul
 // Track which tabs have been rendered from preloaded data
 let renderedTabs = { playoff: false, alliance: false, playbyplay: false, breakdown: false, history: false };
 
+// ── Reset event data (used when switching FRC/FTC mode) ────
+function resetEventData() {
+    currentEvent = null;
+    currentEventYear = null;
+    currentEventStatus = null;
+    eventInfoData = null;
+    teamsData = null;
+    playoffData = null;
+    allianceData = null;
+    summaryData = null;
+    pbpData = null;
+    pbpIndex = 0;
+    bdData = null;
+    bdIndex = 0;
+    bdCache = {};
+    historyData = null;
+    regionData = null;
+    renderedTabs = { playoff: false, alliance: false, playbyplay: false, breakdown: false, history: false };
+    seasonEventsRaw = [];
+    seasonEventsFiltered = [];
+
+    // Stop any active polling
+    stopRankingsPolling();
+    stopPbpRefresh();
+    stopPlayoffRefresh();
+    if (typeof stopBdPolling === 'function') stopBdPolling();
+    if (typeof stopBdListRefresh === 'function') stopBdListRefresh();
+
+    // Clear UI
+    hide('active-event-banner');
+    const badge = document.getElementById('event-badge');
+    if (badge) { badge.textContent = ''; badge.className = 'event-badge hidden'; }
+    const search = document.getElementById('season-search');
+    if (search) search.value = '';
+}
+
 // ── Settings ───────────────────────────────────────────────
 function toggleSettings() {
     document.getElementById('settings-menu').classList.toggle('hidden');
@@ -268,6 +305,283 @@ function toggleTheme(isLight) {
         document.addEventListener('DOMContentLoaded', () => {
             const cb = document.getElementById('toggle-theme');
             if (cb) cb.checked = true;
+        });
+    }
+})();
+
+// ── Competition Mode Toggle (FRC / FTC) ────────────────────
+let competitionMode = 'frc';  // 'frc' or 'ftc'
+let _lastModeSwitch = 0;     // timestamp of last mode switch (cooldown)
+let _modeSwitchGeneration = 0; // increments on each switch; guards delayed loadEvent
+
+function getActiveAPI() {
+    return competitionMode === 'ftc' ? FTC_API : API;
+}
+
+function isFTCMode() {
+    return competitionMode === 'ftc';
+}
+
+function updateFavicon(mode) {
+    const color = mode === 'ftc' ? '#f97316' : '#6366f1';
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5 12 2"/><line x1="12" y1="22" x2="12" y2="15.5"/><polyline points="22 8.5 12 15.5 2 8.5"/><polyline points="2 15.5 12 8.5 22 15.5"/><line x1="12" y1="2" x2="12" y2="8.5"/></svg>`;
+    const blob = new Blob([svg], { type: 'image/svg+xml' });
+    const url = URL.createObjectURL(blob);
+    let link = document.querySelector('link[rel="icon"]');
+    if (!link) {
+        link = document.createElement('link');
+        link.rel = 'icon';
+        link.type = 'image/svg+xml';
+        document.head.appendChild(link);
+    }
+    const old = link.href;
+    link.href = url;
+    if (old && old.startsWith('blob:')) URL.revokeObjectURL(old);
+}
+
+function toggleCompetitionMode() {
+    // 5-second cooldown between mode switches
+    const now = Date.now();
+    if (now - _lastModeSwitch < 5000) {
+        showToast('Please wait a few seconds before switching again', 'info', 2000);
+        return;
+    }
+    _lastModeSwitch = now;
+
+    const icon = document.getElementById('brand-icon-svg');
+    if (icon) {
+        icon.classList.add('switching');
+        icon.addEventListener('animationend', () => icon.classList.remove('switching'), { once: true });
+    }
+
+    // ── Cache current event for this mode before switching ──
+    const prevMode = competitionMode;
+    if (currentEvent) {
+        localStorage.setItem(`lastEvent_${prevMode}`, currentEvent);
+    }
+
+    competitionMode = competitionMode === 'frc' ? 'ftc' : 'frc';
+    document.documentElement.setAttribute('data-mode', competitionMode);
+    localStorage.setItem('competitionMode', competitionMode);
+
+    // Update UI text
+    const sub = document.getElementById('brand-sub');
+    if (sub) sub.textContent = competitionMode === 'ftc' ? 'Public Beta' : 'Events at a glance!';
+
+    const toggleBtn = document.getElementById('mode-toggle-btn');
+    if (toggleBtn) toggleBtn.title = competitionMode === 'ftc' ? 'Switch to FRC Mode' : 'Switch to FTC Mode';
+
+    // Update page title
+    document.title = competitionMode === 'ftc'
+        ? "Caster's Tool: FTC DECODE"
+        : "Caster's Tool: Events at a glance!";
+
+    // Update favicon color
+    updateFavicon(competitionMode);
+
+    // Hide/show FRC-only settings
+    const frcOnlySettings = ['toggle-highlight-foreign', 'toggle-predictions',
+                             'toggle-world-record', 'toggle-offseason'];
+    frcOnlySettings.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            const row = el.closest('.settings-toggle');
+            if (row) row.style.display = competitionMode === 'ftc' ? 'none' : '';
+        }
+    });
+
+    // Show FTC toast
+    showToast(competitionMode === 'ftc' ? 'Switched to FTC Mode — DECODE 2025-2026' : 'Switched to FRC Mode', 'info', 2500);
+
+    // Hide Regional Pool in FTC mode, show in FRC
+    const rpCard = $('regional-pool-card');
+    if (rpCard) rpCard.classList.toggle('hidden', competitionMode === 'ftc');
+
+    // Re-load regional pool on FRC return (may not have been loaded yet)
+    if (competitionMode === 'frc') {
+        if (typeof loadRegionalPool === 'function') loadRegionalPool();
+    }
+
+    // ── Update event code placeholder for mode ──
+    const ecInput = $('event-code');
+    if (ecInput) ecInput.placeholder = competitionMode === 'ftc' ? 'Event code (e.g. TRTUQ1)' : 'Event code (e.g. txda)';
+
+    // ── Update footer credits for mode ──
+    const statusFrc = $('status-frc');   // TBA
+    const statusTba = $('status-tba');   // FIRST FRC Events
+    const statusStat = $('status-statbotics'); // Statbotics + GATool
+    if (competitionMode === 'ftc') {
+        if (statusFrc) statusFrc.style.display = 'none';
+        // Hide TBA separator
+        if (statusFrc) { const sep = statusFrc.nextElementSibling; if (sep && sep.classList.contains('footer-sep')) sep.style.display = 'none'; }
+        if (statusTba) statusTba.innerHTML = 'Event Data provided by <a href="https://ftc-events.firstinspires.org/services/API" target="_blank" rel="noopener"><em>FIRST</em></a>';
+        if (statusStat) statusStat.innerHTML = 'Additional data provided by <a href="https://gatool.org" target="_blank" rel="noopener">GATool</a> and <a href="https://ftcscout.org" target="_blank" rel="noopener">FTC Scout</a>';
+    } else {
+        if (statusFrc) statusFrc.style.display = '';
+        if (statusFrc) { const sep = statusFrc.nextElementSibling; if (sep && sep.classList.contains('footer-sep')) sep.style.display = ''; }
+        if (statusTba) statusTba.innerHTML = 'Event Data provided by <a href="https://frc-events.firstinspires.org/services/API" target="_blank" rel="noopener"><em>FIRST</em></a>';
+        if (statusStat) statusStat.innerHTML = 'Additional data provided by <a href="https://gatool.org" target="_blank" rel="noopener">GATool</a> and <a href="https://www.statbotics.io" target="_blank" rel="noopener">Statbotics</a>';
+    }
+
+    // ── Hide EPA / Playoff Status toggles on alliances tab in FTC ──
+    const epaToggle = document.getElementById('alliance-toggle-epa');
+    if (epaToggle) {
+        const row = epaToggle.closest('label');
+        if (row) row.style.display = competitionMode === 'ftc' ? 'none' : '';
+    }
+    const playoffToggle = document.getElementById('alliance-toggle-playoff');
+    if (playoffToggle) {
+        const row = playoffToggle.closest('label');
+        if (row) row.style.display = competitionMode === 'ftc' ? 'none' : '';
+    }
+
+    // ── Clear pending season selection ──
+    if (typeof clearSeasonSelection === 'function') clearSeasonSelection();
+
+    // ── Update season events title for mode ──
+    const seasonTitle = document.querySelector('.event-section-card .event-section-title');
+    if (seasonTitle) seasonTitle.textContent = competitionMode === 'ftc' ? '2025-2026 Season Events' : '2026 Season Events';
+    const seasonRefresh = document.getElementById('season-refresh-btn');
+    if (seasonRefresh) seasonRefresh.title = competitionMode === 'ftc' ? 'Refresh event list from FIRST' : 'Refresh event list from TBA';
+
+    // ── Close any open lookups so FRC data doesn't leak into FTC ──
+    if (typeof closeFloatingLookup === 'function') closeFloatingLookup();
+    if (typeof closeLookup === 'function') closeLookup();
+
+    // ── Clear current event + all tab data fully ──
+    if (typeof clearActiveEvent === 'function') clearActiveEvent();
+    resetEventData();
+    // Also hide all tab content/skeletons so stale data doesn't show
+    ['pbp-container','bd-container','summary-container','history-container'].forEach(id => {
+        const el = $(id); if (el) el.classList.add('hidden');
+    });
+    ['pbp-empty','bd-empty','summary-empty','history-empty','rankings-empty',
+     'playoff-empty','alliance-empty'].forEach(id => {
+        const el = $(id); if (el) el.classList.remove('hidden');
+    });
+
+    // ── Nuke ALL inner rendered content so no stale data survives ──
+    ['event-teams', 'playoff-bracket', 'alliance-grid',
+     'pbp-arena', 'pbp-footer', 'pbp-match-select', 'pbp-match-label',
+     'bd-content', 'bd-status', 'bd-match-select', 'bd-spotlight',
+     'summary-title', 'summary-demographics',
+     'summary-advancement-content', 'summary-past-champs-list',
+     'summary-past-awards-list', 'summary-history-list',
+     'summary-hof-list', 'summary-impact-list',
+     'summary-top-list', 'summary-high-list',
+     'history-region-body', 'history-event-body'
+    ].forEach(id => {
+        const el = $(id);
+        if (el) {
+            if (el.tagName === 'SELECT') { el.innerHTML = ''; el.value = ''; }
+            else el.innerHTML = '';
+        }
+    });
+    // Hide summary sub-cards
+    ['summary-advancement', 'summary-prestige-row', 'summary-hof', 'summary-impact',
+     'summary-past-champs', 'summary-past-awards', 'summary-history',
+     'summary-top-scorers', 'summary-high-scores'
+    ].forEach(id => {
+        const el = $(id); if (el) el.classList.add('hidden');
+    });
+
+    // Reset tab data dots
+    if (typeof updateTabDots === 'function') updateTabDots();
+
+    // Refresh world record for the new mode
+    fetchWorldRecord();
+
+    // Pre-load FTC avatar map when switching to FTC mode
+    if (competitionMode === 'ftc') loadFtcAvatarMap();
+    else _ftcAvatarMap = null;  // clear on FRC switch to free memory
+
+    // Load season events for the new mode (prefers cached/static data to avoid rate limits)
+    if (typeof loadSeasonEvents === 'function') loadSeasonEvents();
+
+    // ── Update range toggle labels for FTC ("Since 2019") vs FRC ("All time") ──
+    const _allLabel = competitionMode === 'ftc' ? 'Since 2019' : 'All time';
+    const _allShort = competitionMode === 'ftc' ? 'Since 2019' : 'All';
+    const h2hSides = document.querySelectorAll('.h2h-range-side');
+    if (h2hSides.length === 2) h2hSides[1].textContent = _allLabel;
+    const summConnCard = $('summary-history');
+    if (summConnCard) {
+        const cSides = summConnCard.querySelectorAll('.conn-range-side');
+        if (cSides.length === 2) cSides[1].textContent = _allShort;
+    }
+
+    // ── Restore cached event for the new mode (if any) ──
+    const cachedKey = localStorage.getItem(`lastEvent_${competitionMode}`);
+    // Validate: FTC keys contain 'ftc', FRC keys don't
+    const keyValid = cachedKey && (
+        competitionMode === 'ftc' ? cachedKey.includes('ftc') : !cachedKey.includes('ftc')
+    );
+    if (keyValid) {
+        const gen = ++_modeSwitchGeneration;
+        setTimeout(() => {
+            // Only load if no further mode switch happened in the meantime
+            if (gen !== _modeSwitchGeneration) return;
+            if (typeof loadEvent === 'function') loadEvent(cachedKey);
+        }, 600);
+    } else {
+        ++_modeSwitchGeneration;
+        // No cached event — switch to Events tab
+        if (typeof switchToTab === 'function') switchToTab('event');
+    }
+}
+
+// Restore saved competition mode
+(function initCompetitionMode() {
+    const saved = localStorage.getItem('competitionMode');
+    if (saved === 'ftc') {
+        competitionMode = 'ftc';
+        document.documentElement.setAttribute('data-mode', 'ftc');
+        document.addEventListener('DOMContentLoaded', () => {
+            const sub = document.getElementById('brand-sub');
+            if (sub) sub.textContent = 'Public Beta';
+            const toggleBtn = document.getElementById('mode-toggle-btn');
+            if (toggleBtn) toggleBtn.title = 'Switch to FRC Mode';
+            document.title = "Caster's Tool: FTC DECODE";
+            updateFavicon('ftc');
+            // Hide Regional Pool in FTC mode
+            const rpCard = document.getElementById('regional-pool-card');
+            if (rpCard) rpCard.classList.add('hidden');
+            // Hide FRC-only settings
+            ['toggle-highlight-foreign', 'toggle-predictions',
+             'toggle-world-record', 'toggle-offseason'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    const row = el.closest('.settings-toggle');
+                    if (row) row.style.display = 'none';
+                }
+            });
+            // Update event code placeholder
+            const ecInput = document.getElementById('event-code');
+            if (ecInput) ecInput.placeholder = 'Event code (e.g. TRTUQ1)';
+            // Update credits for FTC
+            const statusFrc = document.getElementById('status-frc');
+            const statusTba = document.getElementById('status-tba');
+            const statusStat = document.getElementById('status-statbotics');
+            if (statusFrc) { statusFrc.style.display = 'none'; const sep = statusFrc.nextElementSibling; if (sep && sep.classList.contains('footer-sep')) sep.style.display = 'none'; }
+            if (statusTba) statusTba.innerHTML = 'Event Data provided by <a href="https://ftc-events.firstinspires.org/services/API" target="_blank" rel="noopener"><em>FIRST</em></a>';
+            if (statusStat) statusStat.innerHTML = 'Additional data provided by <a href="https://gatool.org" target="_blank" rel="noopener">GATool</a> and <a href="https://ftcscout.org" target="_blank" rel="noopener">FTC Scout</a>';
+            // Hide EPA / Playoff Status toggles on alliances tab
+            const epaToggle = document.getElementById('alliance-toggle-epa');
+            if (epaToggle) { const row = epaToggle.closest('label'); if (row) row.style.display = 'none'; }
+            const playoffToggle = document.getElementById('alliance-toggle-playoff');
+            if (playoffToggle) { const row = playoffToggle.closest('label'); if (row) row.style.display = 'none'; }
+            // Update season events title for FTC
+            const seasonTitle = document.querySelector('.event-section-card .event-section-title');
+            if (seasonTitle) seasonTitle.textContent = '2025-2026 Season Events';
+            const seasonRefresh = document.getElementById('season-refresh-btn');
+            if (seasonRefresh) seasonRefresh.title = 'Refresh event list from FIRST';
+            // Update range toggle labels for FTC
+            const h2hSides = document.querySelectorAll('.h2h-range-side');
+            if (h2hSides.length === 2) h2hSides[1].textContent = 'Since 2019';
+            const summConnCard = document.getElementById('summary-history');
+            if (summConnCard) {
+                const cSides = summConnCard.querySelectorAll('.conn-range-side');
+                if (cSides.length === 2) cSides[1].textContent = 'Since 2019';
+            }
         });
     }
 })();
@@ -413,7 +727,9 @@ function toggleSponsorFirstOnly(on) {
 async function _fetchGatoolUpdates(eventKey) {
     if (_gatoolUpdatesCache[eventKey]) return _gatoolUpdatesCache[eventKey];
     try {
-        const data = await API.gatoolUpdates(eventKey);
+        const data = isFTCMode()
+            ? await FTC_API.gatoolUpdates(eventKey)
+            : await API.gatoolUpdates(eventKey);
         _gatoolUpdatesCache[eventKey] = data || {};
         return _gatoolUpdatesCache[eventKey];
     } catch {
@@ -530,7 +846,7 @@ document.querySelectorAll('.tab').forEach(btn => {
                 renderSummary(summaryData);
                 fadeIn('summary-container');
                 // Stale-while-revalidate: for ongoing events, silently refresh in background
-                if (currentEventStatus === 'ongoing') {
+                if (currentEventStatus === 'ongoing' && !isFTCMode()) {
                     const _code = currentEvent;
                     API.eventSummary(_code).then(freshData => {
                         if (currentEvent !== _code) return;
@@ -555,7 +871,7 @@ document.querySelectorAll('.tab').forEach(btn => {
                 if (playoffData?.length) {
                     hide('playoff-empty');
                     hideSkeleton('playoff-loading');
-                    renderBracketTree();
+                    if (isFTCMode()) renderFtcBracket(); else renderBracketTree();
                     fadeIn('playoff-bracket');
                     renderedTabs.playoff = true;
                 } else {
@@ -615,7 +931,9 @@ document.querySelectorAll('.tab').forEach(btn => {
             hide('bd-container');
             const el = $('bd-empty');
             if (el) {
-                el.innerHTML = 'Score breakdown is only available for 2025 events onwards.';
+                el.innerHTML = isFTCMode()
+                    ? 'Score breakdown is only available for the 2025-2026 DECODE\u2122 season and later.'
+                    : 'Score breakdown is only available for 2025 events onwards.';
                 el.classList.remove('hidden');
             }
         } else if (btn.dataset.tab === 'breakdown' && currentEvent && !renderedTabs.breakdown) {
@@ -972,17 +1290,81 @@ function loading(on) {
     }
 }
 
+// ── FTC Avatar Map (from FIRST FTC Scoring Server CSS, proxied via backend) ──
+const _FTC_AVATAR_CSS_URL = '/api/ftc/events/avatar-css/2026';
+const _FTC_AVATAR_BASE = 'https://ftc-scoring.firstinspires.org';
+let _ftcAvatarMap = null;  // Map<teamNumber, fullUrl> — null = not loaded yet
+
+async function loadFtcAvatarMap() {
+    if (_ftcAvatarMap) return _ftcAvatarMap;
+    try {
+        const resp = await fetch(_FTC_AVATAR_CSS_URL);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const css = await resp.text();
+        const map = new Map();
+        // Parse: .team-{num} { background-image: url("/avatars/composed/2026/..."); }
+        const re = /\.team-(\d+)\s*\{\s*background-image:\s*url\("([^"]+)"\)/g;
+        let m;
+        while ((m = re.exec(css)) !== null) {
+            map.set(parseInt(m[1], 10), _FTC_AVATAR_BASE + m[2]);
+        }
+        _ftcAvatarMap = map;
+        console.log(`[FTC Avatars] Loaded ${map.size} avatars from FIRST scoring server`);
+        // If teams are already rendered, re-patch and re-render
+        if (teamsData && teamsData.length && isFTCMode()) {
+            patchFtcAvatars(teamsData);
+            const el = $('event-teams');
+            if (el && el.innerHTML) el.innerHTML = renderTeamTable(teamsData, teamsSortCol, teamsSortAsc);
+        }
+        return map;
+    } catch (err) {
+        console.warn('[FTC Avatars] Failed to load avatar CSS:', err.message);
+        _ftcAvatarMap = new Map();  // empty map — don't retry
+        return _ftcAvatarMap;
+    }
+}
+
+/** Patch avatar URLs into an array of team objects using the FTC avatar map. */
+function patchFtcAvatars(teams) {
+    if (!isFTCMode() || !_ftcAvatarMap || _ftcAvatarMap.size === 0) return;
+    for (const t of teams) {
+        if (!t.avatar && t.team_number) {
+            const url = _ftcAvatarMap.get(t.team_number);
+            if (url) t.avatar = url;
+        }
+    }
+}
+
 // ── World Record in footer ────────────────────────────────
 let _worldRecord = null;
 
 async function fetchWorldRecord() {
     try {
-        const rec = await API.worldRecord();
+        // Smooth transition: fade out, swap, fade in
+        const el = $('footer-world-record');
+        if (el && !el.classList.contains('hidden')) {
+            el.classList.add('wr-transitioning');
+            await new Promise(r => setTimeout(r, 400));
+        }
+
+        let rec;
+        if (isFTCMode()) {
+            rec = await FTC_API.worldRecord(2025);
+        } else {
+            rec = await API.worldRecord();
+        }
         if (rec && rec.score > 0) {
             _worldRecord = rec;
             renderWorldRecord(rec, false);
         }
-    } catch { /* non-critical */ }
+
+        if (el) {
+            el.classList.remove('wr-transitioning');
+        }
+    } catch {
+        const el = $('footer-world-record');
+        if (el) el.classList.remove('wr-transitioning');
+    }
 }
 
 let _showWorldRecord = localStorage.getItem('showWorldRecord') !== 'false'; // on by default
@@ -1046,6 +1428,7 @@ function checkWorldRecordFromPbp(data) {
 }
 
 fetchWorldRecord();
+if (isFTCMode()) loadFtcAvatarMap();
 
 // Load saved events list on startup
 loadSavedEventsList();
@@ -1058,10 +1441,13 @@ loadSavedEventsList();
 // ── Season events loader ──────────────────────────────────
 async function loadSeasonEvents() {
     const status = $('season-status');
-    status.textContent = 'Loading 2026 events…';
+    const seasonYear = isFTCMode() ? 2025 : 2026;
+    const label = isFTCMode() ? 'FTC' : '';
+    const staticFile = isFTCMode() ? 'data/season_2025_ftc.json' : 'data/season_2026.json';
+    status.textContent = `Loading ${seasonYear} ${label} events…`;
     try {
-        // Load from bundled static JSON (instant, no API call)
-        const resp = await fetch('data/season_2026.json');
+        // Both FRC and FTC: try static JSON first, then API fallback
+        const resp = await fetch(staticFile);
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         seasonEventsRaw = await resp.json();
         populateSeasonFilters();
@@ -1070,9 +1456,10 @@ async function loadSeasonEvents() {
         const badge = $('season-count-badge');
         if (badge) badge.textContent = `${seasonEventsRaw.length} events`;
     } catch (err) {
-        // Fallback: fetch live from API if static file missing
+        // Fallback: fetch live from API
         try {
-            seasonEventsRaw = await API.seasonEvents(2026);
+            const api = getActiveAPI();
+            seasonEventsRaw = await api.seasonEvents(seasonYear);
             populateSeasonFilters();
             filterSeasonEvents();
             status.textContent = '';
@@ -1088,13 +1475,16 @@ async function refreshSeasonEventsFromAPI() {
     const status = $('season-status');
     const btn = $('season-refresh-btn');
     btn.classList.add('spinning');
-    status.textContent = 'Refreshing from TBA…';
+    const label = isFTCMode() ? 'FTC Events API' : 'TBA';
+    const seasonYear = isFTCMode() ? 2025 : 2026;
+    status.textContent = `Refreshing from ${label}…`;
     try {
-        seasonEventsRaw = await API.seasonEvents(2026, true);
+        const api = getActiveAPI();
+        seasonEventsRaw = await api.seasonEvents(seasonYear, true);
         populateSeasonFilters();
         filterSeasonEvents();
-        status.textContent = 'Updated from TBA ✓';
-        setTimeout(() => { if (status.textContent === 'Updated from TBA ✓') status.textContent = ''; }, 3000);
+        status.textContent = `Updated from ${label} ✓`;
+        setTimeout(() => { if (status.textContent === `Updated from ${label} ✓`) status.textContent = ''; }, 3000);
         const badge = $('season-count-badge');
         if (badge) badge.textContent = `${seasonEventsFiltered.length} events`;
     } catch (err) {
@@ -1104,6 +1494,9 @@ async function refreshSeasonEventsFromAPI() {
     }
 }
 
+const MONTH_NAMES = ['', 'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'];
+
 function populateSeasonFilters() {
     // Region filter
     const regions = [...new Set(seasonEventsRaw.map(e => e.region))].sort();
@@ -1111,11 +1504,18 @@ function populateSeasonFilters() {
     regionSel.innerHTML = '<option value="">All Regions</option>'
         + regions.map(r => `<option value="${r}">${r}</option>`).join('');
 
-    // Week filter
-    const weeks = [...new Set(seasonEventsRaw.map(e => e.week).filter(w => w !== null && w !== undefined))].sort((a, b) => a - b);
+    // Week / Month filter
     const weekSel = $('season-filter-week');
-    weekSel.innerHTML = '<option value="">All Weeks</option>'
-        + weeks.map(w => `<option value="${w}">Week ${w + 1}</option>`).join('');
+    if (isFTCMode()) {
+        // FTC: use month-based filtering
+        const months = [...new Set(seasonEventsRaw.map(e => e.month).filter(m => m != null))].sort((a, b) => a - b);
+        weekSel.innerHTML = '<option value="">All Months</option>'
+            + months.map(m => `<option value="month_${m}">${MONTH_NAMES[m] || 'Month ' + m}</option>`).join('');
+    } else {
+        const weeks = [...new Set(seasonEventsRaw.map(e => e.week).filter(w => w !== null && w !== undefined))].sort((a, b) => a - b);
+        weekSel.innerHTML = '<option value="">All Weeks</option>'
+            + weeks.map(w => `<option value="${w}">Week ${w + 1}</option>`).join('');
+    }
 }
 
 function filterSeasonEvents() {
@@ -1127,7 +1527,14 @@ function filterSeasonEvents() {
         // Hide offseason events unless the setting is on
         if (!showOffseason && e.event_type === 99) return false;
         if (region && e.region !== region) return false;
-        if (week !== '' && String(e.week) !== week) return false;
+        if (week !== '') {
+            if (week.startsWith('month_')) {
+                // FTC month filter
+                if (String(e.month) !== week.replace('month_', '')) return false;
+            } else {
+                if (String(e.week) !== week) return false;
+            }
+        }
         if (search && !e.name.toLowerCase().includes(search) && !e.key.toLowerCase().includes(search)) return false;
         return true;
     });
@@ -1153,10 +1560,17 @@ function renderSeasonDropdown() {
     }
 
     list.innerHTML = seasonEventsFiltered.map((e, i) => {
-        const weekLabel = e.week !== null && e.week !== undefined ? `Wk ${e.week + 1}` : 'CMP';
+        let weekLabel;
+        if (isFTCMode()) {
+            weekLabel = e.month ? (MONTH_NAMES[e.month] || '').substring(0, 3) : (e.event_type_string || '');
+        } else {
+            weekLabel = e.week !== null && e.week !== undefined ? `Wk ${e.week + 1}` : 'CMP';
+        }
+        const typeLabel = isFTCMode() && e.event_type_string ? `<span class="sdi-type">${e.event_type_string}</span>` : '';
         const loc = [e.city, e.country].filter(Boolean).join(', ');
         return `<div class="season-dropdown-item" data-idx="${i}" onclick="selectSeasonEvent(${i})">
             <span class="sdi-name">${e.name}</span>
+            ${typeLabel}
             <span class="sdi-week">${weekLabel}</span>
             <span class="sdi-loc">${loc}</span>
         </div>`;
@@ -1179,7 +1593,12 @@ function selectSeasonEvent(idx) {
     const bar = $('season-selected-bar');
     if (bar) {
         $('ssb-name').textContent = ev.name;
-        const weekLabel = ev.week !== null && ev.week !== undefined ? `Week ${ev.week + 1}` : 'Championship';
+        let weekLabel;
+        if (isFTCMode()) {
+            weekLabel = ev.month ? MONTH_NAMES[ev.month] : (ev.event_type_string || 'Event');
+        } else {
+            weekLabel = ev.week !== null && ev.week !== undefined ? `Week ${ev.week + 1}` : 'Championship';
+        }
         const loc = [ev.city, ev.country].filter(Boolean).join(', ');
         $('ssb-meta').textContent = `${weekLabel} · ${loc}`;
         bar.classList.remove('hidden');
@@ -1302,6 +1721,7 @@ let _regionalPoolData = null;      // raw array of team objects
 let _regionalPoolFiltered = null;  // filtered view
 
 async function loadRegionalPool() {
+    if (isFTCMode()) return;  // FRC-only feature
     try {
         const resp = await API.regionalPool(2026);
         if (!resp || !resp.teams || !resp.teams.length) return;
@@ -1456,15 +1876,16 @@ function stopRankingsPolling() {
 async function refreshRankings() {
     if (!currentEvent) { stopRankingsPolling(); return; }
     try {
+        const rApi = getActiveAPI();
         const oldMap = snapshotRankings();
-        // Use fast FRC-API rankings (lightweight: rank, W-L-T, RP only)
-        const fastData = await API.fastRankings(currentEvent);
+        // Use fast rankings (lightweight: rank, W-L-T, RP only)
+        const fastData = await rApi.fastRankings(currentEvent);
         if (fastData && fastData.length) {
             applyFastRankings(fastData, oldMap);
             return;
         }
-        // Fallback: full refresh from TBA
-        const teams = await API.refreshRankings(currentEvent);
+        // Fallback: full refresh
+        const teams = await rApi.refreshRankings(currentEvent);
         $('event-teams').innerHTML = buildTeamTable(teams);
         applyRankChangeIndicators(oldMap);
     } catch (err) {
@@ -1645,9 +2066,10 @@ async function loadEvent(eventKey) {
 
     try {
         // ── Phase 1: Fetch essentials, show UI immediately ──
+        const api = getActiveAPI();
         const [info, teams] = await Promise.all([
-            API.eventInfo(code),
-            API.eventTeams(code),
+            api.eventInfo(code),
+            api.eventTeams(code),
         ]);
 
         // Restore the load button and season search
@@ -1658,6 +2080,8 @@ async function loadEvent(eventKey) {
         currentEventYear = parseInt(year, 10);
         eventInfoData = info;
         localStorage.setItem('selectedEvent', JSON.stringify({ year, eventCode }));
+        // Also cache as last event for this mode (for mode-switch restore)
+        localStorage.setItem(`lastEvent_${competitionMode}`, code);
 
         // Update URL with event key for shareable links
         if (new URLSearchParams(location.search).get('event') !== code) {
@@ -1776,7 +2200,8 @@ async function loadEvent(eventKey) {
         _restorePendingUrlState();
 
         // Matches (feeds PBP + Breakdown)
-        API.allMatches(code).then(matchData => {
+        const p2api = getActiveAPI();
+        p2api.allMatches(code).then(matchData => {
             if (currentEvent !== code) return;
             if (matchData) {
                 pbpData = matchData;
@@ -1785,32 +2210,43 @@ async function loadEvent(eventKey) {
             }
         }).catch(err => {
             if (currentEvent === code && err && err.status === 429) setTimeout(() => {
-                API.allMatches(code).then(md => { if (currentEvent === code && md) { pbpData = md; bdData = md; autoCacheTab('matches', md); } }).catch(() => {});
+                p2api.allMatches(code).then(md => { if (currentEvent === code && md) { pbpData = md; bdData = md; autoCacheTab('matches', md); } }).catch(() => {});
             }, 5000);
         }).finally(phase2Check);
 
         // Playoffs
-        API.playoffMatches(code).then(playoffResult => {
+        p2api.playoffMatches(code).then(playoffResult => {
             if (currentEvent !== code) return;
             if (playoffResult && playoffResult.matches) {
                 playoffData = playoffResult.matches;
             }
         }).catch(err => {
             if (currentEvent === code && err && err.status === 429) setTimeout(() => {
-                API.playoffMatches(code).then(pr => { if (currentEvent === code && pr && pr.matches) playoffData = pr.matches; }).catch(() => {});
+                p2api.playoffMatches(code).then(pr => { if (currentEvent === code && pr && pr.matches) playoffData = pr.matches; }).catch(() => {});
             }, 5000);
         }).finally(phase2Check);
 
         // Alliances
-        API.alliances(code).then(allianceResult => {
+        p2api.alliances(code).then(allianceResult => {
             if (currentEvent !== code) return;
             if (allianceResult) {
-                allianceData = allianceResult;
-                autoCacheTab('alliances', allianceResult);
+                // FTC returns a flat array; wrap it to match FRC format
+                if (isFTCMode() && Array.isArray(allianceResult)) {
+                    const wrapped = _wrapFtcAlliances(allianceResult);
+                    allianceData = wrapped;
+                    autoCacheTab('alliances', wrapped);
+                } else {
+                    allianceData = allianceResult;
+                    autoCacheTab('alliances', allianceResult);
+                }
             }
         }).catch(err => {
             if (currentEvent === code && err && err.status === 429) setTimeout(() => {
-                API.alliances(code).then(ar => { if (currentEvent === code && ar) { allianceData = ar; autoCacheTab('alliances', ar); } }).catch(() => {});
+                p2api.alliances(code).then(ar => {
+                    if (currentEvent !== code || !ar) return;
+                    if (isFTCMode() && Array.isArray(ar)) { allianceData = _wrapFtcAlliances(ar); } else { allianceData = ar; }
+                    autoCacheTab('alliances', allianceData);
+                }).catch(() => {});
             }, 5000);
         }).finally(phase2Check);
 
@@ -1928,6 +2364,8 @@ async function loadSavedEvent(eventKey) {
         currentEventYear = parseInt(year, 10);
         eventInfoData = data.info;
         localStorage.setItem('selectedEvent', JSON.stringify({ year, eventCode }));
+        // Cache as last event for this mode (for mode-switch restore)
+        localStorage.setItem(`lastEvent_${competitionMode}`, eventKey);
 
         // Update URL with event key for shareable links
         _syncUrl({ event: eventKey });
@@ -1954,7 +2392,7 @@ async function loadSavedEvent(eventKey) {
         // If saved snapshot is missing region, fetch it live
         if (!eventRegion && currentEvent) {
             try {
-                const liveInfo = await API.eventInfo(currentEvent);
+                const liveInfo = await getActiveAPI().eventInfo(currentEvent);
                 if (liveInfo && liveInfo.region) {
                     eventRegion = liveInfo.region;
                     info.region = liveInfo.region;
@@ -2062,11 +2500,12 @@ async function loadSavedEvent(eventKey) {
 /** Background refresh for ongoing events — update data silently */
 async function backgroundRefreshEvent(eventKey) {
     try {
+        const bgApi = getActiveAPI();
         const [freshTeams, freshMatches, freshPlayoffs, freshAlliances] = await Promise.all([
-            API.eventTeams(eventKey).catch(() => null),
-            API.allMatches(eventKey).catch(() => null),
-            API.playoffMatches(eventKey).catch(() => null),
-            API.alliances(eventKey).catch(() => null),
+            bgApi.eventTeams(eventKey).catch(() => null),
+            bgApi.allMatches(eventKey).catch(() => null),
+            bgApi.playoffMatches(eventKey).catch(() => null),
+            bgApi.alliances(eventKey).catch(() => null),
         ]);
 
         // Guard: user may have switched events during fetch
@@ -2099,8 +2538,12 @@ async function backgroundRefreshEvent(eventKey) {
 
         // Update alliance data
         if (freshAlliances) {
-            allianceData = freshAlliances;
-            if (renderedTabs.alliance) renderAlliances(freshAlliances);
+            if (isFTCMode() && Array.isArray(freshAlliances)) {
+                allianceData = _wrapFtcAlliances(freshAlliances);
+            } else {
+                allianceData = freshAlliances;
+            }
+            if (renderedTabs.alliance) renderAlliances(allianceData);
         }
 
         // Brief "updated" flash on cache badge
@@ -2230,6 +2673,7 @@ function applyRankChangeIndicators(oldMap) {
 
 function buildTeamTable(teams) {
     teamsData = teams;
+    patchFtcAvatars(teamsData);
     // Apply the current sort so upcoming events (sorted by team_number) render correctly
     sortTeamsData();
     return renderTeamTable(teamsData, teamsSortCol, teamsSortAsc);
@@ -2298,6 +2742,15 @@ function toggleRankingsSchool(on) {
     }
 }
 
+function toggleRankingsAutoTele(on) {
+    rankingsShowAutoTele = on;
+    if (teamsData) {
+        $('event-teams').innerHTML = rankingsCardView
+            ? renderTeamCards(teamsData)
+            : renderTeamTable(teamsData, teamsSortCol, teamsSortAsc);
+    }
+}
+
 function renderTeamTable(teams, sortCol, asc) {
     const arrow = asc ? ' ▲' : ' ▼';
     const th = (key, label) =>
@@ -2305,13 +2758,16 @@ function renderTeamTable(teams, sortCol, asc) {
     const compact = rankingsCompact;
 
     const school = rankingsShowSchool;
+    const ftcMode = isFTCMode();
     const viewToggle = `<button class="rankings-view-toggle" onclick="toggleRankingsView()">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
         ${rankingsCardView ? 'Table View' : 'Card View'}
     </button>`;
+    const autoTele = ftcMode && rankingsShowAutoTele;
     const toolbar = `<div class="rankings-toolbar">
         <label class="toggle-label"><input type="checkbox" ${compact ? 'checked' : ''} onchange="toggleRankingsCompact(this.checked)"> Compact</label>
         <label class="toggle-label school-toggle"><input type="checkbox" ${school ? 'checked' : ''} onchange="toggleRankingsSchool(this.checked)"> School / Org</label>
+        ${ftcMode ? `<label class="toggle-label"><input type="checkbox" ${autoTele ? 'checked' : ''} onchange="toggleRankingsAutoTele(this.checked)"> Auto / TeleOp</label>` : ''}
         ${viewToggle}
     </div>`;
 
@@ -2328,8 +2784,10 @@ function renderTeamTable(teams, sortCol, asc) {
                 ${school ? th('school_name', 'School / Org') : ''}
                 ${th('record', 'Record')}
                 ${th('opr', 'OPR')}
-                ${compact ? '' : th('epa', 'EPA')}
-                <th class="sortable-th col-ranking_points${teamsSortCol === 'ranking_points' ? ' sorted' : ''}" onclick="sortTeams('ranking_points')"><span class="rp-header-note" title="Unofficial, calculated by TBA">RP*</span>${teamsSortCol === 'ranking_points' ? arrow : ''}</th>
+                ${autoTele ? th('opr_auto', 'Auto') : ''}
+                ${autoTele ? th('opr_dc', 'TeleOp') : ''}
+                ${compact || ftcMode ? '' : th('epa', 'EPA')}
+                ${ftcMode ? '' : `<th class="sortable-th col-ranking_points${teamsSortCol === 'ranking_points' ? ' sorted' : ''}" onclick="sortTeams('ranking_points')"><span class="rp-header-note" title="Unofficial, calculated by TBA">RP*</span>${teamsSortCol === 'ranking_points' ? arrow : ''}</th>`}
             </tr>
         </thead>
         <tbody>
@@ -2356,7 +2814,7 @@ function renderTeamTable(teams, sortCol, asc) {
                 return `
             <tr class="${isIntl ? 'foreign-team-row' : ''}${isRookie ? ' rookie-team-row' : ''}" data-team-key="${t.team_key}" data-country="${t.country || ''}" data-rookie-year="${t.rookie_year || ''}">
                 <td class="compare-td"><input type="checkbox" class="compare-cb" data-team="${t.team_key}" ${checked} onclick="toggleCompareTeam('${t.team_key}')"></td>
-                <td class="rank${Number(t.rank) >= 1 && Number(t.rank) <= 8 ? ' rank-top8' : ''}">${t.rank}</td>
+                <td class="rank${Number(t.rank) >= 1 && Number(t.rank) <= 8 ? ' rank-top8' : ''}">${t.rank != null ? t.rank : '\u2013'}</td>
                 <td class="team-avatar-cell">${avatarImg}</td>
                 <td class="team-num">${t.team_number}</td>
                 <td class="team-name">${name}</td>
@@ -2364,8 +2822,10 @@ function renderTeamTable(teams, sortCol, asc) {
                 ${school ? `<td class="location">${t.school_name || ''}</td>` : ''}
                 <td class="stat">${t.wins}-${t.losses}-${t.ties}</td>
                 <td class="stat stat-opr${oprAboveCls}">${t.opr}</td>
-                ${compact ? '' : `<td class="stat stat-epa${epaAboveCls}">${t.epa != null ? t.epa : '\u2013'}</td>`}
-                <td class="stat">${t.ranking_points != null ? t.ranking_points : '\u2013'}</td>
+                ${autoTele ? `<td class="stat">${t.opr_auto != null ? Number(t.opr_auto).toFixed(1) : '\u2013'}</td>` : ''}
+                ${autoTele ? `<td class="stat">${t.opr_dc != null ? Number(t.opr_dc).toFixed(1) : '\u2013'}</td>` : ''}
+                ${compact || ftcMode ? '' : `<td class="stat stat-epa${epaAboveCls}">${t.epa != null ? t.epa : '\u2013'}</td>`}
+                ${ftcMode ? '' : `<td class="stat">${t.ranking_points != null ? t.ranking_points : '\u2013'}</td>`}
             </tr>`;
             }).join('');
             })()}
@@ -2412,6 +2872,159 @@ async function loadSummary() {
     if (!currentEvent) return;
     hide('summary-empty');
     hideInlineError('summary-error');
+
+    // FTC mode: build summary from event teams data (no TBA)
+    if (isFTCMode()) {
+        // If we have teamsData, build a demographic summary from it
+        if (!teamsData || !teamsData.length) {
+            showInlineError('summary-error', 'Load an event first to see its summary. Team data is required.');
+            return;
+        }
+        showSkeleton('summary-loading', 'summary-loading-status', 'Analysing FTC event data\u2026');
+        try {
+            const teams = teamsData;
+            const countries = [...new Set(teams.map(t => t.country).filter(Boolean))];
+            const eventCtry = (eventInfoData && eventInfoData.country) || (countries.length === 1 ? countries[0] : '');
+            const foreignCount = eventCtry ? teams.filter(t => t.country && t.country !== eventCtry).length : 0;
+            const rookies = teams.filter(t => t.rookie_year && currentEventYear && t.rookie_year >= currentEventYear);
+
+            const demographics = {
+                total_teams: teams.length,
+                rookie_count: rookies.length,
+                rookie_pct: Math.round((rookies.length / teams.length) * 100),
+                veteran_count: teams.length - rookies.length,
+                veteran_pct: Math.round(((teams.length - rookies.length) / teams.length) * 100),
+                avg_team_age: teams.length > 0
+                    ? Math.round(teams.reduce((s, t) => s + ((currentEventYear || 2026) - (t.rookie_year || (currentEventYear || 2026))), 0) / teams.length * 10) / 10
+                    : 0,
+                foreign_count: foreignCount,
+                foreign_pct: Math.round((foreignCount / teams.length) * 100),
+                event_country: eventCtry,
+                country_count: countries.length,
+                countries: countries,
+            };
+            // ── Build top scorers from OPR ──
+            const sorted = [...teams].filter(t => t.opr > 0).sort((a, b) => b.opr - a.opr);
+            const top_scorers = sorted.slice(0, 3).map(t => ({
+                team_number: t.team_number,
+                nickname: t.nickname || `Team ${t.team_number}`,
+                opr: t.opr,
+                rank: t.rank || '-',
+            }));
+
+            // ── Build high scores placeholder (empty for now) ──
+            const high_scores = [];
+
+            // ── Fetch awards for Inspire winners ──
+            let inspire_finalists = [];
+            let champMap = new Map();
+            try {
+                setLoadingStatus('summary-loading-status', 'Fetching event awards\u2026');
+                const awards = await FTC_API.eventAwards(currentEvent);
+                if (Array.isArray(awards)) {
+                    // Inspire Award (awardId varies, match by name)
+                    const inspireAwards = awards.filter(a =>
+                        a.name && /inspire/i.test(a.name) && a.team_number
+                    );
+                    // Winner / Finalist awards
+                    const winnerAwards = awards.filter(a =>
+                        a.name && /^(winning|winner)/i.test(a.name) && a.team_number
+                    );
+                    const finalistAwards = awards.filter(a =>
+                        a.name && /^(finalist)/i.test(a.name) && a.team_number
+                    );
+
+                    // Determine if this event is FIRST Championship or Premier
+                    // (type 6 = "FIRST Championship", type 17 = "Premier")
+                    // Excludes regional/country championships (type 4 = "Championship")
+                    const evType = (eventInfoData && eventInfoData.event_type_string) || '';
+                    const isChampOrPremier = /^FIRST Championship$/i.test(evType) || /premier/i.test(evType);
+
+                    // If Championship/Premier, 1st-place Inspire winners go in the ⭐ prestige section
+                    if (isChampOrPremier) {
+                        const inspireMap = new Map();
+                        const inspire1st = inspireAwards.filter(a => !/2nd|3rd|4th|5th/i.test(a.name));
+                        inspire1st.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+                        inspire1st.forEach(a => {
+                            if (!inspireMap.has(a.team_number)) {
+                                const tm = teams.find(t => t.team_number === a.team_number);
+                                const typeTag = /championship/i.test(evType) ? ' (Championship)' : ' (Premier)';
+                                inspireMap.set(a.team_number, {
+                                    team_number: a.team_number,
+                                    nickname: tm ? tm.nickname : `Team ${a.team_number}`,
+                                    impact_years: [a.name + typeTag],
+                                });
+                            }
+                        });
+                        inspire_finalists = [...inspireMap.values()];
+                    }
+
+                    // Build Event Winners & Finalists from winner/finalist awards
+                    champMap = new Map();
+                    [...winnerAwards, ...finalistAwards].forEach(a => {
+                        if (!champMap.has(a.team_number)) {
+                            const tm = teams.find(t => t.team_number === a.team_number);
+                            champMap.set(a.team_number, {
+                                team_number: a.team_number,
+                                nickname: tm ? tm.nickname : `Team ${a.team_number}`,
+                                years_won: [],
+                                years_finalist: [],
+                                years_inspire: [],
+                            });
+                        }
+                        const entry = champMap.get(a.team_number);
+                        if (/^(winning|winner)/i.test(a.name)) entry.years_won.push(a.name);
+                        else entry.years_finalist.push(a.name);
+                    });
+
+                    // Add only 1st-place Inspire winners to Event Winners & Finalists box
+                    inspireAwards.filter(a => !/2nd|3rd|4th|5th/i.test(a.name)).forEach(a => {
+                        if (!champMap.has(a.team_number)) {
+                            const tm = teams.find(t => t.team_number === a.team_number);
+                            champMap.set(a.team_number, {
+                                team_number: a.team_number,
+                                nickname: tm ? tm.nickname : `Team ${a.team_number}`,
+                                years_won: [],
+                                years_finalist: [],
+                                years_inspire: [],
+                            });
+                        }
+                        const entry = champMap.get(a.team_number);
+                        if (!entry.years_inspire) entry.years_inspire = [];
+                        entry.years_inspire.push(a.name);
+                    });
+                }
+            } catch (e) {
+                console.warn('Could not fetch FTC awards for summary:', e);
+            }
+
+            // Show Inspire at all FTC events (it's the top award in FTC)
+            const ftcChampions = [...champMap.values()];
+
+            // Collect season-wide big 3 award winners (from prior events this season)
+            let ftcSeasonAwards = [];
+            try {
+                const resp = await FTC_API.eventSeasonAwards(currentEvent);
+                if (resp && Array.isArray(resp.season_awards)) {
+                    ftcSeasonAwards = resp.season_awards;
+                }
+            } catch (e) {
+                console.warn('Could not fetch FTC season awards:', e);
+            }
+
+            const data = { demographics, hall_of_fame: [], impact_finalists: inspire_finalists, ftc_event_champions: ftcChampions, ftc_season_awards: ftcSeasonAwards, top_scorers, high_scores };
+            summaryData = data;
+            hideSkeleton('summary-loading');
+            renderSummary(data);
+            fadeIn('summary-container');
+            updateTabDots();
+        } catch (err) {
+            hideSkeleton('summary-loading');
+            showInlineError('summary-error', `Failed to build FTC summary: ${err.message}`, loadSummary);
+        }
+        return;
+    }
+
     showSkeleton('summary-loading', 'summary-loading-status', 'Fetching event summary\u2026');
     hide('summary-container');
 
@@ -2442,7 +3055,7 @@ async function loadSummaryConnections() {
     _loadingConnections = true;
     const eventKey = currentEvent;
     try {
-        const connections = await API.eventConnections(eventKey, false);
+        const connections = await getActiveAPI().eventConnections(eventKey, false);
         if (currentEvent !== eventKey || !summaryData) return; // user switched events
         summaryData.connections = connections;
         summaryData._connections_past3 = connections;
@@ -2527,6 +3140,42 @@ async function loadSummaryAwards() {
         if (isRateLimit) setTimeout(() => { _loadingAwards = false; loadSummaryAwards(); }, 5000);
     } finally {
         _loadingAwards = false;
+    }
+}
+
+/** Lazy-load FTC past-season awards (Inspire/Winner/Finalist from previous season). */
+let _loadingFtcPastAwards = false;
+async function loadFtcPastAwards() {
+    if (!currentEvent || !summaryData || _loadingFtcPastAwards) return;
+    _loadingFtcPastAwards = true;
+    const eventKey = currentEvent;
+    try {
+        const data = await FTC_API.eventPastAwards(eventKey);
+        if (currentEvent !== eventKey || !summaryData) return;
+        summaryData.ftc_past_season_awards = data.past_season_awards || [];
+        summaryData.ftc_past_season_year = data.prev_season;
+
+        const awardsEl = $('summary-past-awards');
+        if (data.past_season_awards && data.past_season_awards.length > 0) {
+            awardsEl.querySelector('h3').textContent = `${data.prev_season} Award Winners`;
+            const filterBar = awardsEl.querySelector('.past-awards-filter-bar');
+            if (filterBar) filterBar.classList.remove('hidden');
+            renderPastSeasonAwards(data.past_season_awards);
+            awardsEl.classList.remove('hidden');
+        } else {
+            awardsEl.classList.add('hidden');
+        }
+    } catch (err) {
+        if (currentEvent !== eventKey) return;
+        const msg = /429|rate.?limit/i.test(err?.message || '')
+            ? 'Rate limited — retrying shortly\u2026'
+            : 'Could not load — switch tabs to retry.';
+        $('summary-past-awards-list').innerHTML = `<p class="empty" style="margin:.5rem 0;font-size:.82rem">${msg}</p>`;
+        if (/429|rate.?limit/i.test(err?.message || '')) {
+            setTimeout(() => { _loadingFtcPastAwards = false; loadFtcPastAwards(); }, 5000);
+        }
+    } finally {
+        _loadingFtcPastAwards = false;
     }
 }
 
@@ -2787,7 +3436,9 @@ function filterPastAwards(filter, btn) {
     currentAwardFilter = filter;
     document.querySelectorAll('.past-awards-filter-btn').forEach(b => b.classList.remove('active'));
     if (btn) btn.classList.add('active');
-    if (summaryData?.past_season_awards) renderPastSeasonAwards(summaryData.past_season_awards);
+    // Support both FRC (past_season_awards) and FTC (ftc_past_season_awards)
+    const awards = summaryData?.past_season_awards || summaryData?.ftc_past_season_awards;
+    if (awards) renderPastSeasonAwards(awards);
 }
 
 function renderPastSeasonAwards(awards) {
@@ -2798,7 +3449,10 @@ function renderPastSeasonAwards(awards) {
         ? awards
         : awards.map(t => ({
             ...t,
-            awards: t.awards.filter(a => a.type === currentAwardFilter),
+            // 'impact' filter also matches 'inspire' (FTC equivalent)
+            awards: t.awards.filter(a => a.type === currentAwardFilter
+                || (currentAwardFilter === 'impact' && a.type === 'inspire')
+                || (currentAwardFilter === 'inspire' && a.type === 'impact')),
         })).filter(t => t.awards.length > 0);
 
     if (filtered.length === 0) {
@@ -2836,6 +3490,12 @@ async function refreshSummaryStats() {
     if (btn) { btn.disabled = true; btn.textContent = '↻ Refreshing…'; }
 
     try {
+        if (isFTCMode()) {
+            // FTC: re-run the full summary load (stats are built client-side)
+            summaryData = null;
+            await loadSummary();
+            return;
+        }
         const data = await API.eventSummaryRefresh(currentEvent);
         if (data.top_scorers && summaryData) {
             summaryData.top_scorers = data.top_scorers;
@@ -2904,9 +3564,14 @@ function renderSummary(data) {
         hofEl.classList.add('hidden');
     }
 
-    // Impact Award Finalists
+    // Impact Award Finalists (FRC) / Inspire Winners (FTC)
     const impactEl = $('summary-impact');
     if (data.impact_finalists && data.impact_finalists.length > 0) {
+        // Update section label based on program
+        const impactLabel = impactEl.querySelector('.highlight-label');
+        if (impactLabel) {
+            impactLabel.textContent = isFTCMode() ? '⭐ Inspire Award Winners' : '⭐ Impact Award Finalists';
+        }
         $('summary-impact-list').innerHTML = data.impact_finalists.map(t => {
             const years = t.impact_years.join(', ');
             return `<div class="prestige-entry">
@@ -2933,12 +3598,110 @@ function renderSummary(data) {
     if (data.is_championship) {
         // Cached championship data — re-render directly
         _renderChampsSummaryAwards(data);
+    } else if (isFTCMode()) {
+        // FTC: Event Winners & Finalists above demographics, full width
+        const demoEl = $('summary-demographics');
+        const container = demoEl?.parentNode;
+        if (container && pastChampsEl) {
+            container.insertBefore(pastChampsEl, demoEl);
+            pastChampsEl.classList.add('ftc-full-width-card');
+        }
+        // FTC: show event winners & finalists if available (left card)
+        if (data.ftc_event_champions && data.ftc_event_champions.length > 0) {
+            pastChampsEl.querySelector('h3').textContent = 'Event Winners & Finalists';
+            const champsFilterBar = $('champs-filter-bar');
+            if (champsFilterBar) champsFilterBar.classList.add('hidden');
+            // Sort by award weight: Inspire 1st > Winner > Finalist
+            const _awardWeight = t => {
+                const inspire1st = (t.years_inspire || []).filter(n => !/2nd/i.test(n));
+                return (inspire1st.length ? 4 : 0)
+                    + (t.years_won.length ? 2 : 0)
+                    + (t.years_finalist.length ? 1 : 0);
+            };
+            const sorted = [...data.ftc_event_champions].sort((a, b) => _awardWeight(b) - _awardWeight(a));
+            $('summary-past-champs-list').innerHTML = sorted.map(t => {
+                const wonBadge = t.years_won.length ? '<span class="badge badge-winner">Winner</span>' : '';
+                const finBadge = t.years_finalist.length ? '<span class="badge badge-finalist">Finalist</span>' : '';
+                // Only highlight 1st-place Inspire (exclude 2nd place)
+                const inspire1st = (t.years_inspire || []).filter(n => !/2nd/i.test(n));
+                const inspireBadge = inspire1st.length ? '<span class="badge badge-inspire">Inspire</span>' : '';
+                return '<div class="prestige-entry">'
+                    + '<span class="prestige-entry-num">' + t.team_number + '</span>'
+                    + '<span class="prestige-entry-name">' + t.nickname + '</span>'
+                    + '<span class="prestige-entry-year">' + inspireBadge + wonBadge + finBadge + '</span>'
+                    + '</div>';
+            }).join('');
+            pastChampsEl.classList.remove('hidden');
+        } else {
+            pastChampsEl.classList.add('hidden');
+        }
+
+        // FTC: Season Award Winners box (big 3 from prior events this season)
+        let currentAwardsEl = $('summary-current-awards');
+        if (!currentAwardsEl) {
+            currentAwardsEl = document.createElement('div');
+            currentAwardsEl.id = 'summary-current-awards';
+            currentAwardsEl.className = 'summary-card ftc-full-width-card';
+            currentAwardsEl.innerHTML = '<h3>Season Award Winners</h3><div id="summary-current-awards-list"></div>';
+            const demoEl2 = $('summary-demographics');
+            const container2 = demoEl2?.parentNode;
+            if (container2) container2.insertBefore(currentAwardsEl, demoEl2);
+        }
+        if (data.ftc_season_awards && data.ftc_season_awards.length > 0) {
+            $('summary-current-awards-list').innerHTML = data.ftc_season_awards.map(t => {
+                const chips = t.awards.map(a => {
+                    const label = a.type === 'inspire'
+                        ? (/2nd/i.test(a.name) ? 'Inspire 2nd' : 'Inspire')
+                        : a.type === 'winner' ? 'Winner'
+                        : a.type === 'finalist' ? 'Finalist' : a.name;
+                    return '<span class="ftc-event-award-chip ' + a.type + '" title="' + (a.event_name || '') + '">'
+                        + label + ' @ ' + (a.event_name || a.name) + '</span>';
+                }).join(' ');
+                return '<div class="prestige-entry">'
+                    + '<span class="prestige-entry-num">' + t.team_number + '</span>'
+                    + '<span class="prestige-entry-name">' + t.nickname + '</span>'
+                    + '<span class="prestige-entry-year">' + chips + '</span>'
+                    + '</div>';
+            }).join('');
+            currentAwardsEl.classList.remove('hidden');
+        } else {
+            currentAwardsEl.classList.add('hidden');
+        }
+
+        // FTC: past season awards (right card) — lazy-load
+        // Update filter button: "Impact" → "Inspire" for FTC
+        const impactFilterBtn = pastAwardsEl.querySelector('[data-award-filter="impact"]');
+        if (impactFilterBtn) impactFilterBtn.textContent = 'Inspire';
+        if (data.ftc_past_season_awards && data.ftc_past_season_awards.length > 0) {
+            pastAwardsEl.querySelector('h3').textContent = `${data.ftc_past_season_year || (currentEventYear - 1)} Award Winners`;
+            const filterBar = pastAwardsEl.querySelector('.past-awards-filter-bar');
+            if (filterBar) filterBar.classList.remove('hidden');
+            renderPastSeasonAwards(data.ftc_past_season_awards);
+            pastAwardsEl.classList.remove('hidden');
+        } else if (!data.ftc_past_season_awards) {
+            // Not loaded yet — show placeholder, lazy-load
+            pastAwardsEl.querySelector('h3').textContent = `${currentEventYear - 1} Award Winners`;
+            $('summary-past-awards-list').innerHTML = '<p class="empty" style="margin:.5rem 0;font-size:.82rem">Loading\u2026</p>';
+            pastAwardsEl.classList.remove('hidden');
+            loadFtcPastAwards();
+        } else {
+            pastAwardsEl.classList.add('hidden');
+        }
     } else {
+        // FRC: restore past-champs into pair-row
+        const pairRow = document.querySelector('.summary-pair-row');
+        if (pairRow && !pairRow.contains(pastChampsEl)) {
+            pairRow.insertBefore(pastChampsEl, pairRow.firstChild);
+        }
+        pastChampsEl.classList.remove('ftc-full-width-card');
         // Reset titles in case we're switching from a champs to a regular event
         pastChampsEl.querySelector('h3').textContent = 'Returning Champions & Finalists';
         pastAwardsEl.querySelector('h3').textContent = 'Past Season Award Winners';
         const filterBar = pastAwardsEl.querySelector('.past-awards-filter-bar');
         if (filterBar) filterBar.classList.remove('hidden');
+        // Reset "Inspire" back to "Impact" for FRC
+        const impactBtn = pastAwardsEl.querySelector('[data-award-filter="impact"]');
+        if (impactBtn) impactBtn.textContent = 'Impact';
         const champsFilterBar = $('champs-filter-bar');
         if (champsFilterBar) champsFilterBar.classList.add('hidden');
 
@@ -2963,15 +3726,16 @@ function renderSummary(data) {
 
     // If awards haven't been loaded yet (undefined) or came back empty
     // (possibly due to a transient API failure), retry the fetch.
+    // Skip for FTC — no past-event-champion / past-season-award API.
     const _noChamps = !data.is_championship && (!data.past_event_champions || data.past_event_champions.length === 0);
     const _noAwards = !data.is_championship && (!data.past_season_awards  || data.past_season_awards.length === 0);
-    if (_noChamps && _noAwards) {
+    if (_noChamps && _noAwards && !isFTCMode()) {
         loadSummaryAwards();
     }
 
     // Advancement — lazy-load (only for completed events)
     const advEl = $('summary-advancement');
-    if (currentEventStatus === 'completed') {
+    if (currentEventStatus === 'completed' && !isFTCMode()) {
         advEl.classList.remove('hidden');
         if (data.advancement && (data.advancement.qualified_teams?.length || data.advancement.district_rankings?.length)) {
             renderAdvancement(data.advancement);
@@ -2987,18 +3751,20 @@ function renderSummary(data) {
 
     // Prior connections — lazy-load on demand
     const histEl = $('summary-history');
-    histEl.classList.remove('hidden');
-    if (data.connections && data.connections.length > 0) {
-        // Connections came from cache — render immediately
-        renderConnections(data.connections, 'all');
-        document.querySelectorAll('.conn-filter-btn').forEach(b => b.classList.remove('active'));
-        document.querySelector('.conn-filter-btn[data-conn-filter="all"]')?.classList.add('active');
-    } else if (!data.connections) {
-        // Not loaded yet — show placeholder, fetch in background
-        $('summary-history-list').innerHTML = '<p class="empty" style="margin:.5rem 0;font-size:.82rem">Loading connections…</p>';
-        loadSummaryConnections();
-    } else {
-        histEl.classList.add('hidden');
+    {
+        histEl.classList.remove('hidden');
+        if (data.connections && data.connections.length > 0) {
+            // Connections came from cache — render immediately
+            renderConnections(data.connections, 'all');
+            document.querySelectorAll('.conn-filter-btn').forEach(b => b.classList.remove('active'));
+            document.querySelector('.conn-filter-btn[data-conn-filter="all"]')?.classList.add('active');
+        } else if (!data.connections) {
+            // Not loaded yet — show placeholder, fetch in background
+            $('summary-history-list').innerHTML = '<p class="empty" style="margin:.5rem 0;font-size:.82rem">Loading connections…</p>';
+            loadSummaryConnections();
+        } else {
+            histEl.classList.add('hidden');
+        }
     }
 
     // Top scorers
@@ -3061,7 +3827,7 @@ async function toggleConnRange(allTime) {
                 connections = summaryData._connections_alltime;
             } else {
                 list.innerHTML = '<p class="empty" style="margin:.5rem 0;font-size:.82rem">Loading connections…</p>';
-                connections = await API.eventConnections(currentEvent, true);
+                connections = await getActiveAPI().eventConnections(currentEvent, true);
                 summaryData._connections_alltime = connections;
             }
         } else {
@@ -3170,6 +3936,7 @@ function renderConnections(connections, filter) {
 
 function renderTopScorers(scorers) {
     const el = $('summary-top-scorers');
+    if (!scorers || scorers.length === 0) { if (el) el.classList.add('hidden'); return; }
     if (scorers.length > 0) {
         const medals = ['1st', '2nd', '3rd'];
         $('summary-top-list').innerHTML = scorers.map((s, i) => `
@@ -3217,7 +3984,7 @@ async function loadPlayoffs() {
     hideInlineError('playoff-error');
     try {
         setLoadingStatus('playoff-loading-status', 'Fetching playoff matches\u2026');
-        const data = await API.playoffMatches(currentEvent);
+        const data = await getActiveAPI().playoffMatches(currentEvent);
         playoffData = data.matches;
         hideSkeleton('playoff-loading');
         if (!playoffData?.length) {
@@ -3231,7 +3998,11 @@ async function loadPlayoffs() {
             return;
         }
         hide('playoff-empty');
-        renderBracketTree();
+        if (isFTCMode()) {
+            renderFtcBracket();
+        } else {
+            renderBracketTree();
+        }
         fadeIn('playoff-bracket');
         updateTabDots();
     } catch (err) {
@@ -3257,10 +4028,13 @@ function stopPlayoffRefresh() {
 async function playoffAutoRefresh() {
     if (!currentEvent) { stopPlayoffRefresh(); return; }
     try {
-        const data = await API.playoffMatches(currentEvent);
+        const data = await getActiveAPI().playoffMatches(currentEvent);
         if (!data?.matches?.length || currentEvent !== data.event_key) return;
         playoffData = data.matches;
-        if (renderedTabs.playoff) renderBracketTree();
+        if (renderedTabs.playoff) {
+            if (isFTCMode()) renderFtcBracket();
+            else renderBracketTree();
+        }
     } catch (_) { /* silently ignore */ }
 }
 
@@ -3436,6 +4210,284 @@ function renderBracketTree() {
     _setupBracketScrollArrow();
 }
 
+/* ── FTC Playoff Bracket Renderer ────────────────────────── */
+function renderFtcBracket() {
+    if (!playoffData || !playoffData.length) {
+        $('playoff-bracket').innerHTML = '<p class="empty">No playoff matches found.</p>';
+        return;
+    }
+    // Detect double-elim events (labels contain "Upper" / "Lower")
+    const hasDoubleElim = playoffData.some(m => /upper|lower/i.test(m.label || ''));
+    if (hasDoubleElim) {
+        _renderFtcBracketTree();
+    } else {
+        _renderFtcBracketSeries();
+    }
+}
+
+/* ── FTC double-elim bracket tree (Upper / Lower / Finals grid) ── */
+function _renderFtcBracketTree() {
+    const _nickMap = {};
+    if (teamsData) teamsData.forEach(t => { if (t.nickname) _nickMap[t.team_number] = t.nickname; });
+    const _teamSpan = (num) => {
+        const nick = _nickMap[num];
+        return nick
+            ? `<span class="has-tooltip bkt-team-num">${num}<span class="custom-tooltip">${nick}</span></span>`
+            : `<span class="bkt-team-num">${num}</span>`;
+    };
+    const _teamsHtml = (nums) => nums.map(_teamSpan).join(' · ');
+
+    // Group matches by series (set_number)
+    const bySeries = {};
+    playoffData.forEach(m => {
+        const s = m.set_number || 1;
+        if (!bySeries[s]) bySeries[s] = [];
+        bySeries[s].push(m);
+    });
+    Object.values(bySeries).forEach(arr => arr.sort((a, b) => a.match_number - b.match_number));
+
+    // Classify each series into upper / lower / final
+    const upper = {};   // round -> [seriesMatches, ...]
+    const lower = {};
+    const finals = [];  // [seriesMatches, ...]
+
+    for (const matches of Object.values(bySeries)) {
+        const label = (matches[0].label || '').toLowerCase();
+        if (/final/.test(label)) {
+            finals.push(matches);
+        } else if (/upper/.test(label)) {
+            const rm = label.match(/r(\d+)/);
+            const round = rm ? parseInt(rm[1]) : 1;
+            if (!upper[round]) upper[round] = [];
+            upper[round].push(matches);
+        } else if (/lower/.test(label)) {
+            const rm = label.match(/r(\d+)/);
+            const round = rm ? parseInt(rm[1]) : 1;
+            if (!lower[round]) lower[round] = [];
+            lower[round].push(matches);
+        } else {
+            if (!upper[1]) upper[1] = [];
+            upper[1].push(matches);
+        }
+    }
+
+    // Sort series within each round by alliance number (first red alliance)
+    const sortSeries = (arr) => arr.sort((a, b) =>
+        (a[0]?.red?.alliance_number || 0) - (b[0]?.red?.alliance_number || 0));
+    Object.values(upper).forEach(sortSeries);
+    Object.values(lower).forEach(sortSeries);
+
+    // Round columns
+    const allRounds = new Set([...Object.keys(upper).map(Number), ...Object.keys(lower).map(Number)]);
+    const maxRound = allRounds.size ? Math.max(...allRounds) : 1;
+    const rounds = [];
+    for (let r = 1; r <= maxRound; r++) rounds.push(r);
+
+    // Series‐slot renderer (shows best-of-N result in one compact card)
+    const seriesSlot = (matches) => {
+        if (!matches || !matches.length) return '';
+        const firstM = matches[0];
+        const redNums  = firstM.red?.teams  ? firstM.red.teams.map(t => t.team_number)  : (firstM.red?.team_numbers || []);
+        const blueNums = firstM.blue?.teams ? firstM.blue.teams.map(t => t.team_number) : (firstM.blue?.team_numbers || []);
+        const redSeed  = firstM.red?.alliance_number  ? `<span class="bkt-seed">#${firstM.red.alliance_number}</span>` : '';
+        const blueSeed = firstM.blue?.alliance_number ? `<span class="bkt-seed">#${firstM.blue.alliance_number}</span>` : '';
+
+        let redWins = 0, blueWins = 0;
+        matches.forEach(m => {
+            if (m.winning_alliance === 'red') redWins++;
+            else if (m.winning_alliance === 'blue') blueWins++;
+        });
+
+        const anyScored  = matches.some(m => (m.red?.score ?? -1) >= 0 && (m.blue?.score ?? -1) >= 0);
+        const seriesDone = redWins >= 2 || blueWins >= 2 || (matches.length === 1 && (redWins + blueWins > 0));
+        const redWon  = seriesDone && redWins > blueWins;
+        const blueWon = seriesDone && blueWins > redWins;
+
+        const shortLabel = /final/i.test(firstM.label || '') ? 'Finals' : ('Match ' + (firstM.set_number || '?'));
+        const seriesScore = matches.length > 1 && anyScored
+            ? ` <span class="bkt-replay">${redWins}-${blueWins}</span>` : '';
+
+        // For single-match series, show actual score; for best-of-N, show series wins
+        const redDisplay  = anyScored ? (matches.length > 1 ? redWins  : matches[0].red.score)  : '–';
+        const blueDisplay = anyScored ? (matches.length > 1 ? blueWins : matches[0].blue.score) : '–';
+
+        return `<div class="bkt-slot ${!anyScored ? 'bkt-upcoming' : ''} ${seriesDone ? 'bkt-decided' : ''}">
+            <div class="bkt-slot-header">${shortLabel}${seriesScore}</div>
+            <div class="bkt-row bkt-red ${redWon ? 'bkt-won' : ''}${blueWon ? ' bkt-lost' : ''}">
+                ${redSeed}
+                <span class="bkt-teams">${_teamsHtml(redNums)}</span>
+                <span class="bkt-score">${redDisplay}</span>
+            </div>
+            <div class="bkt-row bkt-blue ${blueWon ? 'bkt-won' : ''}${redWon ? ' bkt-lost' : ''}">
+                ${blueSeed}
+                <span class="bkt-teams">${_teamsHtml(blueNums)}</span>
+                <span class="bkt-score">${blueDisplay}</span>
+            </div>
+        </div>`;
+    };
+
+    // ── Build CSS-grid ──────────────────────────────────────
+    const finalsCol = rounds.length + 2;   // 1-indexed: label=1, rounds 2..N+1, finals=N+2
+    const colTpl = '20px ' + rounds.map(() => '280px').join(' ') + ' 280px';
+
+    let html = `<div class="bracket-grid" style="grid-template-columns: ${colTpl};">`;
+
+    // Header row
+    html += '<div class="bg-corner"></div>';
+    rounds.forEach(r => { html += `<div class="bg-rnd-hdr">Round ${r}</div>`; });
+    html += `<div class="bg-rnd-hdr bg-rnd-hdr-final">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        Finals</div>`;
+
+    // Upper row
+    html += `<div class="bg-side-label bg-upper-label">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"/></svg>
+        Upper</div>`;
+    rounds.forEach(r => {
+        const list = upper[r] || [];
+        html += `<div class="bg-cell bg-cell-upper ${!list.length ? 'bg-cell-empty' : ''}">`;
+        list.forEach(s => { html += seriesSlot(s); });
+        html += '</div>';
+    });
+    // Finals cell — spans upper + lower rows
+    html += `<div class="bg-cell bg-cell-final" style="grid-column:${finalsCol}; grid-row:2/4;">`;
+    if (finals.length) {
+        finals.forEach(s => { html += seriesSlot(s); });
+    } else {
+        html += '<div class="bkt-slot bkt-tbd"><div class="bkt-slot-header">Finals</div><div class="bkt-slot-body"><span class="bkt-tbd-text">TBD</span></div></div>';
+    }
+    html += '</div>';
+
+    // Lower row
+    html += `<div class="bg-side-label bg-lower-label">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+        Lower</div>`;
+    rounds.forEach(r => {
+        const list = lower[r] || [];
+        html += `<div class="bg-cell bg-cell-lower ${!list.length ? 'bg-cell-empty' : ''}">`;
+        list.forEach(s => { html += seriesSlot(s); });
+        html += '</div>';
+    });
+
+    html += '</div>'; // close bracket-grid
+
+    $('playoff-bracket').innerHTML = html;
+
+    // Show scroll arrow for wide grids
+    let arrowWrapper = document.getElementById('bracket-scroll-wrapper');
+    if (rounds.length >= 3) {
+        if (!arrowWrapper) {
+            arrowWrapper = document.createElement('div');
+            arrowWrapper.id = 'bracket-scroll-wrapper';
+            arrowWrapper.className = 'bracket-scroll-arrow-wrapper';
+            arrowWrapper.innerHTML = `<button class="bracket-scroll-arrow" id="bracket-scroll-finals" onclick="scrollBracketToFinals()" title="Scroll to Finals">
+                    Finals
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                </button>`;
+            $('tab-playoff').appendChild(arrowWrapper);
+        }
+        arrowWrapper.classList.remove('hidden');
+        _setupBracketScrollArrow();
+    } else if (arrowWrapper) {
+        arrowWrapper.classList.add('hidden');
+    }
+}
+
+/* ── FTC simple-elim bracket (series cards — SF / Finals) ── */
+function _renderFtcBracketSeries() {
+    const _nickMap = {};
+    if (teamsData) teamsData.forEach(t => { if (t.nickname) _nickMap[t.team_number] = t.nickname; });
+    const _teamSpan = (num) => {
+        const nick = _nickMap[num];
+        return nick
+            ? `<span class="has-tooltip bkt-team-num">${num}<span class="custom-tooltip">${nick}</span></span>`
+            : `<span class="bkt-team-num">${num}</span>`;
+    };
+    const _teamsHtml = (nums) => nums.map(_teamSpan).join(' · ');
+
+    // Group matches by series (set_number) — each series is a best-of-N
+    const bySeries = {};
+    playoffData.forEach(m => {
+        const series = m.set_number || 1;
+        if (!bySeries[series]) bySeries[series] = [];
+        bySeries[series].push(m);
+    });
+
+    // Sort each series by match_number
+    Object.values(bySeries).forEach(arr => arr.sort((a, b) => a.match_number - b.match_number));
+    const seriesKeys = Object.keys(bySeries).map(Number).sort((a, b) => a - b);
+
+    const renderMatch = (m) => {
+        const redWon  = m.winning_alliance === 'red';
+        const blueWon = m.winning_alliance === 'blue';
+        const upcoming = m.red.score < 0 && m.blue.score < 0;
+        const redLost = blueWon;
+        const blueLost = redWon;
+        const redNums = m.red.teams ? m.red.teams.map(t => t.team_number) : (m.red.team_numbers || []);
+        const blueNums = m.blue.teams ? m.blue.teams.map(t => t.team_number) : (m.blue.team_numbers || []);
+        const redSeed  = m.red.alliance_number  ? `<span class="bkt-seed">#${m.red.alliance_number}</span>` : '';
+        const blueSeed = m.blue.alliance_number ? `<span class="bkt-seed">#${m.blue.alliance_number}</span>` : '';
+
+        const shortLabel = /final/i.test(m.label || '') ? 'Finals' : ('Match ' + (m.set_number || '?'));
+
+        return `<div class="bkt-slot ${upcoming ? 'bkt-upcoming' : ''} ${redWon || blueWon ? 'bkt-decided' : ''}">
+            <div class="bkt-slot-header">${shortLabel}</div>
+            <div class="bkt-row bkt-red ${redWon ? 'bkt-won' : ''}${redLost ? ' bkt-lost' : ''}">
+                ${redSeed}
+                <span class="bkt-teams">${_teamsHtml(redNums)}</span>
+                <span class="bkt-score">${upcoming ? '–' : m.red.score}</span>
+            </div>
+            <div class="bkt-row bkt-blue ${blueWon ? 'bkt-won' : ''}${blueLost ? ' bkt-lost' : ''}">
+                ${blueSeed}
+                <span class="bkt-teams">${_teamsHtml(blueNums)}</span>
+                <span class="bkt-score">${upcoming ? '–' : m.blue.score}</span>
+            </div>
+        </div>`;
+    };
+
+    // Build each series card showing all matches in the series + series score
+    let html = '<div class="ftc-bracket">';
+
+    for (const sKey of seriesKeys) {
+        const matches = bySeries[sKey];
+        let redWins = 0, blueWins = 0;
+        matches.forEach(m => {
+            if (m.winning_alliance === 'red') redWins++;
+            else if (m.winning_alliance === 'blue') blueWins++;
+        });
+
+        const firstMatch = matches[0];
+        const allianceNumRed = firstMatch.red?.alliance_number;
+        const allianceNumBlue = firstMatch.blue?.alliance_number;
+        let seriesLabel = `Series ${sKey}`;
+        if (allianceNumRed && allianceNumBlue) {
+            seriesLabel = `#${allianceNumRed} vs #${allianceNumBlue}`;
+        }
+
+        const seriesWinner = redWins >= 2 ? 'red' : (blueWins >= 2 ? 'blue' : null);
+        const resultBadge = seriesWinner
+            ? `<span class="ftc-series-result ftc-series-${seriesWinner}">${seriesWinner === 'red' ? 'Red' : 'Blue'} Wins Series ${redWins}-${blueWins}</span>`
+            : (redWins + blueWins > 0 ? `<span class="ftc-series-score">Series: ${redWins}-${blueWins}</span>` : '');
+
+        html += `<div class="ftc-series-card${seriesWinner ? ' ftc-series-decided' : ''}">
+            <div class="ftc-series-header">
+                <span class="ftc-series-label">${seriesLabel}</span>
+                ${resultBadge}
+            </div>
+            <div class="ftc-series-matches">
+                ${matches.map(renderMatch).join('')}
+            </div>
+        </div>`;
+    }
+
+    html += '</div>';
+    $('playoff-bracket').innerHTML = html;
+
+    // Hide the FRC bracket scroll arrow for FTC series view
+    const arrowWrapper = document.getElementById('bracket-scroll-wrapper');
+    if (arrowWrapper) arrowWrapper.classList.add('hidden');
+}
+
 /* ── Bracket scroll-to-finals arrow ──────────────────────── */
 function scrollBracketToFinals() {
     const container = $('playoff-bracket');
@@ -3608,23 +4660,94 @@ function _buildMobileBracket(slot, finalNums) {
 // ═══════════════════════════════════════════════════════════
 // 3. ALLIANCE SELECTION
 // ═══════════════════════════════════════════════════════════
+
+/** Wrap a flat FTC alliance array into the object shape renderAlliances expects. */
+function _wrapFtcAlliances(data) {
+    const wrapped = {
+        alliances: data.map(a => ({
+            number: a.number,
+            name: a.name,
+            teams: (a.pick_numbers || []).map(num => ({
+                team_key: `ftc${num}`,
+                team_number: num,
+                nickname: '',
+                avatar: null,
+                opr: 0,
+                epa: null,
+                rank: '-',
+                wins: 0, losses: 0, ties: 0,
+                country: '',
+                rookie_year: null,
+            })),
+            combined_opr: 0,
+            combined_epa: null,
+            playoff_result: null,
+            playoff_type: null,
+            playoff_record: null,
+        })),
+        partnerships: [],
+        max_combined_opr: 0,
+    };
+    if (teamsData) {
+        const nameMap = new Map(teamsData.map(t => [t.team_number, t]));
+        wrapped.alliances.forEach(a => {
+            a.teams.forEach(t => {
+                const td = nameMap.get(t.team_number);
+                if (td) {
+                    t.nickname = td.nickname || '';
+                    t.opr = td.opr || 0;
+                    t.avatar = td.avatar || null;
+                    t.rank = td.rank || '-';
+                    t.wins = td.wins || 0;
+                    t.losses = td.losses || 0;
+                    t.ties = td.ties || 0;
+                    t.country = td.country || '';
+                    t.rookie_year = td.rookie_year || null;
+                }
+            });
+            a.combined_opr = a.teams.reduce((s, t) => s + (parseFloat(t.opr) || 0), 0);
+        });
+        wrapped.max_combined_opr = Math.max(...wrapped.alliances.map(a => a.combined_opr), 0);
+    }
+    // Patch any remaining missing avatars from the FTC avatar map
+    if (_ftcAvatarMap && _ftcAvatarMap.size > 0) {
+        wrapped.alliances.forEach(a => a.teams.forEach(t => {
+            if (!t.avatar) { const url = _ftcAvatarMap.get(t.team_number); if (url) t.avatar = url; }
+        }));
+    }
+    return wrapped;
+}
+
 async function loadAlliances() {
     if (!currentEvent) return;
     hide('alliance-empty');
     hideInlineError('alliance-error');
     showSkeleton('alliance-loading', 'alliance-loading-status', 'Fetching alliance selections\u2026');
     try {
-        setLoadingStatus('alliance-loading-status', 'Loading partnerships & EPA data\u2026');
-        const data = await API.alliances(currentEvent);
-        allianceData = data;
+        setLoadingStatus('alliance-loading-status', isFTCMode() ? 'Loading alliance selections\u2026' : 'Loading partnerships & EPA data\u2026');
+        const data = await getActiveAPI().alliances(currentEvent);
+
+        // FTC returns a flat array; normalise to the object shape FRC uses
+        if (isFTCMode()) {
+            if (!data || !Array.isArray(data) || data.length === 0) {
+                hideSkeleton('alliance-loading');
+                showInlineError('alliance-error', 'Alliance selections are not available for this event yet.', loadAlliances);
+                return;
+            }
+            allianceData = _wrapFtcAlliances(data);
+        } else {
+            allianceData = data;
+        }
+
         hideSkeleton('alliance-loading');
-        renderAlliances(data);
+        renderAlliances(allianceData);
         fadeIn('alliance-grid');
-        autoCacheTab('alliances', data);
+        autoCacheTab('alliances', allianceData);
         updateTabDots();
     } catch (err) {
         hideSkeleton('alliance-loading');
-        showInlineError('alliance-error', `Failed to load alliances: ${err.message}`, loadAlliances);
+        const msg = err && err.message ? err.message : 'An unknown error occurred.';
+        showInlineError('alliance-error', `Failed to load alliances: ${msg}`, loadAlliances);
     }
 }
 
@@ -3727,7 +4850,7 @@ function renderAlliances(data) {
                 </div>
                 <div class="alliance-header-stats">
                     <div class="alliance-header-stats-row-1">
-                        <span class="combined-opr">Σ OPR ${a.combined_opr}</span>
+                        <span class="combined-opr">Σ OPR ${typeof a.combined_opr === 'number' ? a.combined_opr.toFixed(2) : a.combined_opr}</span>
                         ${epaHtml}
                     </div>
                     ${epaDetailHtml}
@@ -3739,7 +4862,7 @@ function renderAlliances(data) {
                     const avatarHtml = allianceShowAvatars
                         ? (t.avatar
                             ? `<img class="alliance-team-avatar" src="${t.avatar}" alt="">`
-                            : `<div class="alliance-team-avatar-placeholder">FRC</div>`)
+                            : `<div class="alliance-team-avatar-placeholder">${isFTCMode() ? 'FTC' : 'FRC'}</div>`)
                         : '';
 
                     const isIntl = highlightForeign && t.country && eventCountry && t.country !== eventCountry;
@@ -3788,12 +4911,23 @@ async function loadTeam() {
     hideInlineError('team-error');
     showSkeleton('team-loading', 'team-loading-status', `Loading team ${num} data\u2026`);
     try {
-        setLoadingStatus('team-loading-status', `Fetching stats for team ${num}\u2026`);
-        const data = await API.teamStats(num, year);
-        lastTeamData = data;
-        hideSkeleton('team-loading');
-        $('team-stats').innerHTML = renderTeamStats(data);
-        fadeIn('team-stats');
+        if (isFTCMode()) {
+            setLoadingStatus('team-loading-status', `Fetching FTC data for team ${num}\u2026`);
+            const data = await _buildFtcTeamLookup(num, year);
+            lastTeamData = data;
+            hideSkeleton('team-loading');
+            $('team-stats').innerHTML = renderFtcTeamStats(data);
+            fadeIn('team-stats');
+            // Lazy-load OPR history chart
+            FTC_API.teamOprHistory(num, year).then(h => renderFtcOprChart(h)).catch(() => {});
+        } else {
+            setLoadingStatus('team-loading-status', `Fetching stats for team ${num}\u2026`);
+            const data = await API.teamStats(num, year);
+            lastTeamData = data;
+            hideSkeleton('team-loading');
+            $('team-stats').innerHTML = renderTeamStats(data);
+            fadeIn('team-stats');
+        }
     } catch (err) {
         hideSkeleton('team-loading');
         showInlineError('team-error', `Failed to load team ${num}: ${err.message}`, loadTeam);
@@ -3856,7 +4990,7 @@ function renderTeamStats(d) {
                 <tr><th>Year</th><th>Award</th><th>Event</th></tr>
             </thead>
             <tbody>
-                ${allAwards.map(a => `
+                ${[...allAwards].sort((a, b) => b.year - a.year).map(a => `
                 <tr>
                     <td class="stat">${a.year}</td>
                     <td>${a.name}</td>
@@ -3917,7 +5051,7 @@ function renderTeamStats(d) {
         </div>
 
         ${(() => {
-            const pastEvents = eventsThisYear.filter(e => !e.is_upcoming);
+            const pastEvents = eventsThisYear.filter(e => !e.is_upcoming).sort((a, b) => (b.end_date || b.start_date || '').localeCompare(a.end_date || a.start_date || ''));
             const upcomingEvents = eventsThisYear.filter(e => e.is_upcoming);
             let html = '';
 
@@ -4019,7 +5153,7 @@ async function loadH2H() {
     hideInlineError('h2h-error');
     showSkeleton('h2h-loading', 'h2h-loading-status', `Loading ${a} vs ${b} history\u2026`);
     try {
-        const data = await API.headToHead(a, b, null, _h2hAllTime);
+        const data = await getActiveAPI().headToHead(a, b, null, _h2hAllTime);
         hideSkeleton('h2h-loading');
         $('h2h-results').innerHTML = renderH2H(data);
         fadeIn('h2h-results');
@@ -4029,6 +5163,58 @@ async function loadH2H() {
     } finally {
         loading(false);
     }
+}
+
+function _buildFtcH2H(teamA, teamB) {
+    const matches = (pbpData && pbpData.matches) || [];
+    const nickA = teamsData?.find(t => t.team_number === teamA)?.nickname || '';
+    const nickB = teamsData?.find(t => t.team_number === teamB)?.nickname || '';
+    let aWins = 0, bWins = 0, draws = 0, asAllies = 0;
+    const opponentMatches = [], allyMatches = [];
+    matches.forEach(m => {
+        const reds = (m.red_teams || []).map(t => t.team_number || t);
+        const blues = (m.blue_teams || []).map(t => t.team_number || t);
+        const aOnRed = reds.includes(teamA), aOnBlue = blues.includes(teamA);
+        const bOnRed = reds.includes(teamB), bOnBlue = blues.includes(teamB);
+        if (!aOnRed && !aOnBlue) return; // teamA not in this match
+        if (!bOnRed && !bOnBlue) return; // teamB not in this match
+        const sameAlliance = (aOnRed && bOnRed) || (aOnBlue && bOnBlue);
+        const label = m.label || m.match_key || '';
+        if (sameAlliance) {
+            asAllies++;
+            allyMatches.push({ match_label: label, red_score: m.red_score || 0, blue_score: m.blue_score || 0 });
+        } else {
+            const aScore = aOnRed ? (m.red_score || 0) : (m.blue_score || 0);
+            const bScore = bOnRed ? (m.red_score || 0) : (m.blue_score || 0);
+            if (aScore > bScore) aWins++;
+            else if (bScore > aScore) bWins++;
+            else draws++;
+            opponentMatches.push({
+                match_label: label,
+                year: currentEventYear,
+                event_key: currentEvent,
+                team_a_alliance: aOnRed ? 'red' : 'blue',
+                team_b_alliance: bOnRed ? 'red' : 'blue',
+                red_score: m.red_score || 0,
+                blue_score: m.blue_score || 0,
+            });
+        }
+    });
+    return {
+        team_a: teamA,
+        team_b: teamB,
+        team_nicknames: { [teamA]: nickA, [teamB]: nickB },
+        years_checked: [currentEventYear],
+        h2h_summary: {
+            team_a_wins: aWins,
+            team_b_wins: bWins,
+            draws: draws,
+            total_opponent_matches: opponentMatches.length,
+            total_ally_matches: asAllies,
+        },
+        opponent_matches: opponentMatches,
+        ally_matches: allyMatches,
+    };
 }
 
 function toggleH2HRange(allTime) {
@@ -4128,6 +5314,242 @@ function renderH2H(d) {
 
 
 // ═══════════════════════════════════════════════════════════
+// 5b. FTC TEAM LOOKUP (uses FTC Events API + FTC Scout)
+// ═══════════════════════════════════════════════════════════
+
+async function _buildFtcTeamLookup(teamNumber, year) {
+    const season = year || 2025;
+    const data = await FTC_API.teamLookup(teamNumber, season);
+    // Patch avatar from the FTC scoring server CSS map
+    if (!data.avatar && _ftcAvatarMap) {
+        const url = _ftcAvatarMap.get(teamNumber);
+        if (url) data.avatar = url;
+    }
+    // Also try to find the team in current event data
+    if (teamsData) {
+        const local = teamsData.find(t => t.team_number === teamNumber);
+        if (local) {
+            data._event_data = local;
+        }
+    }
+    return data;
+}
+
+function renderFtcTeamStats(d) {
+    const loc = d.location || [d.city, d.state_prov, d.country].filter(Boolean).join(', ');
+    const qs = d.quick_stats || {};
+    const tot = qs.tot || {};
+    const auto = qs.auto || {};
+    const dc = qs.dc || {};
+    const totalTeams = qs.count || '?';
+    const ev = d._event_data;
+
+    const avatarHtml = d.avatar
+        ? `<img class="team-avatar" src="${d.avatar}" alt="Team ${d.team_number} avatar">`
+        : '';
+
+    // Current-event highlight cards
+    let eventHighlights = '';
+    if (ev) {
+        const avgTotal = ev.avg_total != null ? Math.round(ev.avg_total * 10) / 10 : '\u2013';
+        const avgAuto = ev.avg_auto != null ? Math.round(ev.avg_auto * 10) / 10 : '\u2013';
+        const avgDc = ev.avg_dc != null ? Math.round(ev.avg_dc * 10) / 10 : '\u2013';
+        eventHighlights = `
+        <h3>Current Event Stats</h3>
+        <div class="team-highlights">
+            <div class="highlight-card">
+                <div class="highlight-label">Rank</div>
+                <div class="highlight-value${Number(ev.rank) <= 8 ? ' rank-top8' : ''}">${ev.rank || '\u2013'}</div>
+            </div>
+            <div class="highlight-card">
+                <div class="highlight-label">Record</div>
+                <div class="highlight-value">${ev.wins}-${ev.losses}-${ev.ties}</div>
+            </div>
+            <div class="highlight-card">
+                <div class="highlight-label">OPR</div>
+                <div class="highlight-value">${ev.opr != null ? (typeof ev.opr === 'number' ? ev.opr.toFixed(1) : ev.opr) : '\u2013'}</div>
+            </div>
+            <div class="highlight-card">
+                <div class="highlight-label">Avg Total</div>
+                <div class="highlight-value">${avgTotal}</div>
+            </div>
+            <div class="highlight-card">
+                <div class="highlight-label">Avg Auto</div>
+                <div class="highlight-value">${avgAuto}</div>
+            </div>
+            <div class="highlight-card">
+                <div class="highlight-label">Avg DC</div>
+                <div class="highlight-value">${avgDc}</div>
+            </div>
+        </div>`;
+    }
+
+    // Global OPR/QuickStats section (with percentile)
+    const _pct = (rank, total) => rank != null && total ? Math.round((1 - rank / total) * 100) : null;
+    let globalSection = '';
+    if (tot.value != null || auto.value != null || dc.value != null) {
+        const totPct = _pct(tot.rank, totalTeams);
+        const autoPct = _pct(auto.rank, totalTeams);
+        const dcPct = _pct(dc.rank, totalTeams);
+        globalSection = `
+        <h3>Global Rankings <span class="muted">(out of ${totalTeams} teams)</span></h3>
+        <div class="team-highlights">
+            <div class="highlight-card">
+                <div class="highlight-label">Total OPR</div>
+                <div class="highlight-value">${tot.value != null ? tot.value.toFixed(1) : '\u2013'}</div>
+                ${tot.rank != null ? `<div class="highlight-sub">#${tot.rank}${totPct != null ? ` (top ${100 - totPct > 0 ? 100 - totPct : 1}%)` : ''}</div>` : ''}
+            </div>
+            <div class="highlight-card">
+                <div class="highlight-label">Auto OPR</div>
+                <div class="highlight-value">${auto.value != null ? auto.value.toFixed(1) : '\u2013'}</div>
+                ${auto.rank != null ? `<div class="highlight-sub">#${auto.rank}${autoPct != null ? ` (top ${100 - autoPct > 0 ? 100 - autoPct : 1}%)` : ''}</div>` : ''}
+            </div>
+            <div class="highlight-card">
+                <div class="highlight-label">DC OPR</div>
+                <div class="highlight-value">${dc.value != null ? dc.value.toFixed(1) : '\u2013'}</div>
+                ${dc.rank != null ? `<div class="highlight-sub">#${dc.rank}${dcPct != null ? ` (top ${100 - dcPct > 0 ? 100 - dcPct : 1}%)` : ''}</div>` : ''}
+            </div>
+        </div>`;
+    }
+
+    // Event Results table (current season only: Event, Type, Playoff Result, Awards)
+    let eventResultsSection = '';
+    const eventResults = d.event_results || [];
+    if (eventResults.length) {
+        let rows = '';
+        const sorted = [...eventResults].sort((a, b) => (b.date_end || b.year || '').localeCompare(a.date_end || a.year || ''));
+        const _shortenAward = (name) => name
+            .replace(/\bAward\b\s*/gi, '')
+            .replace(/(\d+)\s*(st|nd|rd|th)\s*Place/gi, '$1$2')
+            .trim();
+        for (const e of sorted) {
+            // Merge alliance info into playoff: "Winner - Captain" or just "Winner"
+            let playoffText = '';
+            if (e.playoff_result && e.alliance) {
+                playoffText = `${e.playoff_result} (${e.alliance})`;
+            } else if (e.playoff_result) {
+                playoffText = e.playoff_result;
+            }
+            const playoffCls = e.playoff_result === 'Winner' ? ' class="winner-text"' : '';
+            const awardChips = (e.awards || []).map(a =>
+                `<span class="ftc-event-award-chip">${_shortenAward(a)}</span>`
+            ).join(' ');
+            rows += `<tr>
+                <td>${e.event_name || e.event_code || ''}</td>
+                <td class="muted">${e.event_type || ''}</td>
+                <td${playoffCls}>${playoffText || '\u2013'}</td>
+                <td>${awardChips}</td>
+            </tr>`;
+        }
+        eventResultsSection = `
+        <h3>Event Results</h3>
+        <table class="data-table compact">
+            <thead><tr><th>Event</th><th>Type</th><th>Playoff</th><th>Awards</th></tr></thead>
+            <tbody>${rows}</tbody>
+        </table>`;
+    } else if (eventsThisSeason.length) {
+        // Fallback: simple events list if no results data
+        eventResultsSection = `
+        <h3>Events \u00b7 ${d.season || 2025} Season</h3>
+        <table class="data-table compact">
+            <thead><tr><th>Event</th><th>Type</th><th>Location</th></tr></thead>
+            <tbody>${eventsThisSeason.map(e => {
+                const evLoc = [e.city, e.state_prov].filter(Boolean).join(', ');
+                return `<tr><td>${e.event_name}</td><td class="muted">${e.event_type}</td><td class="muted">${evLoc}</td></tr>`;
+            }).join('')}</tbody>
+        </table>`;
+    }
+
+    // Season-by-season achievements (above Awards)
+    let achievementsSection = '';
+    const achievements = d.season_achievements || [];
+    if (achievements.length) {
+        const rookieYear = d.rookie_year || '?';
+        const displaySeason = (yr) => `${yr}\u2011${String(yr + 1).slice(2)}`;
+        achievementsSection = `
+        <h3>Season-by-Season Achievements (since ${rookieYear})</h3>
+        <table class="data-table compact">
+            <thead><tr><th>Season</th><th>Biggest Achievement</th><th>Event</th></tr></thead>
+            <tbody>${[...achievements].reverse().map(s => `
+                <tr>
+                    <td class="stat">${displaySeason(s.year)}</td>
+                    <td>${s.achievement.includes('Winner')
+                        ? '<span class="winner-text">' + s.achievement + '</span>'
+                        : s.achievement}</td>
+                    <td class="muted">${s.event_name || ''}</td>
+                </tr>`).join('')}</tbody>
+        </table>`;
+    }
+
+    // Awards section — only real awards (alliance selections excluded)
+    let awardsSection = '';
+    const allAwards = d.all_awards || [];
+    const currentAwards = d.awards || [];
+    if (allAwards.length) {
+        const displaySeason = (yr) => `${yr}\u2011${String(yr + 1).slice(2)}`;
+        awardsSection = `
+        <h3>Awards (All Seasons)</h3>
+        <table class="data-table compact">
+            <thead><tr><th>Season</th><th>Award</th><th>Event</th></tr></thead>
+            <tbody>${[...allAwards].sort((a, b) => b.year - a.year).map(a => `<tr><td class="stat">${displaySeason(a.year)}</td><td>${a.name}</td><td class="muted">${a.event || ''}</td></tr>`).join('')}</tbody>
+        </table>`;
+    } else if (currentAwards.length) {
+        awardsSection = `
+        <h3>Awards (${d.season || 2025} Season)</h3>
+        <table class="data-table compact">
+            <thead><tr><th>Award</th><th>Event</th></tr></thead>
+            <tbody>${currentAwards.map(a => `<tr><td>${a.name}</td><td class="muted">${a.event || ''}</td></tr>`).join('')}</tbody>
+        </table>`;
+    }
+
+    return `
+    <div class="team-card">
+        <div class="team-header">
+            <div class="team-header-top">
+                ${avatarHtml}
+                <div class="team-header-text">
+                    <h2>${d.team_number} | ${d.nickname || ''}</h2>
+                    ${d.school_name ? `<p>${d.school_name}</p>` : ''}
+                    ${loc ? `<p>${loc}</p>` : ''}
+                    ${d.rookie_year ? `<p class="muted">Rookie Year: ${d.rookie_year}</p>` : ''}
+                </div>
+            </div>
+        </div>
+        ${eventHighlights}
+        ${globalSection}
+        <div class="ftc-opr-chart-section hidden" id="ftc-opr-chart-container">
+            <h3>OPR Across Seasons</h3>
+            <div id="ftc-opr-chart" style="width:100%;height:180px;position:relative"></div>
+        </div>
+        ${eventResultsSection}
+        ${achievementsSection}
+        ${awardsSection}
+    </div>`;
+}
+
+function renderFtcOprChart(history) {
+    const container = $('ftc-opr-chart');
+    const section = $('ftc-opr-chart-container');
+    if (!container || !section || !history || history.length < 2) return;
+    section.classList.remove('hidden');
+    const maxOpr = Math.max(...history.map(h => h.opr_total));
+    const w = 300, h = 140, pad = 35, rightPad = 10;
+    const plotW = w - pad - rightPad, plotH = h - 30;
+    const step = plotW / Math.max(history.length - 1, 1);
+    const scale = maxOpr > 0 ? plotH / (maxOpr * 1.15) : 1;
+    let pts = history.map((d, i) => [pad + i * step, h - 15 - d.opr_total * scale]);
+    let path = pts.map((p, i) => (i === 0 ? 'M' : 'L') + p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ');
+    let areaPath = path + ' L' + pts[pts.length - 1][0].toFixed(1) + ',' + (h - 15) + ' L' + pts[0][0].toFixed(1) + ',' + (h - 15) + ' Z';
+    let labels = history.map((d, i) => '<text x="' + (pad + i * step) + '" y="' + (h - 2) + '" text-anchor="middle" fill="var(--text-muted)" font-size="10">' + d.season + '</text>').join('');
+    let dots = pts.map((p, i) => '<circle cx="' + p[0].toFixed(1) + '" cy="' + p[1].toFixed(1) + '" r="4" fill="#f97316" stroke="#1e1b2e" stroke-width="2"/>' +
+        '<text x="' + p[0].toFixed(1) + '" y="' + (p[1] - 8).toFixed(1) + '" text-anchor="middle" fill="var(--text-secondary)" font-size="10" font-weight="600">' + history[i].opr_total + '</text>').join('');
+    container.innerHTML = '<svg viewBox="0 0 ' + w + ' ' + h + '" style="width:100%;height:100%">' +
+        '<path d="' + areaPath + '" fill="rgba(249,115,22,.1)" />' +
+        '<path d="' + path + '" fill="none" stroke="#f97316" stroke-width="2.5" stroke-linejoin="round" />' +
+        dots + labels + '</svg>';
+}
+
+// ═══════════════════════════════════════════════════════════
 // 6. PLAY BY PLAY
 // ═══════════════════════════════════════════════════════════
 async function loadPlayByPlay() {
@@ -4135,7 +5557,7 @@ async function loadPlayByPlay() {
     hideInlineError('pbp-error');
     try {
         setLoadingStatus('pbp-loading-status', 'Fetching match schedule\u2026');
-        const data = await API.allMatches(currentEvent);
+        const data = await getActiveAPI().allMatches(currentEvent);
         pbpData = data;
         checkWorldRecordFromPbp(data);
         pbpIndex = findLatestScoredMatch(data?.matches || []);
@@ -4169,10 +5591,41 @@ async function loadPlayByPlay() {
     }
 }
 
+// Pre-compute PbP display labels: Qual N for quals, Match N for playoffs, Final / Final N for finals
+function _computePbpLabels() {
+    if (!pbpData?.matches) return;
+    let matchNum = 0;
+    pbpData.matches.forEach(m => {
+        if (m.comp_level === 'qm') {
+            m._pbpLabel = (m.label || '').replace(/^Qualification\s*/i, 'Qual ');
+        } else if (m.comp_level === 'f') {
+            m._pbpLabel = m.label || 'Final';
+        } else {
+            matchNum++;
+            m._pbpLabel = `Match ${matchNum}`;
+        }
+    });
+}
+
+// Get alliance pick role for a team (Captain, P1, P2, etc.)
+function _getPickRole(teamNum) {
+    if (!allianceData?.alliances) return null;
+    for (const a of allianceData.alliances) {
+        const idx = (a.teams || []).findIndex(t => t.team_number === teamNum);
+        if (idx >= 0) {
+            if (idx === 0) return 'C';
+            if (a.teams.length <= 4 && idx === a.teams.length - 1 && idx >= 3) return 'BU';
+            return `P${idx}`;
+        }
+    }
+    return null;
+}
+
 function buildPbpSelector() {
+    _computePbpLabels();
     const sel = $('pbp-match-select');
     sel.innerHTML = pbpData.matches.map((m, i) =>
-        `<option value="${i}">${(m.label || '').replace(/^Qualification\s*/i, 'Qual ')}</option>`
+        `<option value="${i}">${m._pbpLabel || m.label || ''}</option>`
     ).join('');
     sel.value = pbpIndex;
 }
@@ -4279,7 +5732,7 @@ function renderPbpMatch() {
     // Enrich teams with streak and OPR-above-average data
     _enrichPbpTeams(m);
 
-    $('pbp-match-label').textContent = (m.label || '').replace(/^Qualification\s*/i, 'Qual ');
+    $('pbp-match-label').textContent = m._pbpLabel || (m.label || '').replace(/^Qualification\s*/i, 'Qual ');
     $('pbp-match-select').value = pbpIndex;
 
     const redWon = m.winning_alliance === 'red';
@@ -4392,7 +5845,7 @@ function renderPbpMatch() {
             : ''}
     `;
 
-    // Prior connections between the 6 teams on the field
+    // Prior connections between the teams on the field
     renderPbpConnections(m);
 }
 
@@ -4408,7 +5861,7 @@ async function fetchMatchConnections(teamNums, forceAllTime) {
     const key = _connCacheKey(teamNums, wantAllTime);
     if (_pbpConnCache[key]) return _pbpConnCache[key];
     try {
-        const result = await API.eventConnections(currentEvent, wantAllTime, teamNums);
+        const result = await getActiveAPI().eventConnections(currentEvent, wantAllTime, teamNums);
         _pbpConnCache[key] = result;
         return result;
     } catch {
@@ -4521,7 +5974,7 @@ async function renderPbpConnections(match) {
                 <span class="conn-range-side${!_pbpConnAllTime ? ' active' : ''}">Past 3 Seasons</span>
                 <input type="checkbox"${checkedAttr} onchange="togglePbpConnRange(this.checked)">
                 <span class="conn-toggle-slider"></span>
-                <span class="conn-range-side${_pbpConnAllTime ? ' active' : ''}">All time</span>
+                <span class="conn-range-side${_pbpConnAllTime ? ' active' : ''}">${isFTCMode() ? 'Since 2019' : 'All time'}</span>
             </label>
         </div>
         <div class="pbp-conn-body">
@@ -4565,6 +6018,7 @@ function renderPbpTeam(t, sideCls) {
     const shortLoc = [t.state_prov, t.country].filter(Boolean).join(', ');
     const foreignCls = highlightForeign && t.country && eventCountry && t.country !== eventCountry ? 'foreign-team' : '';
     const rookieCls = highlightRookie && t.rookie_year && currentEventYear && t.rookie_year >= currentEventYear ? 'rookie-team' : '';
+    const ftcMode = isFTCMode();
 
     // Streak indicator
     let streakHtml = '';
@@ -4584,7 +6038,7 @@ function renderPbpTeam(t, sideCls) {
 
     // Delta indicator: (OPR - EPA) / avgEventOPR × 100 — positive = outperforming
     let deltaHtml = '';
-    if (t._delta != null && (t._delta > 15 || t._delta < -15)) {
+    if (!ftcMode && t._delta != null && (t._delta > 15 || t._delta < -15)) {
         const pct = Math.round(Math.abs(t._delta));
         if (t._delta > 15) {
             deltaHtml = `<span class="pbp-delta pbp-delta-up" title="Outperforming Statbotics predictions by ${pct}%">\u2191</span>`;
@@ -4593,10 +6047,15 @@ function renderPbpTeam(t, sideCls) {
         }
     }
 
+    // Alliance pick role indicator (Captain / Pick #) — only in playoff matches
+    const isPlayoff = pbpData?.matches?.[pbpIndex]?.comp_level && pbpData.matches[pbpIndex].comp_level !== 'qm';
+    const pickRole = isPlayoff ? _getPickRole(t.team_number) : null;
+    const pickHtml = pickRole ? `<span class="pbp-pick-role">${pickRole}</span>` : '';
+
     return `
     <div class="pbp-team ${foreignCls} ${rookieCls}" data-country="${t.country || ''}" data-rookie-year="${t.rookie_year || ''}">
         <div class="pbp-team-top">
-            <div class="pbp-team-number">${t.team_number}</div>
+            <div class="pbp-team-number">${t.team_number}${pickHtml}</div>
             <div class="pbp-team-identity">
                 <div class="pbp-team-name-row">
                     <div class="pbp-team-nickname">${t.nickname || 'Team ' + t.team_number}</div>
@@ -4621,10 +6080,10 @@ function renderPbpTeam(t, sideCls) {
                 <div class="pbp-stat-label">OPR</div>
                 <div class="pbp-stat-value opr-val${oprCls}">${t.opr}</div>
             </div>
-            <div class="pbp-stat">
+            ${ftcMode ? '' : `<div class="pbp-stat">
                 <div class="pbp-stat-label">EPA${deltaHtml}</div>
                 <div class="pbp-stat-value epa-val${epaCls}">${t.epa != null ? t.epa : '\u2013'}</div>
-            </div>
+            </div>`}
             <div class="pbp-stat">
                 <div class="pbp-stat-label">Avg RP</div>
                 <div class="pbp-stat-value">${t.avg_rp}</div>
@@ -4642,6 +6101,7 @@ let _playoffFirstsCache = null;  // {team_number: {first_playoff, first_finals, 
 async function _injectPlayoffFirsts(teams, matchIdx, compLevel) {
     // Lazy-load once per event
     if (_playoffFirstsCache === null) {
+        if (isFTCMode()) { _playoffFirstsCache = {}; return; }
         try {
             _playoffFirstsCache = await API.playoffFirsts(currentEvent);
         } catch {
@@ -4685,7 +6145,10 @@ async function _injectPbpAwards(teams, matchIdx) {
 
     if (uncached.length) {
         try {
-            const data = await API.teamAwardsSummary(uncached);
+            // Use FTC or FRC awards endpoint depending on mode
+            const data = isFTCMode()
+                ? await FTC_API.teamAwardsSummary(uncached)
+                : await API.teamAwardsSummary(uncached);
             for (const [key, val] of Object.entries(data)) {
                 _pbpAwardsCache[parseInt(key)] = val;
             }
@@ -4788,7 +6251,7 @@ async function pbpAutoRefresh() {
         // Fast path: try FRC Events API scores first (instant from FIRST)
         let fastScoresApplied = false;
         try {
-            const fast = await API.fastScores(currentEvent);
+            const fast = await getActiveAPI().fastScores(currentEvent);
             if (fast?.scores?.length) {
                 const oldMatches = pbpData.matches;
                 let changed = false;
@@ -4824,8 +6287,8 @@ async function pbpAutoRefresh() {
             }
         } catch (_) { /* FRC scores unavailable, continue to TBA */ }
 
-        // Full refresh from TBA (gets new matches, OPR, stats, etc)
-        const fresh = await API.allMatches(currentEvent);
+        // Full refresh (gets new matches, etc)
+        const fresh = await getActiveAPI().allMatches(currentEvent);
         if (!fresh || !fresh.matches || currentEvent !== fresh.event_key) return;
 
         const oldMatches = pbpData.matches;
@@ -4925,7 +6388,9 @@ function updateBreakdownTabState() {
     if (!bdBtn) return;
     if (currentEventYear && currentEventYear < 2025) {
         bdBtn.classList.add('disabled');
-        bdBtn.title = 'Score breakdown is only available for 2025 events onwards';
+        bdBtn.title = isFTCMode()
+            ? 'Score breakdown is only available for the 2025-2026 DECODE season and later'
+            : 'Score breakdown is only available for 2025 events onwards';
     } else {
         bdBtn.classList.remove('disabled');
         bdBtn.title = '';
@@ -4939,7 +6404,7 @@ async function loadBreakdownTab() {
         setLoadingStatus('bd-loading-status', 'Loading score data\u2026');
         // Reuse the same all-matches data as PBP (or fetch if needed)
         if (!pbpData) {
-            const data = await API.allMatches(currentEvent);
+            const data = await getActiveAPI().allMatches(currentEvent);
             pbpData = data;
         }
         bdData = pbpData;
@@ -4982,7 +6447,7 @@ function stopBdListRefresh() {
 async function refreshBdList() {
     if (!currentEvent) return;
     try {
-        const fresh = await API.allMatches(currentEvent);
+        const fresh = await getActiveAPI().allMatches(currentEvent);
         // Merge updated has_breakdown flags into existing data
         if (fresh && fresh.matches && bdData && bdData.matches) {
             const keyMap = {};
@@ -5055,7 +6520,7 @@ async function loadBdMatch() {
     $('bd-content').innerHTML = '';
 
     try {
-        const data = await API.matchBreakdown(m.key);
+        const data = await getActiveAPI().matchBreakdown(m.key);
         if (data.available) {
             m.has_breakdown = true;   // update local flag
             bdCache[m.key] = data;
@@ -5086,7 +6551,7 @@ async function pollBdMatch() {
     if (!bdData || !bdData.matches.length) return;
     const m = bdData.matches[bdIndex];
     try {
-        const data = await API.matchBreakdown(m.key);
+        const data = await getActiveAPI().matchBreakdown(m.key);
         if (data.available) {
             m.has_breakdown = true;
             bdCache[m.key] = data;
@@ -5132,7 +6597,14 @@ function renderBreakdown(data) {
     const blueAllianceNum = m && m.blue ? m.blue.alliance_number : null;
     const isPlayoff = m && m.comp_level && m.comp_level !== 'qm';
 
-    const renderFn = (data.game_year >= 2026) ? renderBdAlliance2026 : renderBdAlliance;
+    let renderFn;
+    if (data.program === 'FTC') {
+        renderFn = renderBdAllianceFTC;
+    } else if (data.game_year >= 2026) {
+        renderFn = renderBdAlliance2026;
+    } else {
+        renderFn = renderBdAlliance;
+    }
 
     $('bd-content').innerHTML = `
         ${renderFn(data.red, 'red', redWon, nickMap, statsMap, redAllianceNum, isPlayoff)}
@@ -5370,6 +6842,202 @@ function renderReefGrid(reef, otherPhaseReef, isAuto) {
 
     html += '</div>';
     return html;
+}
+
+
+// ═══════════════════════════════════════════════════════════
+//  FTC DECODE — BREAKDOWN RENDERER
+// ═══════════════════════════════════════════════════════════
+
+function renderBdAllianceFTC(alliance, color, won, nickMap, statsMap, allianceNum, isPlayoff) {
+    const bd = alliance.breakdown;
+    if (!bd) return '<div class="bd-alliance">No breakdown data</div>';
+
+    const sideCls = color === 'red' ? 'red-side' : 'blue-side';
+    const title = allianceNum ? `Alliance #${allianceNum}` : (color === 'red' ? 'Red Alliance' : 'Blue Alliance');
+    const displayScore = alliance.score != null && alliance.score >= 0 ? alliance.score : '–';
+
+    const headerContent = color === 'blue'
+        ? `<div class="bd-alliance-score-group">
+                <span class="bd-alliance-score">${displayScore}</span>
+                ${won ? '<span class="bd-winner-label">WINNER</span>' : ''}
+            </div>
+            <span>${title}</span>`
+        : `<span>${title}</span>
+            <div class="bd-alliance-score-group">
+                ${won ? '<span class="bd-winner-label">WINNER</span>' : ''}
+                <span class="bd-alliance-score">${displayScore}</span>
+            </div>`;
+
+    // Get match teams from bdData for robot → team mapping
+    const m = (bdData && bdData.matches) ? bdData.matches[bdIndex] : null;
+    const sideTeams = m && m[color] && m[color].teams ? m[color].teams : [];
+
+    return `
+    <div class="bd-alliance ${sideCls}">
+        <div class="bd-alliance-header">
+            ${headerContent}
+        </div>
+
+        <!-- Per-robot: Auto Leave + Endgame -->
+        <div class="bd-section">
+            <div class="bd-section-title">Per-Robot Performance</div>
+            <div class="bd-robots">
+                ${(bd.robots || []).map((r, i) => renderBdRobotFTC(r, sideTeams[i], nickMap, statsMap, color)).join('')}
+            </div>
+        </div>
+
+        <!-- Autonomous -->
+        <div class="bd-section">
+            <div class="bd-section-title">Autonomous (${bd.autoPoints} pts)</div>
+            <div class="bd-stats">
+                <div class="bd-stat-row">
+                    <span class="bd-stat-label">Leave Points</span>
+                    <span class="bd-stat-value">${bd.autoLeavePoints}</span>
+                </div>
+                <div class="bd-stat-row">
+                    <span class="bd-stat-label">Artifacts Classified</span>
+                    <span class="bd-stat-value">${bd.autoClassifiedArtifacts}</span>
+                </div>
+                <div class="bd-stat-row">
+                    <span class="bd-stat-label">Overflow Artifacts</span>
+                    <span class="bd-stat-value">${bd.autoOverflowArtifacts}</span>
+                </div>
+                <div class="bd-stat-row">
+                    <span class="bd-stat-label">Artifact Points</span>
+                    <span class="bd-stat-value">${bd.autoArtifactPoints}</span>
+                </div>
+                <div class="bd-stat-row">
+                    <span class="bd-stat-label">Pattern Points</span>
+                    <span class="bd-stat-value">${bd.autoPatternPoints}</span>
+                </div>
+            </div>
+            ${renderClassifierGrid(bd.autoClassifierState, 'Auto Classifier')}
+        </div>
+
+        <!-- Driver-Controlled (Teleop) -->
+        <div class="bd-section">
+            <div class="bd-section-title">Driver-Controlled (${bd.teleopPoints} pts)</div>
+            <div class="bd-stats">
+                <div class="bd-stat-row">
+                    <span class="bd-stat-label">Artifacts Classified</span>
+                    <span class="bd-stat-value">${bd.teleopClassifiedArtifacts}</span>
+                </div>
+                <div class="bd-stat-row">
+                    <span class="bd-stat-label">Overflow Artifacts</span>
+                    <span class="bd-stat-value">${bd.teleopOverflowArtifacts}</span>
+                </div>
+                <div class="bd-stat-row">
+                    <span class="bd-stat-label">Depot Artifacts</span>
+                    <span class="bd-stat-value">${bd.teleopDepotArtifacts}</span>
+                </div>
+                <div class="bd-stat-row">
+                    <span class="bd-stat-label">Artifact Points</span>
+                    <span class="bd-stat-value">${bd.teleopArtifactPoints}</span>
+                </div>
+                <div class="bd-stat-row">
+                    <span class="bd-stat-label">Depot Points</span>
+                    <span class="bd-stat-value">${bd.teleopDepotPoints}</span>
+                </div>
+                <div class="bd-stat-row">
+                    <span class="bd-stat-label">Base Points</span>
+                    <span class="bd-stat-value">${bd.teleopBasePoints}</span>
+                </div>
+                <div class="bd-stat-row">
+                    <span class="bd-stat-label">Pattern Points</span>
+                    <span class="bd-stat-value">${bd.teleopPatternPoints}</span>
+                </div>
+            </div>
+            ${renderClassifierGrid(bd.teleopClassifierState, 'Teleop Classifier')}
+        </div>
+
+        <!-- Fouls -->
+        <div class="bd-section">
+            <div class="bd-section-title">Fouls & Penalties</div>
+            <div class="bd-fouls">
+                <div class="bd-foul-item">
+                    <span class="bd-foul-label">Minor:</span>
+                    <span class="bd-foul-value">${bd.minorFouls}</span>
+                </div>
+                <div class="bd-foul-item">
+                    <span class="bd-foul-label">Major:</span>
+                    <span class="bd-foul-value">${bd.majorFouls}</span>
+                </div>
+                <div class="bd-foul-item">
+                    <span class="bd-foul-label">Foul Pts Committed:</span>
+                    <span class="bd-foul-value">${bd.foulPointsCommitted}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Ranking Points -->
+        <div class="bd-section">
+            <div class="bd-section-title">${isPlayoff ? 'Bonuses' : 'Ranking Points'}</div>
+            <div class="bd-bonuses">
+                <span class="bd-bonus-badge ${bd.movementRP ? 'achieved' : ''}">🏃 Movement</span>
+                <span class="bd-bonus-badge ${bd.goalRP ? 'achieved' : ''}">🎯 Goal</span>
+                <span class="bd-bonus-badge ${bd.patternRP ? 'achieved' : ''}">🧩 Pattern</span>
+            </div>
+        </div>
+
+        <!-- Total -->
+        <div class="bd-total-bar">
+            <span class="bd-total-label">Total</span>
+            <span class="bd-total-score">${bd.totalPoints}</span>
+        </div>
+    </div>`;
+}
+
+function renderBdRobotFTC(robot, teamObj, nickMap, statsMap, color) {
+    const leaveCls = robot.auto_leave ? 'yes' : 'no';
+    const leaveVal = robot.auto_leave ? 'Yes' : 'No';
+
+    const endMap = {
+        'None': { label: '–', cls: 'no' },
+        'Partial Ascent': { label: 'Partial', cls: 'parked' },
+        'Full Ascent': { label: 'Full', cls: 'deep' },
+    };
+    const eg = endMap[robot.endgame] || { label: robot.endgame || '–', cls: '' };
+
+    // Try to get team number from the match data
+    const num = teamObj ? teamObj.team_number : `R${robot.robot_number}`;
+    const nick = teamObj ? teamObj.nickname : (nickMap && nickMap[num]) || '';
+    const tooltipHtml = nick ? `<span class="custom-tooltip">${nick}</span>` : '';
+    const st = teamObj || (statsMap && statsMap[num]) || {};
+    const oprStr = st.opr != null ? st.opr : '–';
+
+    return `
+    <div class="bd-robot-card" data-team="${num}" data-color="${color}">
+        <div class="bd-robot-num has-tooltip">${num}${tooltipHtml}</div>
+        <div class="bd-robot-field">
+            <span class="bd-robot-label">Auto Leave</span>
+            <span class="bd-robot-value ${leaveCls}">${leaveVal}</span>
+        </div>
+        <div class="bd-robot-field">
+            <span class="bd-robot-label">Endgame</span>
+            <span class="bd-robot-value ${eg.cls}">${eg.label}</span>
+        </div>
+    </div>`;
+}
+
+function renderClassifierGrid(state, title) {
+    if (!state || !state.length) return '';
+    const colorMap = {
+        'NONE':   { cls: '',           label: '–' },
+        'GREEN':  { cls: 'cls-green',  label: '●' },
+        'PURPLE': { cls: 'cls-purple', label: '●' },
+        'YELLOW': { cls: 'cls-yellow', label: '●' },
+    };
+    return `
+    <div class="bd-classifier">
+        <div class="bd-classifier-title">${title}</div>
+        <div class="bd-classifier-grid">
+            ${state.map((s, i) => {
+                const c = colorMap[s] || colorMap['NONE'];
+                return `<div class="bd-classifier-cell ${c.cls}" title="Slot ${i + 1}: ${s}">${c.label}</div>`;
+            }).join('')}
+        </div>
+    </div>`;
 }
 
 
@@ -5678,11 +7346,17 @@ function toggleSpotlight(teamNum, color) {
     const currentCompLevel = m?.comp_level || 'qm';
     const frcLevel = currentCompLevel === 'qm' ? 'Qualification' : 'Playoff';
 
-    // Fetch individual performance data from FRC Events API
+    // Fetch individual performance data from Events API
     const eventKey = currentEvent;
     if (!eventKey) return;
 
-    API.teamPerf(eventKey, teamNum).then(perf => {
+    const _perfApi = isFTCMode() ? null : API;
+    if (!_perfApi) {
+        // FTC: show fallback with just the current-match robot data
+        _renderSpotlightFallback(panel, robot, bd.game_year, color, nick, teamNum, colorLabel);
+        return;
+    }
+    _perfApi.teamPerf(eventKey, teamNum).then(perf => {
         if (_spotlightTeam !== teamNum) return;  // user closed or switched
 
         _renderSpotlightContent(panel, perf, robot, bd.game_year, color, nick, teamNum, colorLabel, frcLevel, currentMatchNum, oprStr, epaStr);
@@ -6051,6 +7725,7 @@ async function compareCurrentMatch() {
     $('compare-title').textContent = `Match Comparison: ${m.label}`;
 
     try {
+        if (isFTCMode()) throw new Error('use-fallback');
         const data = await API.compareTeams(currentEvent, allKeys);
         renderComparison(data, { redKeys, blueKeys, matchLabel: m.label });
     } catch {
@@ -6155,7 +7830,7 @@ function closeLookup() {
 async function launchLookupFromSelection() {
     if (compareSelection.size !== 1) return;
     const teamKey = [...compareSelection][0];
-    const num = parseInt(teamKey.replace('frc', ''), 10);
+    const num = parseInt(teamKey.replace(/^(frc|ftc)/, ''), 10);
     if (!num) return;
 
     openLookup();
@@ -6163,8 +7838,14 @@ async function launchLookupFromSelection() {
     $('lookup-body').innerHTML = '<p class="loading-msg">Loading team data\u2026</p>';
 
     try {
-        const data = await API.teamStats(num, null);
-        $('lookup-body').innerHTML = renderTeamStats(data);
+        if (isFTCMode()) {
+            const data = await _buildFtcTeamLookup(num, currentEventYear);
+            $('lookup-body').innerHTML = renderFtcTeamStats(data);
+            FTC_API.teamOprHistory(num, currentEventYear).then(h => renderFtcOprChart(h)).catch(() => {});
+        } else {
+            const data = await API.teamStats(num, null);
+            $('lookup-body').innerHTML = renderTeamStats(data);
+        }
     } catch (err) {
         $('lookup-body').innerHTML = `<p class="empty">Error: ${err.message}</p>`;
     }
@@ -6227,7 +7908,7 @@ function closeMatchHistory() {
 async function launchMatchHistoryFromSelection() {
     if (compareSelection.size !== 1 || !currentEvent) return;
     const teamKey = [...compareSelection][0];
-    const num = parseInt(teamKey.replace('frc', ''), 10);
+    const num = parseInt(teamKey.replace(/^(frc|ftc)/, ''), 10);
     if (!num) return;
 
     // Find team nickname from teamsData
@@ -6239,11 +7920,60 @@ async function launchMatchHistoryFromSelection() {
     $('match-history-body').innerHTML = '<p class="loading-msg">Loading match history…</p>';
 
     try {
-        const perf = await API.teamPerf(currentEvent, num);
-        renderMatchHistoryPanel(perf, num, nick);
+        if (isFTCMode()) {
+            // FTC: build match history from PbP data
+            const perf = _buildFtcTeamPerf(num);
+            renderMatchHistoryPanel(perf, num, nick);
+        } else {
+            const perf = await API.teamPerf(currentEvent, num);
+            renderMatchHistoryPanel(perf, num, nick);
+        }
     } catch (err) {
         $('match-history-body').innerHTML = `<p class="empty">Error: ${err.message}</p>`;
     }
+}
+
+function _buildFtcTeamPerf(teamNum) {
+    const matches = (pbpData && pbpData.matches) || [];
+    const teamMatches = matches.filter(m => {
+        const redTeams = (m.red && m.red.teams) || [];
+        const blueTeams = (m.blue && m.blue.teams) || [];
+        return redTeams.some(t => t.team_number === teamNum) || blueTeams.some(t => t.team_number === teamNum);
+    });
+    let wins = 0, losses = 0, ties = 0, totalScore = 0;
+    const matchList = teamMatches.map(m => {
+        const redTeams = (m.red && m.red.teams) || [];
+        const blueTeams = (m.blue && m.blue.teams) || [];
+        const onRed = redTeams.some(t => t.team_number === teamNum);
+        const myAlliance = onRed ? redTeams : blueTeams;
+        const oppAlliance = onRed ? blueTeams : redTeams;
+        const myScore = onRed ? ((m.red && m.red.score) || 0) : ((m.blue && m.blue.score) || 0);
+        const oppScore = onRed ? ((m.blue && m.blue.score) || 0) : ((m.red && m.red.score) || 0);
+        const result = myScore > oppScore ? 'W' : myScore < oppScore ? 'L' : 'T';
+        if (result === 'W') wins++; else if (result === 'L') losses++; else ties++;
+        totalScore += myScore;
+        const desc = (m.label || m.match_key || '').replace(/Qualification\s*/gi, 'Qual ');
+        return {
+            label: m.label || m.match_key || '',
+            description: desc,
+            allianceScore: myScore,
+            opponentScore: oppScore,
+            allianceColor: onRed ? 'Red' : 'Blue',
+            allianceTeams: myAlliance.filter(t => t.team_number !== teamNum).map(t => t.team_number),
+            opponentTeams: oppAlliance.map(t => t.team_number),
+            alliance_score: myScore,
+            opponent_score: oppScore,
+            result: result,
+            comp_level: m.comp_level || 'qm',
+        };
+    });
+    return {
+        team_number: teamNum,
+        record: { wins, losses, ties },
+        matches_played: teamMatches.length,
+        avg_alliance_score: teamMatches.length > 0 ? Math.round(totalScore / teamMatches.length) : 0,
+        matches: matchList,
+    };
 }
 
 function renderMatchHistoryPanel(perf, teamNum, nick) {
@@ -6353,11 +8083,20 @@ function lookupTeamFromMatchHistory(teamNum) {
     openLookup();
     $('lookup-title').textContent = `Team Lookup · ${teamNum}`;
     $('lookup-body').innerHTML = '<p class="loading-msg">Loading team data\u2026</p>';
-    API.teamStats(teamNum, null).then(data => {
-        $('lookup-body').innerHTML = renderTeamStats(data);
-    }).catch(err => {
-        $('lookup-body').innerHTML = `<p class="empty">Error: ${err.message}</p>`;
-    });
+    if (isFTCMode()) {
+        _buildFtcTeamLookup(teamNum, currentEventYear).then(data => {
+            $('lookup-body').innerHTML = renderFtcTeamStats(data);
+            FTC_API.teamOprHistory(teamNum, currentEventYear).then(h => renderFtcOprChart(h)).catch(() => {});
+        }).catch(err => {
+            $('lookup-body').innerHTML = `<p class="empty">Error: ${err.message}</p>`;
+        });
+    } else {
+        API.teamStats(teamNum, null).then(data => {
+            $('lookup-body').innerHTML = renderTeamStats(data);
+        }).catch(err => {
+            $('lookup-body').innerHTML = `<p class="empty">Error: ${err.message}</p>`;
+        });
+    }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -6428,8 +8167,14 @@ async function floatLookupTeam() {
     _updateFloatTitleBadge('#' + num);
 
     try {
-        const data = await API.teamStats(num, year);
-        body.innerHTML = renderTeamStats(data);
+        if (isFTCMode()) {
+            const data = await _buildFtcTeamLookup(num, year);
+            body.innerHTML = renderFtcTeamStats(data);
+            FTC_API.teamOprHistory(num, year).then(h => renderFtcOprChart(h)).catch(() => {});
+        } else {
+            const data = await API.teamStats(num, year);
+            body.innerHTML = renderTeamStats(data);
+        }
     } catch (err) {
         body.innerHTML = `<div class="float-lookup-empty"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg><p>${err.message}</p></div>`;
         _updateFloatTitleBadge('');
@@ -6514,13 +8259,18 @@ document.addEventListener('keydown', e => {
 // ── Core comparison renderer ───────────────────────────────
 async function showComparison(teamKeys, opts = {}) {
     openCompare();
-    _syncUrl({ compare: teamKeys.map(k => k.replace('frc','')).join(',') });
+    const prefix = isFTCMode() ? 'ftc' : 'frc';
+    _syncUrl({ compare: teamKeys.map(k => k.replace(prefix,'')).join(',') });
     $('compare-body').innerHTML = '<p class="loading-msg">Fetching comparison data\u2026</p>';
     $('compare-title').textContent = opts.matchLabel
         ? `Match Comparison: ${opts.matchLabel}`
         : 'Team Comparison';
 
     try {
+        if (isFTCMode()) {
+            // FTC: use cached teamsData directly (no dedicated compare endpoint)
+            throw new Error('use-fallback');
+        }
         const data = await API.compareTeams(currentEvent, teamKeys);
         renderComparison(data, opts);
     } catch (err) {
@@ -6530,7 +8280,7 @@ async function showComparison(teamKeys, opts = {}) {
                 const t = teamsData.find(x => x.team_key === tk) || {};
                 return {
                     team_key: tk,
-                    team_number: t.team_number || parseInt(tk.replace('frc', '')),
+                    team_number: t.team_number || parseInt(tk.replace(/^(frc|ftc)/, '')),
                     nickname: t.nickname || '',
                     city: t.city || '',
                     state_prov: t.state_prov || '',
@@ -6540,11 +8290,24 @@ async function showComparison(teamKeys, opts = {}) {
                     losses: t.losses || 0,
                     ties: t.ties || 0,
                     opr: t.opr || 0,
+                    opr_auto: t.opr_auto ?? null,
+                    opr_dc: t.opr_dc ?? null,
+                    opr_np: t.opr_np ?? null,
                     epa: t.epa ?? null,
-                    avg_rp: 0,
-                    qual_average: 0,
-                    high_score: 0,
-                    matches_played: 0,
+                    avg_rp: t.avg_rp ?? t.rp ?? 0,
+                    qual_average: t.qual_average ?? 0,
+                    high_score: t.high_score ?? 0,
+                    matches_played: t.matches_played ?? 0,
+                    avg_total: t.avg_total ?? null,
+                    avg_auto: t.avg_auto ?? null,
+                    avg_dc: t.avg_dc ?? null,
+                    avg_np: t.avg_np ?? null,
+                    max_total: t.max_total ?? null,
+                    max_auto: t.max_auto ?? null,
+                    max_dc: t.max_dc ?? null,
+                    min_total: t.min_total ?? null,
+                    dev_total: t.dev_total ?? null,
+                    quick_stats: t.quick_stats ?? null,
                 };
             });
             renderComparison({ event_key: currentEvent, teams: fallbackTeams }, opts);
@@ -6560,13 +8323,21 @@ function renderComparison(data, opts) {
     const blueKeys = new Set(opts.blueKeys || []);
     const isMatchMode = redKeys.size > 0;
 
-    const stats = [
-        { key: 'rank',         label: 'Rank',       fmt: v => v === '-' ? '–' : `#${v}`, lower: true },
+    const ftcMode = isFTCMode();
+    const stats = ftcMode ? [
+        { key: 'rank',         label: 'Rank',        fmt: v => v === '-' ? '\u2013' : `#${v}`, lower: true },
+        { key: 'opr',          label: 'OPR',         fmt: v => v.toFixed(1) },
+        { key: 'avg_total',    label: 'Avg Score',    fmt: v => v != null ? v.toFixed(1) : '\u2013' },
+        { key: 'max_total',    label: 'High Score',   fmt: v => v != null ? Math.round(v) : '\u2013' },
+        { key: 'min_total',    label: 'Low Score',    fmt: v => v != null ? Math.round(v) : '\u2013', lower: true },
+        { key: 'dev_total',    label: 'Consistency',  fmt: v => v != null ? `\u00b1${v.toFixed(1)}` : '\u2013', lower: true },
+    ] : [
+        { key: 'rank',         label: 'Rank',       fmt: v => v === '-' ? '\u2013' : `#${v}`, lower: true },
         { key: 'opr',          label: 'OPR',        fmt: v => v.toFixed(2) },
         { key: 'epa',          label: 'EPA',        fmt: v => v != null ? v.toFixed(2) : '\u2013' },
-        { key: 'qual_average', label: 'Avg Score',  fmt: v => v.toFixed(1) },
-        { key: 'high_score',   label: 'High Score', fmt: v => v },
-        { key: 'avg_rp',       label: 'Avg RP',     fmt: v => v.toFixed(2) },
+        { key: 'qual_average', label: 'Avg Score',   fmt: v => v.toFixed(1) },
+        { key: 'high_score',   label: 'High Score',  fmt: v => v },
+        { key: 'avg_rp',       label: 'Avg RP',      fmt: v => v.toFixed(2) },
     ];
 
     // Compute max absolute values for bar widths
@@ -6652,8 +8423,83 @@ function renderComparison(data, opts) {
         }
     });
 
+    // OPR sub-rows for FTC (Auto/TeleOp number rows + global rank)
+    if (ftcMode) {
+        const hasOprBreakdown = teams.some(t => t.opr_auto != null || t.opr_dc != null);
+        if (hasOprBreakdown) {
+            // Auto OPR / TeleOp OPR number rows
+            const oprParts = [
+                { key: 'opr_auto', label: 'Auto OPR',   color: 'epa-lbl-auto' },
+                { key: 'opr_dc',   label: 'TeleOp OPR', color: 'epa-lbl-teleop' },
+            ];
+            oprParts.forEach(ep => {
+                const vals = teams.map(t => typeof t[ep.key] === 'number' ? t[ep.key] : 0);
+                const absVals = vals.map(v => Math.abs(v));
+                const best = Math.max(...vals);
+                const maxV = Math.max(...absVals, 0.01);
+                html += `<div class="comp-label"><span class="${ep.color}">${ep.label}</span></div>`;
+                teams.forEach((t, i) => {
+                    const raw = t[ep.key];
+                    const v = typeof raw === 'number' ? raw : 0;
+                    const display = typeof raw === 'number' ? raw.toFixed(1) : '\u2013';
+                    const isBest = teams.length > 1 && v === best && v > 0;
+                    const pct = maxV > 0 ? Math.round((Math.abs(v) / maxV) * 100) : 0;
+                    let sideCls = '';
+                    if (redKeys.has(t.team_key)) sideCls = 'comp-red';
+                    else if (blueKeys.has(t.team_key)) sideCls = 'comp-blue';
+                    html += `
+                    <div class="comp-cell ${sideCls} ${isBest ? 'comp-best' : ''}">
+                        <div class="comp-bar-bg"><div class="comp-bar" style="width:${pct}%"></div></div>
+                        <span class="comp-val">${display}</span>
+                    </div>`;
+                });
+                if (isH2H) {
+                    const v0 = typeof teams[0][ep.key] === 'number' ? teams[0][ep.key] : 0;
+                    const v1 = typeof teams[1][ep.key] === 'number' ? teams[1][ep.key] : 0;
+                    const diff = v0 - v1;
+                    const sign = diff > 0 ? '+' : '';
+                    const cls = diff > 0 ? 'positive' : diff < 0 ? 'negative' : 'neutral';
+                    html += `<div class="comp-delta ${cls}">${sign}${diff.toFixed(1)}</div>`;
+                }
+            });
+        }
+
+        // Global ranking row (QuickStats — rank out of all FTC teams)
+        const hasQS = teams.some(t => t.quick_stats && t.quick_stats.tot);
+        if (hasQS) {
+            const totalCount = teams.reduce((c, t) => {
+                const cnt = t.quick_stats?.count;
+                return cnt > c ? cnt : c;
+            }, 0);
+            const suffix = totalCount ? ` / ${totalCount.toLocaleString()}` : '';
+
+            html += `<div class="comp-label">Global Rank</div>`;
+            teams.forEach(t => {
+                const qs = t.quick_stats?.tot;
+                const rank = qs?.rank;
+                const display = rank != null ? `#${rank}${suffix}` : '\u2013';
+                const isBest = teams.length > 1 && rank != null && rank === Math.min(...teams.map(x => x.quick_stats?.tot?.rank ?? Infinity));
+                let sideCls = '';
+                if (redKeys.has(t.team_key)) sideCls = 'comp-red';
+                else if (blueKeys.has(t.team_key)) sideCls = 'comp-blue';
+                html += `
+                <div class="comp-cell ${sideCls} ${isBest ? 'comp-best' : ''}">
+                    <span class="comp-val">${display}</span>
+                </div>`;
+            });
+            if (isH2H) {
+                const r0 = teams[0].quick_stats?.tot?.rank ?? 0;
+                const r1 = teams[1].quick_stats?.tot?.rank ?? 0;
+                const diff = r0 - r1;
+                const sign = diff > 0 ? '+' : '';
+                const cls = diff < 0 ? 'positive' : diff > 0 ? 'negative' : 'neutral'; // lower rank = better
+                html += `<div class="comp-delta ${cls}">${sign}${diff}</div>`;
+            }
+        }
+    }
+
     // EPA Breakdown stacked bar row (visual only) + number rows
-    const hasEpaBreakdown = teams.some(t => t.epa_auto != null || t.epa_teleop != null || t.epa_endgame != null);
+    const hasEpaBreakdown = !ftcMode && teams.some(t => t.epa_auto != null || t.epa_teleop != null || t.epa_endgame != null);
     if (hasEpaBreakdown) {
         // Visual bar row
         html += '<div class="comp-label">EPA Breakdown</div>';
@@ -6725,7 +8571,7 @@ function renderComparison(data, opts) {
 
     // Alliance totals row for match mode
     if (isMatchMode) {
-        const allianceStats = ['opr', 'epa'];
+        const allianceStats = ftcMode ? ['opr'] : ['opr', 'epa'];
         html += '<div class="comp-divider" style="grid-column: 1 / -1"></div>';
 
         const redTeamsList = teams.filter(t => redKeys.has(t.team_key));
@@ -6771,6 +8617,14 @@ async function loadHistory() {
     if (!currentEvent) return;
     hide('history-empty');
     hideInlineError('history-error');
+
+    // FTC mode: history temporarily out of order
+    if (isFTCMode()) {
+        hideSkeleton('history-loading');
+        showInlineError('history-error', 'Event history is not yet available for FTC events.');
+        return;
+    }
+
     showSkeleton('history-loading', 'history-loading-status', 'Loading region & event history\u2026');
     hide('history-container');
 
@@ -7198,9 +9052,12 @@ function toggleRankingsView() {
 function renderTeamCards(teams) {
     const compact = rankingsCompact;
     const school = rankingsShowSchool;
+    const ftcMode = isFTCMode();
+    const autoTele = ftcMode && rankingsShowAutoTele;
     const toolbar = `<div class="rankings-toolbar">
         <label class="toggle-label"><input type="checkbox" ${compact ? 'checked' : ''} onchange="toggleRankingsCompact(this.checked)"> Compact</label>
         <label class="toggle-label school-toggle"><input type="checkbox" ${school ? 'checked' : ''} onchange="toggleRankingsSchool(this.checked)"> School / Org</label>
+        ${ftcMode ? `<label class="toggle-label"><input type="checkbox" ${autoTele ? 'checked' : ''} onchange="toggleRankingsAutoTele(this.checked)"> Auto / TeleOp</label>` : ''}
         <button class="rankings-view-toggle" onclick="toggleRankingsView()">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
             ${rankingsCardView ? 'Table View' : 'Card View'}
@@ -7229,8 +9086,10 @@ function renderTeamCards(teams) {
             <div class="rank-card-stats">
                 <div class="rank-card-stat"><div class="rank-card-stat-val">${t.wins}-${t.losses}-${t.ties}</div><div class="rank-card-stat-label">W-L-T</div></div>
                 <div class="rank-card-stat"><div class="rank-card-stat-val">${t.opr}</div><div class="rank-card-stat-label">OPR</div></div>
-                <div class="rank-card-stat"><div class="rank-card-stat-val">${t.epa != null ? t.epa : '\u2013'}</div><div class="rank-card-stat-label">EPA</div></div>
-                <div class="rank-card-stat"><div class="rank-card-stat-val">${t.ranking_points != null ? t.ranking_points : '\u2013'}</div><div class="rank-card-stat-label">RP</div></div>
+                ${autoTele ? `<div class="rank-card-stat"><div class="rank-card-stat-val">${t.opr_auto != null ? Number(t.opr_auto).toFixed(1) : '\u2013'}</div><div class="rank-card-stat-label">Auto</div></div>` : ''}
+                ${autoTele ? `<div class="rank-card-stat"><div class="rank-card-stat-val">${t.opr_dc != null ? Number(t.opr_dc).toFixed(1) : '\u2013'}</div><div class="rank-card-stat-label">TeleOp</div></div>` : ''}
+                ${ftcMode ? '' : `<div class="rank-card-stat"><div class="rank-card-stat-val">${t.epa != null ? t.epa : '\u2013'}</div><div class="rank-card-stat-label">EPA</div></div>`}
+                ${ftcMode ? '' : `<div class="rank-card-stat"><div class="rank-card-stat-val">${t.ranking_points != null ? t.ranking_points : '\u2013'}</div><div class="rank-card-stat-label">RP</div></div>`}
             </div>
         </div>`;
     }).join('');
@@ -7247,7 +9106,7 @@ function renderTeamCards(teams) {
             if (!currentEvent) return;
             // Trigger a re-load of rankings
             const eventKey = currentEvent;
-            API.eventTeams(eventKey).then(data => {
+            getActiveAPI().eventTeams(eventKey).then(data => {
                 if (data && !data.error) {
                     $('event-teams').innerHTML = buildTeamTable(data.teams || data);
                     showToast('Rankings refreshed', 'info', 2000);

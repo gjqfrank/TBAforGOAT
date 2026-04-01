@@ -76,6 +76,478 @@
     --shadow-glow:     0 0 20px rgba(99,102,241,.06);
 }
 
+/* ═══ FTC ORANGE THEME (DARK) ══════════════════════════════ */
+[data-mode="ftc"] {
+    --primary:         #f97316;
+    --primary-glow:    rgba(249, 115, 22, .25);
+    --primary-hover:   #fb923c;
+    --primary-soft:    rgba(249, 115, 22, .08);
+    /* Blend FRC indigo undertones with a warm orange tint */
+    --bg-gradient:     linear-gradient(145deg, #08060e 0%, #140e1a 30%, #1a1008 60%, #0e0a06 100%);
+    --surface:         #110d14;
+    --surface-glass:   rgba(17, 13, 20, .75);
+    --card:            #181220;
+    --card-hover:      #201a28;
+    --border:          rgba(249, 115, 22, .12);
+    --shadow-sm:       0 2px 8px rgba(0,0,0,.3);
+    --shadow-md:       0 4px 20px rgba(0,0,0,.4);
+    --shadow-lg:       0 8px 40px rgba(0,0,0,.5);
+    --shadow-glow:     0 0 30px rgba(249,115,22,.08);
+}
+
+[data-mode="ftc"] header h1 {
+    background: linear-gradient(135deg, #e8ecf4 0%, #f97316 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+[data-mode="ftc"] .brand-icon {
+    color: #f97316;
+    filter: drop-shadow(0 0 8px rgba(249,115,22,.35));
+}
+
+[data-mode="ftc"] #event-badge {
+    background: linear-gradient(135deg, #f97316 0%, #fb923c 100%);
+    box-shadow: 0 2px 12px rgba(249,115,22,.35);
+}
+
+[data-mode="ftc"] .tab.active {
+    color: #f97316;
+    border-color: #f97316;
+}
+
+[data-mode="ftc"] .tab.active::after {
+    background: #f97316;
+}
+[data-mode="ftc"] .tab:hover {
+    color: #fb923c;
+}
+
+[data-mode="ftc"] ::-webkit-scrollbar-thumb {
+    background: rgba(249,115,22,.35);
+}
+
+/* FTC overrides for event/section cards & banner */
+[data-mode="ftc"] .event-info-card::before {
+    background: linear-gradient(90deg, #f97316 0%, #fb923c 50%, #fbbf24 100%);
+}
+
+[data-mode="ftc"] .active-event-banner {
+    background: linear-gradient(135deg, rgba(249,115,22,.1) 0%, rgba(249,115,22,.04) 100%);
+    border-color: rgba(249,115,22,.25);
+}
+
+/* (FTC event-section-card:hover is handled above with outline button block) */
+
+[data-mode="ftc"] .event-section-header.clickable:hover {
+    background: rgba(249,115,22,.06);
+}
+
+[data-mode="ftc"] .event-section-header.clickable:hover .event-section-title {
+    color: #fb923c;
+}
+
+[data-mode="ftc"] .event-section-header.clickable:hover .collapse-toggle {
+    border-color: #f97316;
+    color: #f97316;
+    background: rgba(249,115,22,.06);
+}
+
+[data-mode="ftc"] .season-count-badge,
+[data-mode="ftc"] .status-ongoing {
+    background: linear-gradient(135deg, #f97316 0%, #fb923c 100%);
+    color: #fff;
+}
+
+/* ── FTC button category 1: default — neutral base (no gradient) ── */
+[data-mode="ftc"] button {
+    background: rgba(249,115,22,.08);
+    color: #f97316;
+    border: 1px solid rgba(249,115,22,.18);
+    box-shadow: none;
+}
+[data-mode="ftc"] button:hover {
+    background: rgba(249,115,22,.15);
+    border-color: rgba(249,115,22,.35);
+    color: #fb923c;
+    box-shadow: none;
+    transform: translateY(-1px);
+}
+[data-mode="ftc"] button:active {
+    transform: translateY(0);
+    box-shadow: none;
+}
+
+/* ── FTC load-event buttons — gradient accent ── */
+[data-mode="ftc"] #btn-load-event,
+[data-mode="ftc"] .ssb-load-btn {
+    background: linear-gradient(135deg, #f97316 0%, #fb923c 100%);
+    color: #fff;
+    border: none;
+    box-shadow: 0 2px 10px rgba(249,115,22,.25);
+}
+[data-mode="ftc"] #btn-load-event:hover,
+[data-mode="ftc"] .ssb-load-btn:hover {
+    background: linear-gradient(135deg, #fb923c 0%, #fbbf24 100%);
+    border: none;
+    color: #fff;
+    box-shadow: 0 4px 18px rgba(249,115,22,.35);
+    transform: translateY(-1px);
+}
+[data-mode="ftc"] #btn-load-event:active,
+[data-mode="ftc"] .ssb-load-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 6px rgba(249,115,22,.15);
+}
+
+/* ── FTC button category 2: ghost / chrome — restore transparency ── */
+[data-mode="ftc"] .settings-btn {
+    background: rgba(255,255,255,.06);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    box-shadow: none;
+}
+[data-mode="ftc"] .settings-btn:hover {
+    background: rgba(249,115,22,.1);
+    color: #fb923c;
+    border-color: rgba(249,115,22,.3);
+    transform: none;
+    box-shadow: none;
+}
+
+[data-mode="ftc"] .pbp-nav-btn {
+    background: transparent;
+    border: 1px solid rgba(249,115,22,.18);
+    color: var(--text);
+    box-shadow: none;
+}
+[data-mode="ftc"] .pbp-nav-btn:hover {
+    background: rgba(249,115,22,.06);
+    border-color: rgba(249,115,22,.35);
+    color: #fb923c;
+    transform: none;
+    box-shadow: none;
+}
+
+[data-mode="ftc"] .ssb-clear,
+[data-mode="ftc"] .landscape-hint-close {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    box-shadow: none;
+}
+[data-mode="ftc"] .ssb-clear:hover {
+    color: var(--danger);
+    background: var(--danger-soft, rgba(239,68,68,.1));
+    transform: none;
+    box-shadow: none;
+}
+
+[data-mode="ftc"] .pbp-refresh-btn {
+    background: rgba(249,115,22,.06);
+    border: 1px solid rgba(249,115,22,.15);
+    color: #fb923c;
+    box-shadow: none;
+}
+[data-mode="ftc"] .pbp-refresh-btn:hover {
+    background: rgba(249,115,22,.12);
+    border-color: rgba(249,115,22,.3);
+    transform: none;
+    box-shadow: none;
+}
+
+[data-mode="ftc"] .season-refresh-btn {
+    background: rgba(249,115,22,.08);
+    border: none;
+    color: #f97316;
+    box-shadow: none;
+}
+[data-mode="ftc"] .season-refresh-btn:hover {
+    background: rgba(249,115,22,.18);
+    transform: none;
+    box-shadow: none;
+}
+
+[data-mode="ftc"] .summary-refresh-btn {
+    background: rgba(249,115,22,.08);
+    border: 1px solid rgba(249,115,22,.15);
+    color: #fb923c;
+    box-shadow: none;
+}
+[data-mode="ftc"] .summary-refresh-btn:hover {
+    background: rgba(249,115,22,.15);
+    border-color: rgba(249,115,22,.3);
+    transform: none;
+    box-shadow: none;
+}
+
+/* ── FTC button category 3: filter pills — small toggles ── */
+[data-mode="ftc"] .past-awards-filter-btn,
+[data-mode="ftc"] .conn-filter-btn,
+[data-mode="ftc"] .conn-sort-btn {
+    background: rgba(249,115,22,.06);
+    border: 1px solid rgba(249,115,22,.12);
+    color: var(--text-muted);
+    box-shadow: none;
+}
+[data-mode="ftc"] .past-awards-filter-btn:hover,
+[data-mode="ftc"] .conn-filter-btn:hover,
+[data-mode="ftc"] .conn-sort-btn:hover {
+    background: rgba(249,115,22,.12);
+    border-color: rgba(249,115,22,.3);
+    color: #fb923c;
+    transform: none;
+    box-shadow: none;
+}
+[data-mode="ftc"] .past-awards-filter-btn.active,
+[data-mode="ftc"] .conn-filter-btn.active {
+    background: rgba(249,115,22,.15);
+    border-color: rgba(249,115,22,.4);
+    color: #f97316;
+}
+[data-mode="ftc"] .conn-sort-btn.active {
+    background: #f97316;
+    border-color: #f97316;
+    color: #fff;
+}
+
+/* ── FTC button category 4: overlay / modal chrome ── */
+[data-mode="ftc"] .compare-close-btn {
+    background: rgba(255,255,255,.06);
+    border: 1px solid rgba(255,255,255,.1);
+    color: var(--text-muted);
+    box-shadow: none;
+}
+[data-mode="ftc"] .compare-close-btn:hover {
+    background: rgba(239,68,68,.1);
+    color: #ef4444;
+    transform: none;
+    box-shadow: none;
+}
+
+[data-mode="ftc"] .compare-bar-clear {
+    background: rgba(239,68,68,.08);
+    border: 1px solid rgba(239,68,68,.2);
+    color: #ef4444;
+    box-shadow: none;
+}
+[data-mode="ftc"] .compare-bar-clear:hover {
+    background: rgba(239,68,68,.15);
+    border-color: rgba(239,68,68,.35);
+    transform: none;
+    box-shadow: none;
+}
+
+/* ── FTC button category 5: empty-state action ── */
+[data-mode="ftc"] .empty-action-btn {
+    background: rgba(249,115,22,.08);
+    border: 1px solid transparent;
+    color: #f97316;
+    box-shadow: none;
+}
+[data-mode="ftc"] .empty-action-btn:hover {
+    background: #f97316;
+    color: #fff;
+    border-color: #f97316;
+    box-shadow: none;
+}
+
+/* ── FTC mobile nav: restore ── */
+[data-mode="ftc"] .mob-nav-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    box-shadow: none;
+}
+[data-mode="ftc"] .mob-nav-btn.active { color: #f97316; }
+[data-mode="ftc"] .mob-nav-btn:hover { transform: none; box-shadow: none; }
+
+/* ── FTC keep breakdown button green ── */
+[data-mode="ftc"] .pbp-breakdown-btn {
+    background: linear-gradient(135deg, #10b981 0%, #34d399 100%);
+    border: none;
+    color: #fff;
+    box-shadow: 0 2px 10px rgba(16,185,129,.25);
+}
+[data-mode="ftc"] .pbp-breakdown-btn:hover {
+    background: linear-gradient(135deg, #10b981 0%, #34d399 100%);
+    color: #fff;
+    box-shadow: 0 4px 16px rgba(16,185,129,.35);
+}
+
+/* FTC orange-tinted section cards — match FRC card styling */
+[data-mode="ftc"] .event-section-card {
+    background: rgba(24, 18, 32, .85);
+    border: 1px solid rgba(255, 255, 255, .1);
+    box-shadow: var(--shadow-sm);
+}
+[data-mode="ftc"] .event-section-card:hover {
+    border-color: var(--primary);
+}
+
+/* FTC summary cards — match FRC glow/shadow */
+[data-mode="ftc"] .summary-card {
+    box-shadow: var(--shadow-sm);
+}
+[data-mode="ftc"] .summary-stat-card:hover {
+    border-color: var(--primary);
+    box-shadow: var(--shadow-glow);
+}
+
+/* FTC collapse-toggle (Show/Hide buttons) */
+[data-mode="ftc"] .collapse-toggle {
+    border-color: rgba(249,115,22,.2);
+    color: var(--text-muted);
+    background: var(--bg);
+}
+[data-mode="ftc"] .event-section-header.clickable:hover .collapse-toggle,
+[data-mode="ftc"] .summary-card-header:hover .collapse-toggle {
+    border-color: #f97316;
+    color: #f97316;
+    background: rgba(249,115,22,.06);
+}
+
+/* FTC season filter select dropdowns */
+[data-mode="ftc"] .season-filter-row select {
+    background: rgba(17, 13, 20, .9);
+    border-color: rgba(249,115,22,.15);
+}
+[data-mode="ftc"] .season-filter-row select:hover {
+    border-color: #f97316;
+}
+[data-mode="ftc"] .season-filter-row select:focus {
+    border-color: #f97316;
+    box-shadow: 0 0 0 3px rgba(249,115,22,.15);
+}
+
+/* FTC data table thead tint */
+[data-mode="ftc"] .data-table thead {
+    background: linear-gradient(180deg, rgba(249,115,22,.06) 0%, var(--surface) 100%);
+}
+
+/* FTC saved-events card */
+[data-mode="ftc"] .saved-events-card {
+    border-color: rgba(249,115,22,.2) !important;
+    background: linear-gradient(135deg, rgba(249,115,22,.04) 0%, rgba(249,115,22,.01) 100%);
+}
+[data-mode="ftc"] .saved-event-item:hover {
+    background: rgba(249,115,22,.08);
+}
+
+/* FTC alliance toolbar toggles */
+[data-mode="ftc"] .alliance-toolbar label {
+    color: var(--text-muted);
+}
+
+/* FTC save-event button override */
+[data-mode="ftc"] .btn-save-event {
+    background: rgba(249,115,22,.1);
+    border-color: rgba(249,115,22,.3);
+    color: #f97316;
+}
+[data-mode="ftc"] .btn-save-event:hover:not(:disabled) {
+    background: rgba(249,115,22,.18);
+    border-color: rgba(249,115,22,.5);
+    box-shadow: 0 2px 8px rgba(249,115,22,.2);
+}
+[data-mode="ftc"] .btn-save-event.saved {
+    background: rgba(34,197,94,.12);
+    border-color: rgba(34,197,94,.4);
+    color: #22c55e;
+}
+
+/* ═══ FTC + LIGHT THEME COMBINED ═══════════════════════════ */
+[data-mode="ftc"][data-theme="light"] {
+    --primary:         #ea580c;
+    --primary-glow:    rgba(234, 88, 12, .18);
+    --primary-hover:   #f97316;
+    --primary-soft:    rgba(249, 115, 22, .08);
+    /* Light mode: warm cream base with subtle indigo/orange tint */
+    --bg-gradient:     linear-gradient(145deg, #f8f6fa 0%, #fef0e6 50%, #f6f4f9 100%);
+    --surface:         #ffffff;
+    --surface-glass:   rgba(255, 255, 255, .85);
+    --card:            #ffffff;
+    --card-hover:      #fff8f2;
+    --border:          rgba(249, 115, 22, .18);
+    --border-subtle:   rgba(0, 0, 0, .06);
+    --shadow-sm:       0 1px 4px rgba(0,0,0,.08);
+    --shadow-md:       0 2px 12px rgba(0,0,0,.1);
+    --shadow-lg:       0 4px 24px rgba(0,0,0,.12);
+    --shadow-glow:     0 0 20px rgba(249,115,22,.06);
+}
+
+[data-mode="ftc"][data-theme="light"] header h1 {
+    background: linear-gradient(135deg, #1a1a2e 0%, #ea580c 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+[data-mode="ftc"][data-theme="light"] .brand-icon {
+    color: #ea580c;
+    filter: none;
+}
+
+[data-mode="ftc"][data-theme="light"] ::-webkit-scrollbar-thumb {
+    background: rgba(249,115,22,.25);
+}
+[data-mode="ftc"][data-theme="light"] .event-section-card {
+    background: #ffffff;
+    border: 1px solid rgba(0,0,0,.1);
+    box-shadow: var(--shadow-md);
+}
+[data-mode="ftc"][data-theme="light"] .event-section-card:hover {
+    border-color: rgba(249,115,22,.45);
+}
+[data-mode="ftc"][data-theme="light"] .summary-card {
+    background: #ffffff;
+    border: 1px solid rgba(0,0,0,.1);
+    box-shadow: var(--shadow-sm);
+}
+[data-mode="ftc"][data-theme="light"] .summary-stat-card {
+    background: #ffffff;
+    border: 1px solid rgba(0,0,0,.1);
+    box-shadow: var(--shadow-sm);
+}
+[data-mode="ftc"][data-theme="light"] .summary-stat-card:hover {
+    border-color: var(--primary);
+    box-shadow: var(--shadow-glow);
+}
+[data-mode="ftc"][data-theme="light"] .data-table {
+    background: #ffffff;
+    box-shadow: var(--shadow-sm);
+}
+[data-mode="ftc"][data-theme="light"] .saved-events-card {
+    background: #ffffff;
+    border-color: rgba(0,0,0,.1) !important;
+    box-shadow: var(--shadow-sm);
+}
+[data-mode="ftc"][data-theme="light"] button {
+    background: rgba(234,88,12,.06);
+    color: #ea580c;
+    border: 1px solid rgba(234,88,12,.18);
+    box-shadow: none;
+}
+[data-mode="ftc"][data-theme="light"] button:hover {
+    background: rgba(234,88,12,.12);
+    border-color: rgba(234,88,12,.3);
+    color: #ea580c;
+    box-shadow: none;
+}
+[data-mode="ftc"][data-theme="light"] #btn-load-event,
+[data-mode="ftc"][data-theme="light"] .ssb-load-btn {
+    background: linear-gradient(135deg, #ea580c 0%, #f97316 100%);
+    border: none;
+    color: #fff;
+    box-shadow: 0 2px 10px rgba(234,88,12,.2);
+}
+[data-mode="ftc"][data-theme="light"] #btn-load-event:hover,
+[data-mode="ftc"][data-theme="light"] .ssb-load-btn:hover {
+    background: linear-gradient(135deg, #f97316 0%, #fb923c 100%);
+    box-shadow: 0 4px 14px rgba(234,88,12,.25);
+}
+
 [data-theme="light"] body::before { opacity: 0; }
 
 [data-theme="light"] header h1 {
@@ -194,6 +666,44 @@ header {
     color: var(--primary);
     flex-shrink: 0;
     filter: drop-shadow(0 0 8px var(--primary-glow));
+    transition: color .4s ease, filter .4s ease, transform .4s ease;
+}
+
+/* ── Brand icon (FRC/FTC mode switch) — intentionally NOT a button look ── */
+.brand-icon-btn {
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    -webkit-tap-highlight-color: transparent;
+    outline: none;
+}
+
+.brand-icon-btn:hover .brand-icon {
+    color: #f97316;
+    filter: drop-shadow(0 0 8px rgba(249,115,22,.35));
+    transform: scale(1.06);
+}
+
+[data-mode="ftc"] .brand-icon-btn:hover .brand-icon {
+    color: #6366f1;
+    filter: drop-shadow(0 0 8px rgba(99,102,241,.35));
+}
+
+/* Icon spin animation on mode switch */
+@keyframes icon-mode-switch {
+    0%   { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.brand-icon.switching {
+    animation: icon-mode-switch .5s cubic-bezier(.4, 0, .2, 1);
+    animation-fill-mode: forwards;
+    transition: none !important;
 }
 
 .brand-text {
@@ -1493,6 +2003,29 @@ input.input-loading {
 
 .winner-text { color: var(--green); font-weight: 700; }
 
+/* ─── FTC Event Results table helpers ─────────────────────── */
+.season-divider-row td { padding: 0 !important; }
+.season-divider {
+    font-weight: 700;
+    font-size: .82rem;
+    color: var(--text-muted);
+    padding: 6px 0 2px;
+    border-bottom: 1px solid var(--border);
+}
+.ftc-event-award-chip {
+    display: inline-block;
+    background: var(--surface-alt);
+    color: var(--text);
+    font-size: .72rem;
+    padding: 1px 6px;
+    margin: 1px 2px;
+    border-radius: 4px;
+    white-space: nowrap;
+}
+.ftc-event-award-chip.inspire { background: #c9a227; color: #fff; }
+.ftc-event-award-chip.winner  { background: #3a7bd5; color: #fff; }
+.ftc-event-award-chip.finalist { background: #6c757d; color: #fff; }
+
 /* ═══ BRACKET GRID ═════════════════════════════════════════ */
 /* Scroll wrapper — lives on #playoff-bracket */
 #playoff-bracket {
@@ -1740,11 +2273,13 @@ input.input-loading {
 .bkt-seed {
     font-size: .88rem;
     font-weight: 800;
-    color: var(--primary);
+    color: var(--text-muted);
     min-width: 24px;
     flex-shrink: 0;
     font-family: var(--mono);
 }
+.bkt-row.bkt-red .bkt-seed { color: var(--red); }
+.bkt-row.bkt-blue .bkt-seed { color: var(--blue); }
 .bkt-teams {
     flex: 1;
     font-weight: 700;
@@ -1951,6 +2486,72 @@ input.input-loading {
 
 .red-text  { color: var(--red); }
 .blue-text { color: var(--blue); }
+
+/* ═══ FTC PLAYOFF BRACKET ════════════════════════════════ */
+.ftc-bracket {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(380px, 100%), 1fr));
+    gap: 1.1rem;
+    padding: .5rem 0;
+}
+
+.ftc-series-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    transition: border-color var(--transition);
+}
+.ftc-series-card:hover { border-color: rgba(99, 102, 241, .25); }
+.ftc-series-decided { border-color: rgba(34, 197, 94, .2); }
+
+.ftc-series-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: .55rem .8rem;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border-subtle);
+    font-weight: 600;
+    font-size: .82rem;
+    gap: .5rem;
+}
+
+.ftc-series-label { color: var(--text); }
+
+.ftc-series-result {
+    font-size: .72rem;
+    font-weight: 700;
+    padding: .15rem .5rem;
+    border-radius: 4px;
+    letter-spacing: .02em;
+}
+.ftc-series-red {
+    background: rgba(239, 68, 68, .12);
+    color: var(--red);
+    border: 1px solid rgba(239, 68, 68, .2);
+}
+.ftc-series-blue {
+    background: rgba(59, 130, 246, .12);
+    color: var(--blue);
+    border: 1px solid rgba(59, 130, 246, .2);
+}
+.ftc-series-score {
+    font-size: .72rem;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.ftc-series-matches {
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+    padding: .6rem;
+}
+
+.ftc-series-matches .bkt-slot {
+    margin: 0;
+}
 
 /* ═══ ALLIANCE SELECTION GRID ═════════════════════════════ */
 #alliance-grid {
@@ -2162,9 +2763,9 @@ input.input-loading {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 110px;
-    flex-shrink: 1;
+    flex: 1 1 0;
     min-width: 0;
+    max-width: 140px;
 }
 
 .team-stats-mini {
@@ -3061,6 +3662,23 @@ input.input-loading {
 .red-side .pbp-team-number { color: var(--red); }
 .blue-side .pbp-team-number { color: var(--blue); }
 
+/* Captain / Pick role indicator next to team number */
+.pbp-pick-role {
+    font-size: .55rem;
+    font-weight: 700;
+    font-family: var(--mono);
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    background: rgba(99,102,241,.08);
+    border: 1px solid rgba(99,102,241,.15);
+    border-radius: 3px;
+    padding: .05rem .25rem;
+    margin-left: .35rem;
+    vertical-align: super;
+    opacity: .7;
+}
+
 .pbp-team-identity {
     flex: 1;
     min-width: 0;
@@ -3813,6 +4431,51 @@ input.input-loading {
     flex-wrap: wrap;
     gap: .3rem;
     margin-top: .4rem;
+}
+
+/* ── FTC DECODE — Classifier Grid ──────────────────────── */
+.bd-classifier {
+    margin: .5rem 0;
+}
+.bd-classifier-title {
+    font-size: .72rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-bottom: .3rem;
+}
+.bd-classifier-grid {
+    display: grid;
+    grid-template-columns: repeat(9, 1fr);
+    gap: 3px;
+}
+.bd-classifier-cell {
+    aspect-ratio: 1;
+    border-radius: 4px;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: .7rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    min-width: 0;
+    min-height: 22px;
+}
+.bd-classifier-cell.cls-green {
+    background: rgba(34,197,94,.2);
+    border-color: rgba(34,197,94,.5);
+    color: #22c55e;
+}
+.bd-classifier-cell.cls-purple {
+    background: rgba(147,51,234,.2);
+    border-color: rgba(147,51,234,.5);
+    color: #a855f7;
+}
+.bd-classifier-cell.cls-yellow {
+    background: rgba(234,179,8,.2);
+    border-color: rgba(234,179,8,.5);
+    color: #eab308;
 }
 
 .bd-bonus-badge {
@@ -4706,9 +5369,13 @@ tr:hover .compare-cb,
     background: var(--primary-soft);
     border: 1px solid var(--border);
     border-radius: 999px;
-    transition: opacity .4s ease, transform .4s ease;
+    transition: opacity .4s ease, transform .4s ease, background .4s ease, border-color .4s ease, color .4s ease;
 }
 .footer-world-record.hidden { display: none; }
+.footer-world-record.wr-transitioning {
+    opacity: 0;
+    transform: scale(.95);
+}
 .footer-wr-label {
     font-weight: 600;
     color: var(--text-secondary);
@@ -5720,6 +6387,29 @@ tr:hover .compare-cb,
     color: var(--text-muted);
     white-space: nowrap;
 }
+.badge-winner, .badge-finalist, .badge-inspire {
+    display: inline-block;
+    padding: .1rem .45rem;
+    border-radius: 4px;
+    font-size: .7rem;
+    font-weight: 600;
+    margin-left: .25rem;
+}
+.badge-winner {
+    background: rgba(250, 204, 21, .15);
+    color: #facc15;
+    border: 1px solid rgba(250, 204, 21, .3);
+}
+.badge-finalist {
+    background: rgba(148, 163, 184, .12);
+    color: #94a3b8;
+    border: 1px solid rgba(148, 163, 184, .25);
+}
+.badge-inspire {
+    background: rgba(168, 85, 247, .15);
+    color: #c084fc;
+    border: 1px solid rgba(168, 85, 247, .3);
+}
 
 /* Collapsible section body (past champs, past awards) */
 .summary-collapse-body {
@@ -5737,6 +6427,14 @@ tr:hover .compare-cb,
     max-height: 0;
     opacity: 0;
     margin-top: 0;
+}
+
+/* FTC: full-width card when moved out of pair-row */
+#summary-past-champs.ftc-full-width-card {
+    max-width: none;
+    flex: none;
+    width: 100%;
+    margin-bottom: .75rem;
 }
 
 /* Scrollable list for long championship award sections */
@@ -5760,6 +6458,10 @@ tr:hover .compare-cb,
     font-size: .85rem;
     color: var(--primary);
     min-width: 3rem;
+}
+/* Past award recipient team numbers in orange for contrast */
+.past-award-row .summary-hof-num {
+    color: #f59e0b;
 }
 .summary-hof-name {
     font-weight: 600;
@@ -5892,12 +6594,14 @@ tr:hover .compare-cb,
     border-color: rgba(192, 192, 192, .55);
     background: linear-gradient(135deg, rgba(192, 192, 192, .2), rgba(156, 163, 175, .2));
 }
-.past-award-chip-impact {
+.past-award-chip-impact,
+.past-award-chip-inspire {
     background: linear-gradient(135deg, rgba(59, 130, 246, .13), rgba(37, 99, 235, .13));
     border: 1px solid rgba(59, 130, 246, .35);
     color: #60a5fa;
 }
-.past-award-chip-impact:hover {
+.past-award-chip-impact:hover,
+.past-award-chip-inspire:hover {
     border-color: rgba(59, 130, 246, .55);
     background: linear-gradient(135deg, rgba(59, 130, 246, .2), rgba(37, 99, 235, .2));
 }
@@ -7475,12 +8179,15 @@ td .pick-flip-back { font-size: inherit; }
 }
 .toast-info {
     border-left: 4px solid var(--primary);
+    border-radius: 0 var(--radius-lg) var(--radius-lg) 0;
 }
 .toast-success {
     border-left: 4px solid #22c55e;
+    border-radius: 0 var(--radius-lg) var(--radius-lg) 0;
 }
 .toast-error {
     border-left: 4px solid #ef4444;
+    border-radius: 0 var(--radius-lg) var(--radius-lg) 0;
 }
 
 /* ── Back to Top Button ───────────────────────────────────── */
@@ -8493,12 +9200,20 @@ body.epa-breakdown-active .stat-opr {
 }
 
 /* ── Playoffs: dim losing alliance ─────────────────────── */
-.bkt-row.bkt-lost {
-    opacity: .5;
-}
+.bkt-row.bkt-lost .bkt-seed,
 .bkt-row.bkt-lost .bkt-teams,
 .bkt-row.bkt-lost .bkt-score {
-    opacity: .7;
+    opacity: .45;
+}
+/* Restore full opacity on hover so tooltips are legible */
+.bkt-row.bkt-lost:hover .bkt-seed,
+.bkt-row.bkt-lost:hover .bkt-teams,
+.bkt-row.bkt-lost:hover .bkt-score {
+    opacity: 1;
+}
+/* Keep tooltips fully visible even on dimmed rows */
+.bkt-row.bkt-lost .custom-tooltip {
+    opacity: 1;
 }
 
 /* ── Playoffs: highlight parent matches on hover ──────── */

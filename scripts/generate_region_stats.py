@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+    #!/usr/bin/env python3
 """
 One-time generator: build region_stats.json with pre-computed facts per region/district.
 
