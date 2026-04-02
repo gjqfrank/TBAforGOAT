@@ -55,6 +55,7 @@ Additional UI: team comparison table (up to 6 teams), current season award winne
 - **FIRST FTC Events API** — FTC event lists, teams, matches, alliances, and awards
 - **FTCScout API** — FTC OPR data and team statistics
 - **Statbotics** — EPA ratings and match win predictions
+- **GATool** — community-sourced team updates and sponsor data
 - **Anthropic Claude** — AI-powered broadcast storyline generation (optional)
 
 **Caching strategy:**
