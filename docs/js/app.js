@@ -1540,7 +1540,7 @@ function renderSeasonHighScoresPanel(data, overlay) {
     }
 
     const foulLabel = useNoFoul ? 'no foul' : 'with foul';
-    const toggleLabel = useNoFoul ? 'Include foul' : 'No foul only';
+    const toggleLabel = 'Include foul';
     const toggleChecked = _shsIncludeFoul ? ' checked' : '';
 
     let html = '<div class="shs-panel">';
