@@ -35,10 +35,12 @@ def is_available() -> bool:
 # ── System prompts ──────────────────────────────────────────
 _MATCH_SYSTEM_PROMPT = (
     "You are a veteran FIRST Robotics Competition broadcast commentator. "
-    "Write exactly 2 punchy sentences a play-by-play host can read straight off a teleprompter. "
-    "Keep the total under 60 words — short enough to read in one breath per sentence. "
+    "Write 2-3 punchy sentences a play-by-play host can read straight off a teleprompter. "
+    "HARD LIMIT: 80 words maximum — count carefully. "
     "Structure: Sentence 1 sets up tension or context (rivalry, underdog, stakes). "
     "Sentence 2 delivers the payoff (what to watch for, why it matters right now). "
+    "An optional short sentence 3 can spotlight an alliance partner with a compelling story. "
+    "Try to mention at least one non-captain team per alliance when there is a good angle. "
     "Prioritize the NARRATIVE HINTS section — those are pre-computed insights about "
     "improvement trajectories, award progressions, banner droughts, and underdog stories. "
     "Weave them into a story, don't just list stats. "
@@ -59,7 +61,7 @@ _MATCH_SYSTEM_PROMPT = (
     "- Name teams by number AND nickname (e.g. '4481 Team Rembrandts'). "
     "- No generic filler — every clause must carry specific information. "
     "BANNED WORDS AND PHRASES (never use these): "
-    "'powerhouse', 'proving', 'showcasing', 'demonstrating', "
+    "'powerhouse', 'flawless', 'proving', 'showcasing', 'demonstrating', "
     "'impressive experience', 'translates across', 'at the highest levels', "
     "'completing the prestigious', 'coveted progression', 'technical excellence', "
     "'championship aspirations', 'making a statement'. "
@@ -94,7 +96,7 @@ _TEAM_SYSTEM_PROMPT = (
     "- Name the team by number AND nickname. "
     "- No generic filler — every clause must carry specific information. "
     "BANNED WORDS AND PHRASES (never use these): "
-    "'powerhouse', 'proving', 'showcasing', 'demonstrating', "
+    "'powerhouse', 'flawless', 'proving', 'showcasing', 'demonstrating', "
     "'impressive experience', 'translates across', 'at the highest levels', "
     "'completing the prestigious', 'coveted progression', 'technical excellence', "
     "'championship aspirations', 'making a statement'. "
@@ -130,6 +132,7 @@ async def _build_team_dossier(team_key: str, event_key: str, year: int) -> dict:
         season_statuses,
         all_events_simple,
         event_info,
+        event_teams_list,
     ) = await asyncio.gather(
         tba.get_team(team_key),
         _safe(tba.get_team_awards(team_key), []),
@@ -137,6 +140,7 @@ async def _build_team_dossier(team_key: str, event_key: str, year: int) -> dict:
         _safe(tba.get_team_events_statuses(team_key, year), {}),
         _safe(tba.get_team_events_simple(team_key), []),
         _safe(tba.get_event(event_key), {}),
+        _safe(tba.get_event_teams(event_key), []),
     )
 
     # Try EPA from Statbotics (non-critical)
@@ -162,7 +166,7 @@ async def _build_team_dossier(team_key: str, event_key: str, year: int) -> dict:
     einstein_win_years = []
     chairmans_years = []
     ei_years: list[int] = []           # Engineering Inspiration wins
-    ras_years: list[int] = []          # Rookie All-Star wins
+    ras_years: list[int] = []          # Rookie All-Star (10) / Rising All-Star (83) wins
 
     if all_awards:
         for aw in all_awards:
@@ -196,8 +200,8 @@ async def _build_team_dossier(team_key: str, event_key: str, year: int) -> dict:
             if aw_type == 9 and ev_type not in OFFSEASON_TYPES:
                 if aw_year:
                     ei_years.append(aw_year)
-            # Rookie All-Star
-            if aw_type == 29 and ev_type not in OFFSEASON_TYPES:
+            # Rookie All-Star (10) / Rising All-Star (83)
+            if aw_type in {10, 83} and ev_type not in OFFSEASON_TYPES:
                 if aw_year:
                     ras_years.append(aw_year)
 
@@ -205,9 +209,9 @@ async def _build_team_dossier(team_key: str, event_key: str, year: int) -> dict:
     _EI_TYPE = 9
     _IMPACT_TYPE = 0
     # Robot performance awards (basic tier)
-    _ROBOT_AWARD_TYPES = {15, 16, 17, 20, 21, 29}
-    # Quality=20, Innovation in Control=15, Industrial Design=16,
-    # Engineering Excellence=17, Creativity=21, Rookie All Star=29
+    _ROBOT_AWARD_TYPES = {16, 17, 20, 21, 29}
+    # Industrial Design=16, Quality=17, Creativity=20,
+    # Engineering Excellence=21, Innovation in Control=29
     season_award_names = []
     season_award_tiers: list[str] = []  # "impact", "ei", "robot", "other"
     if season_awards:
@@ -341,6 +345,25 @@ async def _build_team_dossier(team_key: str, event_key: str, year: int) -> dict:
                     visit_years_in_country.append(ev_year)
     first_year_in_country = min(visit_years_in_country) if visit_years_in_country else None
     first_time_in_country = (first_year_in_country == year) if first_year_in_country else False
+    seasons_in_country = len(set(visit_years_in_country))
+
+    # Home country FRC presence — does the team's country host any events?
+    home_events_ever = 0
+    if all_events_simple and team_country:
+        for ev in all_events_simple:
+            if ev.get("country") == team_country and ev.get("event_type", -1) not in {99, 100, -1}:
+                home_events_ever += 1
+    home_country_has_events = home_events_ever > 0
+
+    # How many teams from the same country are at this event?
+    countrymates_at_event = 0
+    if event_teams_list and team_country:
+        for t in event_teams_list:
+            if t.get("country") == team_country:
+                countrymates_at_event += 1
+    # Subtract self
+    if countrymates_at_event > 0:
+        countrymates_at_event -= 1
     # ── Award progression milestones ──
     first_ei_year = min(ei_years) if ei_years else None
     first_impact_year = min(chairmans_years) if chairmans_years else None
@@ -389,8 +412,11 @@ async def _build_team_dossier(team_key: str, event_key: str, year: int) -> dict:
         "event_city": event_city,
         "is_international": is_international,
         "visits_to_event_country": visits_to_event_country,
+        "seasons_in_country": seasons_in_country,
         "first_time_in_country": first_time_in_country,
         "first_year_in_country": first_year_in_country,
+        "home_country_has_events": home_country_has_events,
+        "countrymates_at_event": countrymates_at_event,
     }
 
 
@@ -434,7 +460,8 @@ def _format_team_dossier(d: dict) -> str:
     if d.get("ei_wins"):
         lines.append(f"  Engineering Inspiration Award wins: {len(d['ei_wins'])} (years: {', '.join(str(y) for y in d['ei_wins'])})")
     if d.get("ras_wins"):
-        lines.append(f"  Rookie All-Star Award: {', '.join(str(y) for y in d['ras_wins'])}")
+        lines.append(f"  Rookie All-Star / Rising All-Star: {', '.join(str(y) for y in d['ras_wins'])}")
+
 
     # This event
     if d.get("this_event_rank") and d["this_event_rank"] != "?":
@@ -464,13 +491,18 @@ def _format_team_dossier(d: dict) -> str:
     team_country = d.get("country", "")
     is_intl = d.get("is_international", False)
     visits = d.get("visits_to_event_country", 0)
+    seasons_visited = d.get("seasons_in_country", 0)
     first_time = d.get("first_time_in_country", False)
+    home_has_events = d.get("home_country_has_events", True)
+    countrymates = d.get("countrymates_at_event", 0)
     if is_intl:
         if first_time:
             lines.append(f"  Travel: First time competing in {event_country} (home country: {team_country})")
-        elif visits > 1:
+        elif seasons_visited > 1:
             first_yr = d.get("first_year_in_country")
-            lines.append(f"  Travel: Has competed in {event_country} {visits} times since {first_yr} (home country: {team_country})")
+            lines.append(f"  Travel: Has competed in {event_country} in {seasons_visited} seasons ({visits} events) since {first_yr} (home country: {team_country})")
+    if team_country and not home_has_events:
+        lines.append(f"  Home country ({team_country}): No FRC events — must always travel abroad to compete")
 
     # ── Computed narrative hints ─────────────────────────
     hints = []
@@ -569,7 +601,7 @@ def _format_team_dossier(d: dict) -> str:
     # Skip EI→Impact progression noise for teams with Einstein/HoF (those are bigger stories)
     is_elite = is_hof or einstein_wins > 0
     if ras and first_ras:
-        hints.append(f"Rookie All-Star: {first_ras}")
+        hints.append(f"Rookie All-Star / Rising All-Star: {first_ras}")
     if ei_to_impact is not None and not is_elite:
         hints.append(f"EI→Impact: {ei_to_impact} seasons (EI {first_ei}, Impact {first_impact})")
     elif ei and impact_count == 0 and seasons_chasing:
@@ -585,11 +617,10 @@ def _format_team_dossier(d: dict) -> str:
     if team_age and team_age <= 2 and this_rank and str(this_rank).isdigit() and int(this_rank) <= 8:
         hints.append(f"Rookie/2nd-year, ranked #{this_rank} at this event")
 
-    # Travel data points
+    # Travel data points — only push as hints when genuinely notable;
+    # routine travel info is already in the dossier body for the LLM to use contextually.
     if is_intl and first_time:
         hints.append(f"First time in {event_country} (from {team_country})")
-    elif is_intl and visits >= 3:
-        hints.append(f"{visits} events in {event_country} since {d.get('first_year_in_country', '?')} (from {team_country})")
 
     if hints:
         lines.append("  NARRATIVE HINTS (data points — synthesize into natural story, do not read verbatim):")
