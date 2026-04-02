@@ -7,6 +7,7 @@ from ..services import region_service
 from ..services import world_record_service
 from ..services.tba_client import get_tba_client
 from ..services.frc_client import get_frc_client
+from ..services.statbotics_client import get_statbotics_client
 from ..services.alliance_service import get_alliances_with_stats
 from ..services.gatool_client import get_gatool_client
 from ..services.error_utils import raise_api_error
@@ -22,6 +23,57 @@ async def world_record():
     if not rec:
         return {"score": 0}
     return rec
+
+
+@router.get("/season-high-scores")
+async def season_high_scores(year: int = Query(2026)):
+    """Top match scores and top EPA teams for a season (from Statbotics)."""
+    try:
+        sb = get_statbotics_client()
+        data = await sb.get_season_high_scores(year, limit=5)
+
+        # Resolve event keys → friendly names from season data
+        event_names: dict[str, str] = {}
+        try:
+            events = await event_service.get_season_events(year)
+            for ev in events:
+                event_names[ev.get("key", "")] = ev.get("short_name") or ev.get("name") or ev.get("key", "")
+        except Exception:
+            pass
+
+        for m in data.get("matches", []):
+            ek = m.get("event_key", "")
+            m["event_name"] = event_names.get(ek, ek)
+            # Pretty match label from key (e.g. 2026caclv_sf1m1 → SF1-1)
+            raw = m.get("key", "")
+            m["match_label"] = _parse_match_label(raw)
+
+        return data
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise_api_error(e, fallback_detail=f"Could not load season high scores for {year}.")
+
+
+def _parse_match_label(match_key: str) -> str:
+    """Convert a TBA match key suffix into a readable label.
+
+    Examples: 2026abc_qm42 → QM 42, 2026abc_sf1m1 → SF1-1, 2026abc_f1m2 → F1-2
+    """
+    parts = match_key.split("_")
+    if len(parts) < 2:
+        return match_key
+    raw = parts[-1]  # e.g. "sf1m1", "qm42", "f1m2"
+    import re
+    m = re.match(r"([a-z]+)(\d+)(?:m(\d+))?", raw)
+    if not m:
+        return raw
+    comp, num1, num2 = m.group(1), m.group(2), m.group(3)
+    labels = {"qm": "QM", "sf": "SF", "f": "F", "qf": "QF", "ef": "EF"}
+    prefix = labels.get(comp, comp.upper())
+    if num2:
+        return f"{prefix}{num1}-{num2}"
+    return f"{prefix} {num1}"
 
 
 @router.get("/season/{year}")

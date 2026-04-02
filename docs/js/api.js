@@ -86,7 +86,8 @@ const API = {
     regionalPoolEvent: (season, code) => API.get(`/events/regional-pool/${season}/${code}`),
 
     // ── Season ──────────────────────────────────────────
-    worldRecord:  ()     => API.get('/events/world-record'),
+    worldRecord:       ()     => API.get('/events/world-record'),
+    seasonHighScores:  (year) => API.get(`/events/season-high-scores?year=${year || 2026}`),
 
     // ── AI Storylines ───────────────────────────────────
     storylineStatus: () => API.get('/storylines/status'),

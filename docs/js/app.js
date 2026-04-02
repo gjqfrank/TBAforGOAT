@@ -1432,6 +1432,7 @@ function toggleWorldRecord(on) {
 function renderWorldRecord(rec, isNew) {
     const el = $('footer-world-record');
     if (!el || !rec || rec.score <= 0) return;
+    setupHighScoresPanelClick();
     $('footer-wr-score').textContent = rec.score;
     const eventLabel = rec.event_name || rec.event_key || '';
     const matchLabel = rec.match || '';
@@ -1441,7 +1442,14 @@ function renderWorldRecord(rec, isNew) {
     if (eventLabel) detail += (detail ? ' · ' : '') + eventLabel;
     if (teamsStr) detail += ` (${teamsStr})`;
     $('footer-wr-detail').textContent = detail;
-    if (_showWorldRecord) el.classList.remove('hidden');
+    if (_showWorldRecord) {
+        const wasHidden = el.classList.contains('hidden');
+        el.classList.remove('hidden');
+        if (wasHidden) {
+            el.classList.add('wr-enter');
+            el.addEventListener('animationend', () => el.classList.remove('wr-enter'), { once: true });
+        }
+    }
     if (isNew) {
         el.classList.add('wr-new');
         setTimeout(() => el.classList.remove('wr-new'), 5000);
@@ -1464,6 +1472,144 @@ function checkWorldRecordFromPbp(data) {
         renderWorldRecord(rec, true);
     }
 }
+
+// ── Season High Scores Panel ──────────────────────────────
+let _seasonHighScoresCache = null;  // cached response
+let _shsIncludeFoul = false;        // toggle: show total score (with fouls)
+
+function setupHighScoresPanelClick() {
+    const pill = $('footer-world-record');
+    if (!pill || pill._shsBound) return;
+    pill.style.cursor = 'pointer';
+    pill.addEventListener('click', toggleSeasonHighScoresPanel);
+    pill._shsBound = true;
+}
+
+async function toggleSeasonHighScoresPanel() {
+    const existing = $('season-high-scores-overlay');
+    if (existing) {
+        existing.remove();
+        return;
+    }
+
+    const year = currentEventYear || 2026;
+
+    // Show loading overlay immediately
+    const overlay = document.createElement('div');
+    overlay.id = 'season-high-scores-overlay';
+    overlay.className = 'shs-overlay';
+    overlay.innerHTML = '<div class="shs-panel"><div class="shs-loading">Loading season data…</div></div>';
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) overlay.remove();
+    });
+    document.body.appendChild(overlay);
+
+    try {
+        if (!_seasonHighScoresCache || _seasonHighScoresCache._year !== year) {
+            const data = await API.seasonHighScores(year);
+            data._year = year;
+            _seasonHighScoresCache = data;
+        }
+        renderSeasonHighScoresPanel(_seasonHighScoresCache, overlay);
+    } catch (err) {
+        const panel = overlay.querySelector('.shs-panel');
+        if (panel) panel.innerHTML = `<div class="shs-loading">Could not load data.</div>`;
+    }
+}
+
+function renderSeasonHighScoresPanel(data, overlay) {
+    const matches = (data.matches || []).slice();
+    const epaTeams = data.epa_teams || [];
+    const teamNames = data.team_names || {};
+    const useNoFoul = !_shsIncludeFoul;
+
+    // Re-sort matches based on toggle
+    matches.sort((a, b) => {
+        const aVal = useNoFoul ? (a.no_foul || a.score) : a.score;
+        const bVal = useNoFoul ? (b.no_foul || b.score) : b.score;
+        return bVal - aVal;
+    });
+
+    // Build set of teams at current event for highlighting
+    const eventTeamSet = new Set();
+    if (teamsData && Array.isArray(teamsData)) {
+        teamsData.forEach(t => {
+            const num = String(t.team_number || t.teamNumber || '');
+            if (num) eventTeamSet.add(num);
+        });
+    }
+
+    const foulLabel = useNoFoul ? 'no foul' : 'with foul';
+    const toggleLabel = useNoFoul ? 'Include foul' : 'No foul only';
+    const toggleChecked = _shsIncludeFoul ? ' checked' : '';
+
+    let html = '<div class="shs-panel">';
+    html += '<div class="shs-header"><span class="shs-title">Season High Scores</span><button class="shs-close" onclick="document.getElementById(\'season-high-scores-overlay\')?.remove()">&times;</button></div>';
+
+    // Section 1: Top Match Scores
+    html += `<div class="shs-section"><div class="shs-section-title-row"><span class="shs-section-title">Top Match Scores (${foulLabel})</span><label class="shs-toggle"><input type="checkbox" id="shs-foul-toggle"${toggleChecked}><span>${toggleLabel}</span></label></div>`;
+    if (matches.length) {
+        html += '<table class="shs-table"><thead><tr><th>#</th><th>Score</th><th>Match</th><th>Event</th><th>Teams</th></tr></thead><tbody>';
+        matches.forEach((m, i) => {
+            const isEventMatch = currentEvent && m.event_key === currentEvent;
+            const teamStrs = (m.teams || []).map(t => {
+                const hl = eventTeamSet.has(String(t)) ? ' shs-highlight' : '';
+                const name = teamNames[String(t)] || '';
+                const tip = name ? `<span class="custom-tooltip">${name}</span>` : '';
+                return `<span class="shs-team-num has-tooltip${hl}">${t}${tip}</span>`;
+            });
+            const scoreTxt = useNoFoul ? `${m.no_foul || m.score}` : `${m.score}`;
+            const rowCls = isEventMatch ? ' class="shs-event-row"' : '';
+            html += `<tr${rowCls}><td>${i + 1}</td><td>${scoreTxt}</td><td>${m.match_label || m.key}</td><td>${m.event_name || m.event_key}</td><td class="shs-teams">${teamStrs.join(', ')}</td></tr>`;
+        });
+        html += '</tbody></table>';
+    } else {
+        html += '<div class="shs-empty">No data available</div>';
+    }
+    html += '</div>';
+
+    // Section 2: Top EPA Teams
+    html += '<div class="shs-section"><div class="shs-section-title">Top EPA Teams</div>';
+    if (epaTeams.length) {
+        html += '<table class="shs-table"><thead><tr><th>#</th><th>Team</th><th>EPA</th></tr></thead><tbody>';
+        epaTeams.forEach((t, i) => {
+            const isLocal = eventTeamSet.has(String(t.team));
+            const rowCls = isLocal ? ' class="shs-event-row"' : '';
+            const numCls = isLocal ? ' class="shs-highlight"' : '';
+            html += `<tr${rowCls}><td>${i + 1}</td><td><span${numCls}>${t.team}</span> ${t.name || ''}</td><td>${t.epa}</td></tr>`;
+        });
+        html += '</tbody></table>';
+    } else {
+        html += '<div class="shs-empty">No data available</div>';
+    }
+    html += '</div>';
+
+    html += '</div>';
+
+    const panel = overlay.querySelector('.shs-panel');
+    if (panel) {
+        panel.outerHTML = html;
+    } else {
+        overlay.innerHTML = html;
+    }
+
+    // Wire foul toggle
+    const toggle = document.getElementById('shs-foul-toggle');
+    if (toggle) {
+        toggle.addEventListener('change', () => {
+            _shsIncludeFoul = toggle.checked;
+            renderSeasonHighScoresPanel(data, overlay);
+        });
+    }
+}
+
+// Close high scores panel on Escape
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        const overlay = $('season-high-scores-overlay');
+        if (overlay) { overlay.remove(); e.stopPropagation(); }
+    }
+});
 
 fetchWorldRecord();
 if (isFTCMode()) loadFtcAvatarMap();

@@ -73,6 +73,101 @@ class StatboticsClient:
         except (httpx.HTTPStatusError, httpx.RequestError):
             return []
 
+    async def get_season_high_scores(self, year: int, limit: int = 5) -> dict:
+        """Return top match scores and top EPA teams for a season.
+
+        Fetches red-sorted and blue-sorted matches from Statbotics,
+        merges, dedupes, and returns the top *limit* along with top EPA teams.
+        """
+        import asyncio
+
+        async def _top_red():
+            return await self.get(
+                f"/matches?year={year}&metric=red_score&ascending=false&limit={limit * 2}"
+            )
+
+        async def _top_blue():
+            return await self.get(
+                f"/matches?year={year}&metric=blue_score&ascending=false&limit={limit * 2}"
+            )
+
+        async def _top_epa():
+            # Fetch extra teams so we can build a name map for match teams too
+            return await self.get(
+                f"/team_years?year={year}&metric=epa&ascending=false&limit=50"
+            )
+
+        red_matches, blue_matches, epa_teams = await asyncio.gather(
+            _top_red(), _top_blue(), _top_epa(),
+            return_exceptions=True,
+        )
+
+        # --- Merge match scores (pick best alliance per match) ---------------
+        if isinstance(red_matches, Exception):
+            red_matches = []
+        if isinstance(blue_matches, Exception):
+            blue_matches = []
+
+        seen: dict[str, dict] = {}  # match_key -> best row
+        for m in red_matches:
+            key = m.get("key", "")
+            result = m.get("result") or {}
+            score = result.get("red_score", 0)
+            no_foul = result.get("red_no_foul", score)
+            teams = [str(k).replace("frc", "") for k in (m.get("alliances", {}).get("red", {}).get("team_keys") or [])]
+            event_key = m.get("event", "")
+            row = {"key": key, "event_key": event_key, "score": score, "no_foul": no_foul, "teams": teams, "color": "red"}
+            if key not in seen or no_foul > seen[key]["no_foul"]:
+                seen[key] = row
+
+        for m in blue_matches:
+            key = m.get("key", "")
+            result = m.get("result") or {}
+            score = result.get("blue_score", 0)
+            no_foul = result.get("blue_no_foul", score)
+            teams = [str(k).replace("frc", "") for k in (m.get("alliances", {}).get("blue", {}).get("team_keys") or [])]
+            event_key = m.get("event", "")
+            row = {"key": key, "event_key": event_key, "score": score, "no_foul": no_foul, "teams": teams, "color": "blue"}
+            if key not in seen or no_foul > seen[key]["no_foul"]:
+                seen[key] = row
+
+        top_matches = sorted(seen.values(), key=lambda r: r["no_foul"], reverse=True)[:limit]
+
+        # --- EPA teams + name map ---------------------------------------------
+        if isinstance(epa_teams, Exception):
+            epa_teams = []
+
+        team_names: dict[str, str] = {}
+        top_epa = []
+        for idx, te in enumerate(epa_teams):
+            team_num = te.get("team")
+            name = te.get("name", "")
+            if team_num:
+                team_names[str(team_num)] = name
+            if idx < limit:
+                epa_block = te.get("epa") or {}
+                total = epa_block.get("total_points", {})
+                epa_val = round(total.get("mean", 0), 1)
+                top_epa.append({"team": team_num, "name": name, "epa": epa_val})
+
+        # Fill in missing names for match teams not in top-50 EPA (~2-5 calls, cached)
+        missing = set()
+        for m in top_matches:
+            for t in m.get("teams", []):
+                if t not in team_names:
+                    missing.add(t)
+        if missing:
+            lookups = await asyncio.gather(
+                *(self.get_team_year(int(t), year) for t in missing),
+                return_exceptions=True,
+            )
+            for t_num, result in zip(missing, lookups):
+                if isinstance(result, Exception) or result is None:
+                    continue
+                team_names[t_num] = result.get("name", "")
+
+        return {"matches": top_matches, "epa_teams": top_epa, "team_names": team_names}
+
 
 # ── Singleton ───────────────────────────────────────────────
 _instance: Optional[StatboticsClient] = None
