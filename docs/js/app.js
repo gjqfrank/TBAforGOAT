@@ -511,6 +511,7 @@ function toggleCompetitionMode() {
 
     // Refresh world record for the new mode
     fetchWorldRecord();
+    _seasonHighScoresCache = null;  // clear stale high-scores panel data
 
     // Pre-load FTC avatar map when switching to FTC mode
     if (competitionMode === 'ftc') loadFtcAvatarMap();
@@ -1492,6 +1493,9 @@ async function toggleSeasonHighScoresPanel() {
         return;
     }
 
+    // FTC mode — no Statbotics high-scores panel
+    if (isFTCMode()) return;
+
     const year = currentEventYear || 2026;
 
     // Show loading overlay immediately
@@ -1907,7 +1911,8 @@ let _regionalPoolFiltered = null;  // filtered view
 async function loadRegionalPool() {
     if (isFTCMode()) return;  // FRC-only feature
     try {
-        const resp = await API.regionalPool(2026);
+        const year = currentEventYear || 2026;
+        const resp = await API.regionalPool(year);
         if (!resp || !resp.teams || !resp.teams.length) return;
         _regionalPoolData = resp.teams;
         _regionalPoolFiltered = _regionalPoolData;

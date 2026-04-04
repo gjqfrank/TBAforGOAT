@@ -18,11 +18,16 @@ router = APIRouter()
 @router.get("/world-record")
 async def world_record():
     """Return the season world high score (highest single-alliance match score)."""
-    await world_record_service.seed_from_tba()
-    rec = world_record_service.get_world_record()
-    if not rec:
-        return {"score": 0}
-    return rec
+    try:
+        await world_record_service.seed_from_tba()
+        rec = world_record_service.get_world_record()
+        if not rec:
+            return {"score": 0}
+        return rec
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise_api_error(e, fallback_detail="Could not load world record.")
 
 
 @router.get("/season-high-scores")
@@ -181,8 +186,13 @@ async def event_connections(
 
 @router.get("/{event_key}/clear-cache")
 async def clear_cache(event_key: str):
-    get_tba_client().clear_cache()
-    return {"status": "cache cleared"}
+    try:
+        get_tba_client().clear_cache()
+        return {"status": "cache cleared"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise_api_error(e, fallback_detail="Could not clear cache.")
 
 
 @router.get("/{event_key}/refresh-rankings")
@@ -274,7 +284,12 @@ async def region_facts(region_name: str):
 @router.get("/regions/list")
 async def regions_list():
     """Return all known region names."""
-    return region_service.list_regions()
+    try:
+        return region_service.list_regions()
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise_api_error(e, fallback_detail="Could not load regions list.")
 
 
 @router.get("/{event_key}/history")
