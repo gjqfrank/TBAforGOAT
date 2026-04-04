@@ -194,7 +194,12 @@ async def refresh_rankings(event_key: str):
         f"/event/{event_key}/oprs",
         f"/event/{event_key}/teams",
     )
-    return await event_service.get_event_teams_with_stats(event_key)
+    try:
+        return await event_service.get_event_teams_with_stats(event_key)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise_api_error(e, fallback_detail=f"Could not refresh rankings for event '{event_key}'.")
 
 
 @router.get("/{event_key}/fast-rankings")
