@@ -16,6 +16,7 @@ from starlette.responses import Response
 from .config import TRUSTED_API_KEYS
 from .routers import events, matches, alliances, teams, storylines
 from .routers import ftc_events, ftc_matches, ftc_alliances
+from .routers import sync
 
 log = logging.getLogger(__name__)
 
@@ -207,6 +208,9 @@ app.include_router(storylines.router, prefix="/api/storylines", tags=["Storyline
 app.include_router(ftc_events.router, prefix="/api/ftc/events", tags=["FTC Events"])
 app.include_router(ftc_matches.router, prefix="/api/ftc/matches", tags=["FTC Matches"])
 app.include_router(ftc_alliances.router, prefix="/api/ftc/alliances", tags=["FTC Alliances"])
+
+# ── Sync endpoint ───────────────────────────────────────────
+app.include_router(sync.router, prefix="/api/sync", tags=["Sync"])
 
 # ── No-cache middleware for JS/CSS (prevents stale browser cache) ───
 class NoCacheStaticMiddleware(BaseHTTPMiddleware):
