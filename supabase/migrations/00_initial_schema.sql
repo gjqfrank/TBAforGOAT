@@ -70,6 +70,7 @@ CREATE TRIGGER trg_teams_updated_at
 CREATE TABLE event_teams (
     event_key   TEXT NOT NULL REFERENCES events (event_key) ON DELETE CASCADE,
     team_key    TEXT NOT NULL REFERENCES teams  (team_key)  ON DELETE CASCADE,
+    raw_data    JSONB       NOT NULL DEFAULT '{}',    -- per-event stats: rank, OPR, EPA, record
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
     PRIMARY KEY (event_key, team_key)
 );

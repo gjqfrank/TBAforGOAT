@@ -33,3 +33,9 @@ FTC_EVENTS_API_TOKEN = os.environ.get("FTC_EVENTS_API_TOKEN", "")
 # Anthropic API Key for AI Storylines (optional)
 # Set via environment variable ANTHROPIC_API_KEY
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+
+# Supabase Configuration (Phase 1.2 — Offline-First BFF)
+# SUPABASE_URL: Project URL (e.g. "https://xyz.supabase.co")
+# SUPABASE_SERVICE_KEY: Service-role key — bypasses RLS, server-side only
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
+SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
