@@ -1,8 +1,10 @@
 """FRC Caster's Tool — FastAPI application."""
 import asyncio
 import logging
+import os
 import time
 from collections import defaultdict
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -17,7 +19,44 @@ from .routers import ftc_events, ftc_matches, ftc_alliances
 
 log = logging.getLogger(__name__)
 
-app = FastAPI(title="FRC Caster's Tool", version="1.2.0")
+
+# ── Lifespan: start/stop background ingestion workers ──────
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Start background ingestion workers on startup, cancel on shutdown."""
+    tasks: list[asyncio.Task] = []
+
+    # Only start workers when Supabase is configured
+    supabase_url = os.environ.get("SUPABASE_URL", "")
+    if supabase_url:
+        from .workers.match_poller import run_match_poller
+        from .workers.event_sync import run_event_sync
+
+        tasks.append(asyncio.create_task(run_event_sync(), name="event-sync"))
+        tasks.append(asyncio.create_task(run_match_poller(), name="match-poller"))
+        log.info("Ingestion workers started (%d tasks)", len(tasks))
+    else:
+        log.info("SUPABASE_URL not set — ingestion workers disabled")
+
+    yield
+
+    # Graceful shutdown
+    for t in tasks:
+        t.cancel()
+    if tasks:
+        await asyncio.gather(*tasks, return_exceptions=True)
+        log.info("Ingestion workers stopped")
+
+    # Close Supabase client if it was initialized
+    if supabase_url:
+        try:
+            from .services.supabase_client import close_supabase
+            await close_supabase()
+        except Exception:
+            pass
+
+
+app = FastAPI(title="FRC Caster's Tool", version="1.2.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
