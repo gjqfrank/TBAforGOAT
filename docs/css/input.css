@@ -3035,6 +3035,9 @@
         background: var(--card);
         border-radius: var(--radius);
         border: 1px solid var(--border);
+        opacity: 0;
+        animation: skeleton-fade-in .25s ease forwards;
+        animation-delay: .3s;
     }
     .skeleton::after {
         content: '';
@@ -3047,6 +3050,10 @@
             rgba(99,102,241,.06) 65%,
             transparent 100%);
         animation: skeleton-shimmer 1.8s ease-in-out infinite;
+        animation-delay: .3s;
+    }
+    @keyframes skeleton-fade-in {
+        to { opacity: 1; }
     }
     @keyframes skeleton-shimmer {
         0%   { transform: translateX(-100%); }
