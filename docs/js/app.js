@@ -3501,18 +3501,14 @@ function renderPrequalifiedTeams() {
 
     let html = '<div class="adv-qual-list">';
     prequalified.forEach(t => {
-        let method = '';
-        let methodCls = 'adv-method-ranking';
-        if (t.qualifiedFirstCmpAwardName) {
-            method = t.qualifiedFirstCmpAwardName;
-            methodCls = method.toLowerCase().includes('impact') ? 'adv-method-impact' : 'adv-method-award';
-        } else if (_isPoolQualified(t)) {
-            method = t.qualifiedFirstCmpEventWeek != null ? `Pool W${t.qualifiedFirstCmpEventWeek}` : 'Pool';
-            methodCls = 'adv-method-backup';
-        } else {
-            const s = (t.championshipStatus || '').toLowerCase();
-            if (s.includes('ranking')) method = 'Event Winner';
-            else method = 'Qualified';
+        const method = _rpQualMethod(t);
+        let methodCls = 'adv-method-ranking'; // green — directly qualified
+        if (method.startsWith('Pool')) {
+            methodCls = 'adv-method-backup';  // amber — pool
+        } else if (method.toLowerCase().includes('impact')) {
+            methodCls = 'adv-method-impact';
+        } else if (t.qualifiedFirstCmpAwardName) {
+            methodCls = 'adv-method-award';
         }
 
         const teamObj = teamsData.find(et => et.team_number === t.teamNumber);
