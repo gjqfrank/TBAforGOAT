@@ -5,6 +5,7 @@ import asyncio
 from datetime import date
 from . import payload_cache
 from .region_service import _load_region_stats, get_event_history
+from .supabase_client import get_cached_summary, set_cached_summary
 from .tba_client import get_tba_client
 from .statbotics_client import get_epa_map
 
@@ -12,14 +13,20 @@ from .statbotics_client import get_epa_map
 _API_SEMAPHORE = asyncio.Semaphore(10)
 
 # Cache TTLs (seconds)
-_SUMMARY_TTL = 300       # 5 min — demographics, HoF, scorers (cheap but still save time)
+_SUMMARY_TTL = 300       # 5 min — demographics, HoF, scorers
 _AWARDS_TTL = 600        # 10 min — expensive awards section
+_CONNECTIONS_TTL = 900   # 15 min — very heavy (years × teams)
+_SEASON_AWARDS_TTL = 600 # 10 min — scans all events per team
+_ADVANCEMENT_TTL = 300   # 5 min — moderate cost
 
 
 def invalidate_event_caches(event_key: str) -> None:
     """Clear all disk-cached summary/awards for an event."""
     payload_cache.invalidate("summary", event_key)
     payload_cache.invalidate("awards", event_key)
+    payload_cache.invalidate("connections", event_key)
+    payload_cache.invalidate("season_awards", event_key)
+    payload_cache.invalidate("advancement", event_key)
 
 
 # ── Static HoF / Impact lookup (built once from region_stats.json) ───
@@ -61,14 +68,23 @@ async def _safe(coro):
 
 
 async def get_event_summary(event_key: str) -> dict:
-    """Build the full event summary payload (cached to disk)."""
+    """Build the full event summary payload (disk → Supabase → build)."""
+    # 1) Disk cache (fastest, in-process)
     cached = payload_cache.read_payload("summary", event_key, _SUMMARY_TTL)
     if cached:
         return cached
 
+    # 2) Supabase cache (survives restarts)
+    sb_row = await get_cached_summary(event_key)
+    if sb_row and sb_row.get("summary"):
+        payload_cache.write_payload("summary", event_key, sb_row["summary"])
+        return sb_row["summary"]
+
+    # 3) Build from scratch
     result = await _build_event_summary(event_key)
     if "error" not in result:
         payload_cache.write_payload("summary", event_key, result)
+        await set_cached_summary(event_key, summary=result)
     return result
 
 
@@ -171,13 +187,22 @@ async def _build_event_summary(event_key: str) -> dict:
 
 
 async def get_event_summary_awards(event_key: str) -> dict:
-    """Deferred summary data — cached to disk."""
+    """Deferred summary data — disk → Supabase → build."""
+    # 1) Disk cache
     cached = payload_cache.read_payload("awards", event_key, _AWARDS_TTL)
     if cached:
         return cached
 
+    # 2) Supabase cache
+    sb_row = await get_cached_summary(event_key)
+    if sb_row and sb_row.get("awards"):
+        payload_cache.write_payload("awards", event_key, sb_row["awards"])
+        return sb_row["awards"]
+
+    # 3) Build from scratch
     result = await _build_event_summary_awards(event_key)
     payload_cache.write_payload("awards", event_key, result)
+    await set_cached_summary(event_key, awards=result)
     return result
 
 
@@ -258,6 +283,29 @@ _ADVANCEMENT_AWARD_TYPES = {
 async def get_event_advancement(event_key: str) -> dict:
     """Build advancement data — event-level point standings, awards, winners,
     and (for district events) the overall district rankings."""
+    # 1) Disk cache
+    cached = payload_cache.read_payload("advancement", event_key, _ADVANCEMENT_TTL)
+    if cached:
+        cached.pop("_ts", None)
+        return cached
+
+    # 2) Supabase cache
+    sb_key = f"adv_{event_key}"
+    sb_row = await get_cached_summary(sb_key)
+    if sb_row and sb_row.get("summary"):
+        payload_cache.write_payload("advancement", event_key, sb_row["summary"])
+        return sb_row["summary"]
+
+    # 3) Build from scratch
+    result = await _build_event_advancement(event_key)
+    if result:
+        payload_cache.write_payload("advancement", event_key, result)
+        await set_cached_summary(sb_key, summary=result)
+    return result
+
+
+async def _build_event_advancement(event_key: str) -> dict:
+    """Build advancement data from scratch."""
     client = get_tba_client()
 
     # Parallel fetch: event info, teams, district points, awards, alliances
@@ -998,6 +1046,28 @@ async def get_current_season_awards(event_key: str) -> dict:
 
     Returns {"season_awards": [{ team_number, nickname, awards: [{type, event_key, event_name, pick?, alliance?}] }]}
     """
+    # 1) Disk cache
+    cached = payload_cache.read_payload("season_awards", event_key, _SEASON_AWARDS_TTL)
+    if cached:
+        cached.pop("_ts", None)
+        return cached
+
+    # 2) Supabase cache
+    sb_key = f"seas_{event_key}"
+    sb_row = await get_cached_summary(sb_key)
+    if sb_row and sb_row.get("summary"):
+        payload_cache.write_payload("season_awards", event_key, sb_row["summary"])
+        return sb_row["summary"]
+
+    # 3) Build from scratch
+    result = await _build_current_season_awards(event_key)
+    payload_cache.write_payload("season_awards", event_key, result)
+    await set_cached_summary(sb_key, summary=result)
+    return result
+
+
+async def _build_current_season_awards(event_key: str) -> dict:
+    """Build current-season awards payload."""
     client = get_tba_client()
     year = int(event_key[:4])
 
@@ -1250,13 +1320,34 @@ def _resolve_de_stage(match: dict) -> tuple[int, str]:
 
 async def get_event_connections(event_key: str, all_time: bool = False) -> list[dict]:
     """Public entry point to fetch connections with configurable lookback."""
+    cache_key = f"{event_key}_all" if all_time else event_key
+
+    # 1) Disk cache
+    cached = payload_cache.read_payload("connections", cache_key, _CONNECTIONS_TTL)
+    if cached:
+        cached.pop("_ts", None)
+        return cached.get("connections", [])
+
+    # 2) Supabase cache
+    sb_key = f"conn_{cache_key}"
+    sb_row = await get_cached_summary(sb_key)
+    if sb_row and sb_row.get("summary"):
+        payload_cache.write_payload("connections", cache_key, sb_row["summary"])
+        return sb_row["summary"].get("connections", [])
+
+    # 3) Build from scratch
     client = get_tba_client()
     year = int(event_key[:4])
     teams = await client.get_event_teams_full(event_key)
     if not teams:
         return []
     lookback = None if all_time else 3
-    return await _find_playoff_connections(teams, event_key, year, lookback_years=lookback)
+    result = await _find_playoff_connections(teams, event_key, year, lookback_years=lookback)
+
+    payload = {"connections": result}
+    payload_cache.write_payload("connections", cache_key, payload)
+    await set_cached_summary(sb_key, summary=payload)
+    return result
 
 
 async def get_match_connections(event_key: str, team_numbers: list[int], all_time: bool = False) -> list[dict]:

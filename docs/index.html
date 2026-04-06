@@ -140,6 +140,7 @@
                         <span id="aeb-meta" class="aeb-meta"></span>
                     </div>
                 </div>
+
             </div>
 
             <!-- Current season quick-select -->
@@ -159,6 +160,9 @@
                         </select>
                         <select id="season-filter-week" onchange="filterSeasonEvents()">
                             <option value="">All Weeks</option>
+                        </select>
+                        <select id="season-filter-type" class="hidden" onchange="filterSeasonEvents()">
+                            <option value="">All Types</option>
                         </select>
                     </div>
                     <div class="season-search-wrap">
@@ -204,6 +208,8 @@
                     </div>
                 </div>
             </div>
+
+
 
             <!-- Regional Advancement Pool -->
             <div id="regional-pool-card" class="event-section-card regional-pool-card hidden">
@@ -265,6 +271,18 @@
 
                 <!-- Demographics row -->
                 <div class="summary-stats-row" id="summary-demographics"></div>
+
+                <!-- Pre-qualified teams (teams already qualified for Championship) -->
+                <div id="summary-prequalified" class="summary-card hidden">
+                    <div class="summary-card-header" onclick="togglePrequalified()">
+                        <h3>Already Qualified for Championship</h3>
+                        <span id="prequalified-badge" class="season-count-badge"></span>
+                        <span id="prequalified-toggle-icon" class="collapse-toggle"><span class="collapse-toggle-label">Hide</span><span class="collapse-toggle-arrow">▼</span></span>
+                    </div>
+                    <div id="summary-prequalified-body" class="summary-collapse-body">
+                        <div id="summary-prequalified-content"></div>
+                    </div>
+                </div>
 
                 <!-- Hall of Fame & Impact Award -->
                 <div id="summary-prestige-row" class="team-highlights hidden">
@@ -503,7 +521,6 @@
             <div id="alliance-error" class="hidden"></div>
             <div id="alliance-toolbar" class="alliance-toolbar hidden">
                 <label class="toggle-label"><input type="checkbox" id="alliance-toggle-avatars" checked onchange="toggleAllianceAvatars(this.checked)"> Avatars</label>
-                <label class="toggle-label"><input type="checkbox" id="alliance-toggle-names" onchange="toggleAllianceNames(this.checked)"> Team Names</label>
                 <label class="toggle-label"><input type="checkbox" id="alliance-toggle-epa" onchange="toggleAllianceEpa(this.checked)"> EPA Breakdown</label>
                 <label class="toggle-label"><input type="checkbox" id="alliance-toggle-playoff" onchange="toggleAlliancePlayoff(this.checked)"> Playoff Status</label>
             </div>
@@ -621,7 +638,7 @@
             <input type="text" id="float-team-number" placeholder="Team #" onkeydown="if(event.key==='Enter')floatLookupTeam()"/>
             <input type="text" id="float-team-year" placeholder="Year" class="input-sm" title="Leave blank for current season" onkeydown="if(event.key==='Enter')floatLookupTeam()"/>
             <button onclick="floatLookupTeam()">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right:3px;vertical-align:middle;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                 Lookup
             </button>
         </div>
@@ -681,13 +698,13 @@
     <div id="compare-bar" class="compare-bar hidden">
         <span id="compare-bar-count">0 teams selected</span>
         <button id="compare-bar-match-history" class="hidden" onclick="launchMatchHistoryFromSelection()">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:3px"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="10"/></svg>Matches <kbd>M</kbd>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="10"/></svg>Matches <kbd>M</kbd>
         </button>
         <button id="compare-bar-lookup" class="hidden" onclick="launchLookupFromSelection()">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:3px"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Lookup <kbd>L</kbd>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Lookup <kbd>L</kbd>
         </button>
         <button onclick="launchCompareFromSelection()">
-            Compare <kbd>C</kbd>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 16l4-8 4 4 4-6"/></svg>Compare <kbd>C</kbd>
         </button>
         <button class="compare-bar-clear" onclick="clearCompareSelection()">Clear</button>
     </div>

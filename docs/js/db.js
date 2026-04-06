@@ -12,6 +12,11 @@
      notes         → keyPath: 'id'  (index: 'target_key')
      tims_overrides→ keyPath: 'id'  (index: 'team_key')
 
+   Event cache (offline snapshots):
+     event_cache   → keyPath: ['event_key', 'tab']  (index: 'event_key')
+       Stores raw JSON data payloads per tab per event.
+       No TTLs — data survives indefinitely for offline use.
+
    Public API (window.DB):
      initDB()                       — open / upgrade the database
      upsertRows(storeName, rows)    — batch put() into a store
@@ -19,13 +24,18 @@
      getNotesByTarget(targetKey)    — query notes via target_key index
      getOverridesByTeam(teamKey)    — query tims_overrides via team_key index
      generateLocalId()              — crypto.randomUUID() helper
+     cacheTab(eventKey, tab, data)  — store a tab's raw JSON payload
+     getCachedTab(eventKey, tab)    — retrieve a single cached tab
+     getCachedEvent(eventKey)       — retrieve all cached tabs for an event
+     listCachedEvents()             — list all events with cached data
+     removeCachedEvent(eventKey)    — delete all cached tabs for an event
    ═══════════════════════════════════════════════════════════ */
 
 const DB = (() => {
     'use strict';
 
     const DB_NAME    = 'casters_tool_db';
-    const DB_VERSION = 1;
+    const DB_VERSION = 2;
 
     let _db = null;
 
@@ -37,6 +47,7 @@ const DB = (() => {
         { name: 'matches',        keyPath: 'match_key',  indexes: [{ name: 'event_key', keyPath: 'event_key', unique: false }] },
         { name: 'notes',          keyPath: 'id', indexes: [{ name: 'target_key', keyPath: 'target_key', unique: false }] },
         { name: 'tims_overrides', keyPath: 'id', indexes: [{ name: 'team_key', keyPath: 'team_key', unique: false }] },
+        { name: 'event_cache',    keyPath: ['event_key', 'tab'], indexes: [{ name: 'event_key', keyPath: 'event_key', unique: false }] },
     ];
 
     // ── initDB ─────────────────────────────────────────────
@@ -141,6 +152,123 @@ const DB = (() => {
         return crypto.randomUUID();
     }
 
+    // ── Event Cache — offline tab snapshots ────────────────
+
+    /**
+     * Store a single tab's raw JSON data for an event.
+     * Overwrites any existing entry for (event_key, tab).
+     */
+    async function cacheTab(eventKey, tab, data) {
+        if (!eventKey || !tab || data == null) return;
+        const db = await initDB();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction('event_cache', 'readwrite');
+            tx.objectStore('event_cache').put({
+                event_key: eventKey,
+                tab: tab,
+                data: data,
+                saved_at: Date.now(),
+            });
+            tx.oncomplete = () => resolve(true);
+            tx.onerror    = () => reject(tx.error);
+        });
+    }
+
+    /**
+     * Retrieve a single cached tab payload. Returns null on miss.
+     */
+    async function getCachedTab(eventKey, tab) {
+        if (!eventKey || !tab) return null;
+        try {
+            const db = await initDB();
+            return new Promise((resolve, reject) => {
+                const tx  = db.transaction('event_cache', 'readonly');
+                const req = tx.objectStore('event_cache').get([eventKey, tab]);
+                req.onsuccess = () => resolve(req.result ? req.result.data : null);
+                req.onerror   = () => reject(req.error);
+            });
+        } catch { return null; }
+    }
+
+    /**
+     * Retrieve all cached tabs for an event as { tab: data, ... }.
+     */
+    async function getCachedEvent(eventKey) {
+        if (!eventKey) return null;
+        try {
+            const db = await initDB();
+            return new Promise((resolve, reject) => {
+                const tx    = db.transaction('event_cache', 'readonly');
+                const index = tx.objectStore('event_cache').index('event_key');
+                const req   = index.getAll(eventKey);
+                req.onsuccess = () => {
+                    const rows = req.result || [];
+                    if (!rows.length) { resolve(null); return; }
+                    const out = {};
+                    let latestSave = 0;
+                    for (const r of rows) {
+                        out[r.tab] = r.data;
+                        if (r.saved_at > latestSave) latestSave = r.saved_at;
+                    }
+                    out._saved_at = latestSave;
+                    resolve(out);
+                };
+                req.onerror = () => reject(req.error);
+            });
+        } catch { return null; }
+    }
+
+    /**
+     * List all events that have cached data.
+     * Returns [{ event_key, saved_at, tabs: [...] }, ...].
+     */
+    async function listCachedEvents() {
+        try {
+            const db = await initDB();
+            return new Promise((resolve, reject) => {
+                const tx  = db.transaction('event_cache', 'readonly');
+                const req = tx.objectStore('event_cache').getAll();
+                req.onsuccess = () => {
+                    const rows = req.result || [];
+                    // Group by event_key
+                    const map = {};
+                    for (const r of rows) {
+                        if (!map[r.event_key]) map[r.event_key] = { event_key: r.event_key, saved_at: 0, tabs: [] };
+                        map[r.event_key].tabs.push(r.tab);
+                        if (r.saved_at > map[r.event_key].saved_at) map[r.event_key].saved_at = r.saved_at;
+                    }
+                    resolve(Object.values(map));
+                };
+                req.onerror = () => reject(req.error);
+            });
+        } catch { return []; }
+    }
+
+    /**
+     * Delete all cached tabs for an event.
+     */
+    async function removeCachedEvent(eventKey) {
+        if (!eventKey) return;
+        try {
+            const db = await initDB();
+            return new Promise((resolve, reject) => {
+                const tx    = db.transaction('event_cache', 'readwrite');
+                const store = tx.objectStore('event_cache');
+                const index = store.index('event_key');
+                const req   = index.openCursor(eventKey);
+                req.onsuccess = (e) => {
+                    const cursor = e.target.result;
+                    if (cursor) {
+                        cursor.delete();
+                        cursor.continue();
+                    }
+                };
+                tx.oncomplete = () => resolve(true);
+                tx.onerror    = () => reject(tx.error);
+            });
+        } catch { return false; }
+    }
+
     // ── Public API ─────────────────────────────────────────
     return {
         initDB,
@@ -149,5 +277,10 @@ const DB = (() => {
         getNotesByTarget,
         getOverridesByTeam,
         generateLocalId,
+        cacheTab,
+        getCachedTab,
+        getCachedEvent,
+        listCachedEvents,
+        removeCachedEvent,
     };
 })();

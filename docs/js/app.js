@@ -490,6 +490,7 @@ function toggleCompetitionMode() {
      'summary-past-awards-list', 'summary-history-list',
      'summary-hof-list', 'summary-impact-list',
      'summary-top-list', 'summary-high-list',
+     'summary-prequalified-content',
      'history-region-body', 'history-event-body'
     ].forEach(id => {
         const el = $(id);
@@ -501,7 +502,7 @@ function toggleCompetitionMode() {
     // Hide summary sub-cards
     ['summary-advancement', 'summary-prestige-row', 'summary-hof', 'summary-impact',
      'summary-past-champs', 'summary-past-awards', 'summary-history',
-     'summary-top-scorers', 'summary-high-scores'
+     'summary-top-scorers', 'summary-high-scores', 'summary-prequalified'
     ].forEach(id => {
         const el = $(id); if (el) el.classList.add('hidden');
     });
@@ -533,11 +534,11 @@ function toggleCompetitionMode() {
 
     // ── Restore cached event for the new mode (if any) ──
     const cachedKey = localStorage.getItem(`lastEvent_${competitionMode}`);
-    // Validate: FTC keys contain 'ftc', FRC keys don't
-    const keyValid = cachedKey && (
-        competitionMode === 'ftc' ? cachedKey.includes('ftc') : !cachedKey.includes('ftc')
-    );
-    if (keyValid) {
+
+    // Always switch to Events tab first so user sees the event list
+    if (typeof switchToTab === 'function') switchToTab('event');
+
+    if (cachedKey) {
         const gen = ++_modeSwitchGeneration;
         setTimeout(() => {
             // Only load if no further mode switch happened in the meantime
@@ -546,8 +547,6 @@ function toggleCompetitionMode() {
         }, 600);
     } else {
         ++_modeSwitchGeneration;
-        // No cached event — switch to Events tab
-        if (typeof switchToTab === 'function') switchToTab('event');
     }
 }
 
@@ -865,8 +864,12 @@ document.querySelectorAll('.tab').forEach(btn => {
             if (summaryData && summaryData.demographics) {
                 hide('summary-empty');
                 hideSkeleton('summary-loading');
-                renderSummary(summaryData);
-                fadeIn('summary-container');
+                // Only re-render if not already rendered
+                const sc = $('summary-container');
+                if (!sc || !sc.querySelector('.summary-card:not(.hidden)')) {
+                    renderSummary(summaryData);
+                }
+                sc && sc.classList.remove('hidden');
                 // Stale-while-revalidate: for ongoing events, silently refresh in background
                 if (currentEventStatus === 'ongoing' && !isFTCMode()) {
                     const _code = currentEvent;
@@ -878,12 +881,16 @@ document.querySelectorAll('.tab').forEach(btn => {
                         autoCacheTab('summary', freshData);
                     }).catch(() => {});
                 }
-            } else {
-                // Optimistic skeleton
+            } else if (summaryData === null) {
+                // Optimistic skeleton — data not fetched yet
                 hide('summary-empty');
                 hideInlineError('summary-error');
                 showSkeleton('summary-loading', 'summary-loading-status', 'Fetching event summary\u2026');
                 loadSummary();
+            } else {
+                // summaryData exists but has no demographics — pre-fetch may be in flight
+                hide('summary-empty');
+                showSkeleton('summary-loading', 'summary-loading-status', 'Loading summary\u2026');
             }
         }
 
@@ -1567,7 +1574,7 @@ function renderSeasonHighScoresPanel(data, overlay) {
             });
             const scoreTxt = useNoFoul ? `${m.no_foul || m.score}` : `${m.score}`;
             const rowCls = isEventMatch ? ' class="shs-event-row"' : '';
-            html += `<tr${rowCls}><td>${i + 1}</td><td>${scoreTxt}</td><td>${m.match_label || m.key}</td><td>${m.event_name || m.event_key}</td><td class="shs-teams">${teamStrs.join(', ')}</td></tr>`;
+            html += `<tr${rowCls}><td>${i + 1}</td><td class="shs-score">${scoreTxt}</td><td class="shs-match-label">${m.match_label || m.key}</td><td class="shs-event-name">${m.event_name || m.event_key}</td><td class="shs-teams">${teamStrs.join(', ')}</td></tr>`;
         });
         html += '</tbody></table>';
     } else {
@@ -1583,7 +1590,7 @@ function renderSeasonHighScoresPanel(data, overlay) {
             const isLocal = eventTeamSet.has(String(t.team));
             const rowCls = isLocal ? ' class="shs-event-row"' : '';
             const numCls = isLocal ? ' class="shs-highlight"' : '';
-            html += `<tr${rowCls}><td>${i + 1}</td><td><span${numCls}>${t.team}</span> ${t.name || ''}</td><td>${t.epa}</td></tr>`;
+            html += `<tr${rowCls}><td>${i + 1}</td><td><span${numCls}>${t.team}</span> <span class="shs-team-name">${t.name || ''}</span></td><td class="shs-score">${t.epa}</td></tr>`;
         });
         html += '</tbody></table>';
     } else {
@@ -1685,12 +1692,63 @@ async function refreshSeasonEventsFromAPI() {
 const MONTH_NAMES = ['', 'January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December'];
 
+const _FTC_REGION_SPECIAL = {
+    CMPZ2: 'FIRST Championship', CMP: 'Championship', CMPHOU: 'Champs Houston',
+    FPE: 'FPE', ONADOD: 'Ontario ADOD',
+};
+const _FTC_REGION_NAMES = {
+    // US States
+    USAL:'Alabama', USAK:'Alaska', USAR:'Arkansas', USAZ:'Arizona',
+    USCALA:'California – LA', USCALS:'California – LA South', USCANO:'California – NorCal', USCASD:'California – San Diego',
+    USCO:'Colorado', USCHS:'Chesapeake', USCT:'Connecticut', USFCT:'Connecticut',
+    USDE:'Delaware', USFL:'Florida', USGA:'Georgia', USHI:'Hawaii',
+    USIA:'Iowa', USID:'Idaho', USIL:'Illinois', USIN:'Indiana',
+    USKS:'Kansas', USKY:'Kentucky', USLA:'Louisiana',
+    USMA:'Massachusetts', USMD:'Maryland', USME:'Maine', USMI:'Michigan',
+    USMN:'Minnesota', USMO:'Missouri', USMOKS:'Missouri–Kansas', USMS:'Mississippi', USMT:'Montana',
+    USNC:'North Carolina', USND:'North Dakota', USNE:'Nebraska', USNH:'New Hampshire',
+    USNJ:'New Jersey', USNM:'New Mexico', USNV:'Nevada',
+    USNY:'New York', USNYEX:'New York – Excelsior', USNYLI:'New York – Long Island', USNYNY:'New York – NYC',
+    USOH:'Ohio', USOK:'Oklahoma', USOR:'Oregon',
+    USPA:'Pennsylvania', USPR:'Puerto Rico', USRI:'Rhode Island',
+    USSC:'South Carolina', USSD:'South Dakota', USTN:'Tennessee',
+    USTX:'Texas', USTXCE:'Texas – Central', USTXHO:'Texas – Houston', USTXNO:'Texas – North', USTXSO:'Texas – South',
+    USUT:'Utah', USVA:'Virginia', USVT:'Vermont', USWA:'Washington', USWI:'Wisconsin', USWV:'West Virginia', USWY:'Wyoming',
+    // Canada
+    CAAB:'Alberta', CABC:'British Columbia', CAMB:'Manitoba', CANB:'New Brunswick',
+    CANL:'Newfoundland & Labrador', CANS:'Nova Scotia', CAON:'Ontario', CAQC:'Quebec', CASK:'Saskatchewan',
+    // International (ISO 3166-1 alpha-2)
+    AE:'UAE', AR:'Argentina', AU:'Australia', BR:'Brazil', CN:'China', CY:'Cyprus',
+    DE:'Germany', EG:'Egypt', FR:'France', GB:'United Kingdom', GR:'Greece', HKG:'Hong Kong',
+    HU:'Hungary', ID:'Indonesia', IL:'Israel', IN:'India', IT:'Italy', JM:'Jamaica',
+    JP:'Japan', KR:'South Korea', KZ:'Kazakhstan', LT:'Lithuania', LY:'Libya',
+    MA:'Morocco', MD:'Moldova', MX:'Mexico', MY:'Malaysia', NG:'Nigeria', NL:'Netherlands',
+    NZ:'New Zealand', PL:'Poland', PY:'Paraguay', QA:'Qatar', RO:'Romania',
+    TH:'Thailand', TR:'Turkey', TW:'Taiwan', UA:'Ukraine', VN:'Vietnam', ZA:'South Africa',
+};
+function _ftcRegionLabel(code) {
+    if (!code) return code;
+    if (_FTC_REGION_NAMES[code]) return _FTC_REGION_NAMES[code];
+    if (_FTC_REGION_SPECIAL[code]) return _FTC_REGION_SPECIAL[code];
+    // Fallback: strip US/CA prefix as abbreviation
+    if (code.startsWith('US') && code.length > 2) return code.slice(2);
+    if (code.startsWith('CA') && code.length > 2) return code.slice(2);
+    return code;
+}
+
 function populateSeasonFilters() {
-    // Region filter
-    const regions = [...new Set(seasonEventsRaw.map(e => e.region))].sort();
+    // Region filter — exclude championship pseudo-regions in FTC mode
+    const _CHAMP_REGION_CODES = new Set(['CMPZ2', 'CMP', 'CMPHOU']);
+    const regions = [...new Set(seasonEventsRaw.map(e => e.region))].filter(r => {
+        if (isFTCMode() && _CHAMP_REGION_CODES.has(r)) return false;
+        return true;
+    }).sort((a, b) => {
+        if (isFTCMode()) return (_ftcRegionLabel(a) || a).localeCompare(_ftcRegionLabel(b) || b);
+        return a.localeCompare(b);
+    });
     const regionSel = $('season-filter-region');
     regionSel.innerHTML = '<option value="">All Regions</option>'
-        + regions.map(r => `<option value="${r}">${r}</option>`).join('');
+        + regions.map(r => `<option value="${r}">${isFTCMode() ? _ftcRegionLabel(r) : r}</option>`).join('');
 
     // Week / Month filter
     const weekSel = $('season-filter-week');
@@ -1704,17 +1762,33 @@ function populateSeasonFilters() {
         weekSel.innerHTML = '<option value="">All Weeks</option>'
             + weeks.map(w => `<option value="${w}">Week ${w + 1}</option>`).join('');
     }
+
+    // Event type filter (FTC only)
+    const typeSel = $('season-filter-type');
+    if (typeSel) {
+        if (isFTCMode()) {
+            const types = [...new Set(seasonEventsRaw.map(e => e.event_type_string).filter(Boolean))].sort();
+            typeSel.innerHTML = '<option value="">All Types</option>'
+                + types.map(t => `<option value="${t}">${t}</option>`).join('');
+            typeSel.classList.remove('hidden');
+        } else {
+            typeSel.classList.add('hidden');
+        }
+    }
 }
 
 function filterSeasonEvents() {
     const region = $('season-filter-region').value;
     const week = $('season-filter-week').value;
+    const typeSel = $('season-filter-type');
+    const eventType = typeSel ? typeSel.value : '';
     const search = ($('season-search').value || '').toLowerCase().trim();
 
     seasonEventsFiltered = seasonEventsRaw.filter(e => {
         // Hide offseason events unless the setting is on
         if (!showOffseason && e.event_type === 99) return false;
         if (region && e.region !== region) return false;
+        if (eventType && e.event_type_string !== eventType) return false;
         if (week !== '') {
             if (week.startsWith('month_')) {
                 // FTC month filter
@@ -1876,7 +1950,7 @@ document.addEventListener('click', e => {
 
 // Load season events on page init
 loadSeasonEvents();
-loadRegionalPool();
+// loadRegionalPool() is called after its variable declarations below
 
 /** Unified collapse toggle helper. Updates body, header class, and pill label/arrow. */
 function _toggleCollapse(bodyId, toggleId, headerEl) {
@@ -1905,15 +1979,22 @@ function toggleManualEntry() {
 // ═══════════════════════════════════════════════════════════
 //  Regional Advancement Pool
 // ═══════════════════════════════════════════════════════════
-let _regionalPoolData = null;      // raw array of team objects
+let _regionalPoolData = null;      // pool-qualified teams only (for pool display)
+let _regionalPoolAllTeams = null;  // ALL teams from pool endpoint (for pre-qual box)
 let _regionalPoolFiltered = null;  // filtered view
+let _loadingRegionalPool = false;
+
+// Kick off regional pool load now that variables are declared
+loadRegionalPool();
 
 async function loadRegionalPool() {
-    if (isFTCMode()) return;  // FRC-only feature
+    if (isFTCMode() || _loadingRegionalPool) return;  // FRC-only feature, deduplicate
+    _loadingRegionalPool = true;
     try {
         const year = currentEventYear || 2026;
         const resp = await API.regionalPool(year);
         if (!resp || !resp.teams || !resp.teams.length) return;
+        _regionalPoolAllTeams = resp.teams;  // all teams for cross-referencing
         _regionalPoolData = resp.teams;
         _regionalPoolFiltered = _regionalPoolData;
         const card = $('regional-pool-card');
@@ -1922,8 +2003,12 @@ async function loadRegionalPool() {
         const poolCount = _regionalPoolData.filter(t => _isPoolQualified(t)).length;
         badge.textContent = `${_regionalPoolData.length} qualified · ${poolCount} via pool`;
         renderRegionalPool();
+        // Re-render pre-qualified box in case summary was already rendered before pool loaded
+        renderPrequalifiedTeams();
     } catch (err) {
         console.warn('[Regional Pool]', err);
+    } finally {
+        _loadingRegionalPool = false;
     }
 }
 
@@ -2001,8 +2086,6 @@ function renderRegionalPool() {
 
 function _isPoolQualified(t) {
     const s = (t.championshipStatus || '').toLowerCase();
-    // Check explicit "pool" in status, OR if they have a qualifying event week
-    // (which indicates pool-based qualification even when status says "Qualified")
     if (s.includes('pool')) return true;
     if (t.qualifiedFirstCmpEventWeek != null && !s.includes('ranking') && !t.qualifiedFirstCmpAwardName) return true;
     return false;
@@ -2213,6 +2296,9 @@ async function loadEvent(eventKey) {
     show('event-badge');
 
     // Reset state
+    // Refresh world-record pill so it always shows the true season high
+    fetchWorldRecord();
+
     playoffData = null;
     allianceData = null;
     summaryData = null;
@@ -2274,7 +2360,16 @@ async function loadEvent(eventKey) {
             : await Promise.all([
                   api.eventInfo(code),
                   api.eventTeams(code),
-              ]);
+              ]).catch(async (netErr) => {
+                  // Offline fallback — try IndexedDB cache
+                  const cachedInfo  = await DB.getCachedTab(code, 'info');
+                  const cachedTeams = await DB.getCachedTab(code, 'teams');
+                  if (cachedInfo && cachedTeams) {
+                      console.info('[Offline] Using cached info+teams for', code);
+                      return [cachedInfo, cachedTeams];
+                  }
+                  throw netErr;
+              });
 
         // Restore the load button and season search
         if (btn) { btn.disabled = false; btn.textContent = btn.dataset.origText || 'Load Event'; btn.classList.remove('btn-loading'); }
@@ -2418,10 +2513,17 @@ async function loadEvent(eventKey) {
                 bdData  = matchData;
                 autoCacheTab('matches', matchData);
             }
-        }).catch(err => {
-            if (currentEvent === code && err && err.status === 429) setTimeout(() => {
-                p2api.allMatches(code).then(md => { if (currentEvent === code && md) { pbpData = md; bdData = md; autoCacheTab('matches', md); } }).catch(() => {});
-            }, 5000);
+        }).catch(async (err) => {
+            // Offline fallback for matches
+            const cached = await DB.getCachedTab(code, 'matches');
+            if (cached && currentEvent === code) {
+                pbpData = cached; bdData = cached;
+                console.info('[Offline] Using cached matches for', code);
+            } else if (currentEvent === code && err && err.status === 429) {
+                setTimeout(() => {
+                    p2api.allMatches(code).then(md => { if (currentEvent === code && md) { pbpData = md; bdData = md; autoCacheTab('matches', md); } }).catch(() => {});
+                }, 5000);
+            }
         }).finally(phase2Check);
 
         // Playoffs
@@ -2450,15 +2552,62 @@ async function loadEvent(eventKey) {
                     autoCacheTab('alliances', allianceResult);
                 }
             }
-        }).catch(err => {
-            if (currentEvent === code && err && err.status === 429) setTimeout(() => {
-                p2api.alliances(code).then(ar => {
-                    if (currentEvent !== code || !ar) return;
-                    if (isFTCMode() && Array.isArray(ar)) { allianceData = _wrapFtcAlliances(ar); } else { allianceData = ar; }
-                    autoCacheTab('alliances', allianceData);
-                }).catch(() => {});
-            }, 5000);
+        }).catch(async (err) => {
+            // Offline fallback for alliances
+            const cached = await DB.getCachedTab(code, 'alliances');
+            if (cached && currentEvent === code) {
+                allianceData = cached;
+                console.info('[Offline] Using cached alliances for', code);
+            } else if (currentEvent === code && err && err.status === 429) {
+                setTimeout(() => {
+                    p2api.alliances(code).then(ar => {
+                        if (currentEvent !== code || !ar) return;
+                        if (isFTCMode() && Array.isArray(ar)) { allianceData = _wrapFtcAlliances(ar); } else { allianceData = ar; }
+                        autoCacheTab('alliances', allianceData);
+                    }).catch(() => {});
+                }, 5000);
+            }
         }).finally(phase2Check);
+
+        // Summary — pre-fetch so tab switch is instant (FRC only; FTC builds client-side)
+        if (!isFTCMode()) {
+            API.eventSummary(code).then(data => {
+                if (currentEvent !== code) return;
+                if (data && data.demographics) {
+                    summaryData = data;
+                    autoCacheTab('summary', data);
+                    updateTabDots();
+                    // If user is already on the summary tab, render immediately
+                    const activeTab = document.querySelector('.tab.active');
+                    if (activeTab && activeTab.dataset.tab === 'summary') {
+                        hideSkeleton('summary-loading');
+                        hide('summary-empty');
+                        renderSummary(data);
+                        const sc = $('summary-container');
+                        if (sc) sc.classList.remove('hidden');
+                    }
+                }
+            }).catch(async () => {
+                // Offline fallback for summary pre-fetch
+                const cached = await DB.getCachedTab(code, 'summary');
+                if (cached && cached.demographics && currentEvent === code) {
+                    summaryData = cached;
+                    updateTabDots();
+                    console.info('[Offline] Using cached summary for', code);
+                    const activeTab = document.querySelector('.tab.active');
+                    if (activeTab && activeTab.dataset.tab === 'summary') {
+                        hideSkeleton('summary-loading');
+                        hide('summary-empty');
+                        renderSummary(cached);
+                        const sc = $('summary-container');
+                        if (sc) sc.classList.remove('hidden');
+                    }
+                }
+            });
+        } else {
+            // FTC: pre-fetch the slow API calls in background so summary tab is faster
+            _ftcPrefetchSummary(code);
+        }
 
         } // end !_snap fallback
 
@@ -2473,8 +2622,30 @@ async function loadEvent(eventKey) {
     }
 }
 
-// No-op stub — save event functionality removed
-async function autoCacheTab() {}
+// Cache a tab's raw JSON data into IndexedDB for offline use
+async function autoCacheTab(tabName, data) {
+    if (!currentEvent || !tabName || data == null) return;
+    try { await DB.cacheTab(currentEvent, tabName, data); }
+    catch (e) { console.warn('[Cache] Failed to cache tab', tabName, e); }
+}
+
+/**
+ * Try a network fetch; on failure, fall back to IndexedDB cache.
+ * Returns { data, offline } where offline=true means data came from cache.
+ */
+async function _fetchWithCache(fetchFn, eventKey, tabName) {
+    try {
+        const data = await fetchFn();
+        return { data, offline: false };
+    } catch (err) {
+        const cached = await DB.getCachedTab(eventKey, tabName);
+        if (cached != null) {
+            console.info(`[Offline] Using cached ${tabName} for ${eventKey}`);
+            return { data: cached, offline: true };
+        }
+        throw err;
+    }
+}
 
 let teamsData = null;      // cached teams list for sorting
 let teamsSortCol = 'rank';  // current sort column
@@ -2624,16 +2795,11 @@ function renderTeamTable(teams, sortCol, asc) {
 
     const school = rankingsShowSchool;
     const ftcMode = isFTCMode();
-    const viewToggle = `<button class="rankings-view-toggle" onclick="toggleRankingsView()">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-        ${rankingsCardView ? 'Table View' : 'Card View'}
-    </button>`;
     const autoTele = ftcMode && rankingsShowAutoTele;
     const toolbar = `<div class="rankings-toolbar">
         <label class="toggle-label"><input type="checkbox" ${compact ? 'checked' : ''} onchange="toggleRankingsCompact(this.checked)"> Compact</label>
         <label class="toggle-label school-toggle"><input type="checkbox" ${school ? 'checked' : ''} onchange="toggleRankingsSchool(this.checked)"> School / Org</label>
         ${ftcMode ? `<label class="toggle-label"><input type="checkbox" ${autoTele ? 'checked' : ''} onchange="toggleRankingsAutoTele(this.checked)"> Auto / TeleOp</label>` : ''}
-        ${viewToggle}
     </div>`;
 
     return toolbar + `
@@ -2733,6 +2899,28 @@ function sortTeams(col) {
 // 1b. EVENT SUMMARY
 // ═══════════════════════════════════════════════════════════
 
+// Pre-fetch cache for FTC awards (populated in background during event load)
+let _ftcPrefetchedAwards = null;
+let _ftcPrefetchedSeasonAwards = null;
+let _ftcPrefetchEventKey = null;
+
+async function _ftcPrefetchSummary(code) {
+    _ftcPrefetchedAwards = null;
+    _ftcPrefetchedSeasonAwards = null;
+    _ftcPrefetchEventKey = code;
+    try {
+        // Fire both slow API calls in parallel
+        const [awards, seasonResp] = await Promise.all([
+            FTC_API.eventAwards(code).catch(() => null),
+            FTC_API.eventSeasonAwards(code).catch(() => null),
+        ]);
+        if (_ftcPrefetchEventKey !== code) return; // stale
+        _ftcPrefetchedAwards = awards;
+        _ftcPrefetchedSeasonAwards = (seasonResp && Array.isArray(seasonResp.season_awards))
+            ? seasonResp.season_awards : [];
+    } catch { /* ignore */ }
+}
+
 async function loadSummary() {
     if (!currentEvent) return;
     hide('summary-empty');
@@ -2785,7 +2973,10 @@ async function loadSummary() {
             let champMap = new Map();
             try {
                 setLoadingStatus('summary-loading-status', 'Fetching event awards\u2026');
-                const awards = await FTC_API.eventAwards(currentEvent);
+                // Use pre-fetched data if available (from _ftcPrefetchSummary), or fetch fresh
+                const awards = (_ftcPrefetchEventKey === currentEvent && _ftcPrefetchedAwards != null)
+                    ? _ftcPrefetchedAwards
+                    : await FTC_API.eventAwards(currentEvent);
                 if (Array.isArray(awards)) {
                     // Inspire Award (awardId varies, match by name)
                     const inspireAwards = awards.filter(a =>
@@ -2869,9 +3060,14 @@ async function loadSummary() {
             // Collect season-wide big 3 award winners (from prior events this season)
             let ftcSeasonAwards = [];
             try {
-                const resp = await FTC_API.eventSeasonAwards(currentEvent);
-                if (resp && Array.isArray(resp.season_awards)) {
-                    ftcSeasonAwards = resp.season_awards;
+                // Use pre-fetched data if available
+                if (_ftcPrefetchEventKey === currentEvent && _ftcPrefetchedSeasonAwards != null) {
+                    ftcSeasonAwards = _ftcPrefetchedSeasonAwards;
+                } else {
+                    const resp = await FTC_API.eventSeasonAwards(currentEvent);
+                    if (resp && Array.isArray(resp.season_awards)) {
+                        ftcSeasonAwards = resp.season_awards;
+                    }
                 }
             } catch (e) {
                 console.warn('Could not fetch FTC season awards:', e);
@@ -2908,8 +3104,19 @@ async function loadSummary() {
         autoCacheTab('summary', data);
         updateTabDots();
     } catch (err) {
-        hideSkeleton('summary-loading');
-        showInlineError('summary-error', `Failed to load summary: ${err.message}`, loadSummary);
+        // Offline fallback for summary
+        const cached = await DB.getCachedTab(currentEvent, 'summary');
+        if (cached && cached.demographics) {
+            summaryData = cached;
+            hideSkeleton('summary-loading');
+            renderSummary(cached);
+            fadeIn('summary-container');
+            updateTabDots();
+            console.info('[Offline] Using cached summary for', currentEvent);
+        } else {
+            hideSkeleton('summary-loading');
+            showInlineError('summary-error', `Failed to load summary: ${err.message}`, loadSummary);
+        }
     }
 }
 
@@ -3078,7 +3285,15 @@ function switchAwardSeason(season, btn) {
         renderPastSeasonAwards(awards);
     } else if (season === 'current' && !summaryData?.season_awards) {
         $('summary-past-awards-list').innerHTML = '<p class="empty" style="margin:.5rem 0;font-size:.82rem">Loading\u2026</p>';
-        loadSeasonAwards();
+        if (isFTCMode()) {
+            // FTC current-season awards are populated from summary data (not lazy-loaded)
+            $('summary-past-awards-list').innerHTML = '<p class="empty" style="margin:.5rem 0;font-size:.82rem">No award winners found.</p>';
+        } else {
+            loadSeasonAwards();
+        }
+    } else if (season === 'past' && !summaryData?.past_season_awards && !summaryData?.ftc_past_season_awards) {
+        $('summary-past-awards-list').innerHTML = '<p class="empty" style="margin:.5rem 0;font-size:.82rem">Loading\u2026</p>';
+        if (isFTCMode()) loadFtcPastAwards();
     } else {
         $('summary-past-awards-list').innerHTML = '<p class="empty" style="margin:.5rem 0;font-size:.82rem">No award winners found.</p>';
     }
@@ -3094,17 +3309,25 @@ async function loadFtcPastAwards() {
         const data = await FTC_API.eventPastAwards(eventKey);
         if (currentEvent !== eventKey || !summaryData) return;
         summaryData.ftc_past_season_awards = data.past_season_awards || [];
+        summaryData.past_season_awards = data.past_season_awards || [];
         summaryData.ftc_past_season_year = data.prev_season;
 
         const awardsEl = $('summary-past-awards');
         if (data.past_season_awards && data.past_season_awards.length > 0) {
-            awardsEl.querySelector('h3').textContent = `${data.prev_season} Award Winners`;
-            const filterBar = awardsEl.querySelector('.past-awards-filter-bar');
-            if (filterBar) filterBar.classList.remove('hidden');
-            renderPastSeasonAwards(data.past_season_awards);
+            // Update the past-season toggle button label
+            const tog = $('award-season-toggle');
+            if (tog) {
+                const btns = tog.querySelectorAll('.award-season-btn');
+                if (btns[1]) btns[1].textContent = String(data.prev_season);
+            }
+            // Only render if we're currently on the past tab
+            if (currentAwardSeason === 'past') {
+                renderPastSeasonAwards(data.past_season_awards);
+            }
             awardsEl.classList.remove('hidden');
         } else {
-            awardsEl.classList.add('hidden');
+            // If nothing loaded & we're on past tab, hide
+            if (currentAwardSeason === 'past') awardsEl.classList.add('hidden');
         }
     } catch (err) {
         if (currentEvent !== eventKey) return;
@@ -3226,6 +3449,89 @@ async function loadSummaryAdvancement() {
     }
 }
 
+function togglePrequalified() {
+    _toggleCollapse('summary-prequalified-body', 'prequalified-toggle-icon');
+}
+
+/** Show teams at this event that are already qualified for Championship */
+function renderPrequalifiedTeams() {
+    const el = $('summary-prequalified');
+    const content = $('summary-prequalified-content');
+    if (!el || !content) return;
+
+    // Only for FRC events with loaded team data
+    if (isFTCMode() || !teamsData || !teamsData.length) {
+        el.classList.add('hidden');
+        return;
+    }
+
+    // Build lookup of team numbers at this event
+    const eventTeamNums = new Set(teamsData.map(t => t.team_number));
+
+    let prequalified = [];
+
+    if (_regionalPoolAllTeams && _regionalPoolAllTeams.length) {
+        // Primary: use global pool data (has all teams)
+        prequalified = _regionalPoolAllTeams.filter(t =>
+            t.qualifiedFirstCmp && eventTeamNums.has(t.teamNumber)
+        );
+    } else if (summaryData && summaryData.regional_pool && summaryData.regional_pool.length) {
+        // Fallback: use summary's regional_pool (this event's teams only)
+        prequalified = summaryData.regional_pool
+            .filter(t => t.qualified)
+            .map(t => ({
+                teamNumber: t.team_number,
+                totalPoints: t.total_points,
+                qualifiedFirstCmpAwardName: t.qual_method || '',
+                championshipStatus: t.status || '',
+                qualifiedFirstCmp: true,
+            }));
+    }
+
+    if (!prequalified.length) {
+        el.classList.add('hidden');
+        return;
+    }
+
+    // Sort: award-qualified first, then pool, by total points desc
+    prequalified.sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0));
+
+    const badge = $('prequalified-badge');
+    if (badge) badge.textContent = `${prequalified.length} team${prequalified.length !== 1 ? 's' : ''}`;
+
+    let html = '<div class="adv-qual-list">';
+    prequalified.forEach(t => {
+        let method = '';
+        let methodCls = 'adv-method-ranking';
+        if (t.qualifiedFirstCmpAwardName) {
+            method = t.qualifiedFirstCmpAwardName;
+            methodCls = method.toLowerCase().includes('impact') ? 'adv-method-impact' : 'adv-method-award';
+        } else if (_isPoolQualified(t)) {
+            method = t.qualifiedFirstCmpEventWeek != null ? `Pool W${t.qualifiedFirstCmpEventWeek}` : 'Pool';
+            methodCls = 'adv-method-backup';
+        } else {
+            const s = (t.championshipStatus || '').toLowerCase();
+            if (s.includes('ranking')) method = 'Event Winner';
+            else method = 'Qualified';
+        }
+
+        const teamObj = teamsData.find(et => et.team_number === t.teamNumber);
+        const name = teamObj ? teamObj.nickname : (t.nameShort || '');
+
+        html += '<div class="adv-qual-row">';
+        html += `<span class="adv-team-num">${t.teamNumber}</span>`;
+        html += `<span class="adv-team-name">${name}</span>`;
+        html += '<span class="adv-right-group">';
+        html += `<span class="adv-pts">${t.totalPoints != null ? t.totalPoints + ' pts' : ''}</span>`;
+        html += `<span class="adv-method ${methodCls}">${method}</span>`;
+        html += '</span>';
+        html += '</div>';
+    });
+    html += '</div>';
+    content.innerHTML = html;
+    el.classList.remove('hidden');
+}
+
 function toggleAdvancement() {
     _toggleCollapse('summary-advancement-body', 'advancement-toggle-icon');
 }
@@ -3259,11 +3565,13 @@ function renderAdvancement(data) {
             html += '<div class="adv-qual-row">';
             html += `<span class="adv-team-num">${t.team_number}</span>`;
             html += `<span class="adv-team-name">${t.nickname}</span>`;
-            html += `<span class="adv-method ${methodCls}">${t.method}</span>`;
-            html += `<span class="adv-pts" title="Qual ${t.qual_points} · Alliance ${t.alliance_points} · Elim ${t.elim_points} · Award ${t.award_points}">${t.total_points} pts</span>`;
+            html += '<span class="adv-right-group">';
             if (awardsStr) {
                 html += `<span class="adv-awards-badge" title="${awardsStr}">${awardsStr}</span>`;
             }
+            html += `<span class="adv-pts" title="Qual ${t.qual_points} · Alliance ${t.alliance_points} · Elim ${t.elim_points} · Award ${t.award_points}">${t.total_points} pts</span>`;
+            html += `<span class="adv-method ${methodCls}">${t.method}</span>`;
+            html += '</span>';
             html += '</div>';
         });
         html += '</div>';
@@ -3548,11 +3856,11 @@ function renderSummary(data) {
         const seasonToggleHideChamps = $('award-season-toggle');
         if (seasonToggleHideChamps) seasonToggleHideChamps.classList.add('hidden');
     } else if (isFTCMode()) {
-        // FTC: Event Winners & Finalists above demographics, full width
-        const demoEl = $('summary-demographics');
-        const container = demoEl?.parentNode;
+        // FTC: Event Winners & Finalists above Prior Playoff Connections, full width
+        const historyEl = $('summary-history');
+        const container = historyEl?.parentNode;
         if (container && pastChampsEl) {
-            container.insertBefore(pastChampsEl, demoEl);
+            container.insertBefore(pastChampsEl, historyEl);
             pastChampsEl.classList.add('ftc-full-width-card');
         }
         // FTC: show event winners & finalists if available (left card)
@@ -3574,10 +3882,10 @@ function renderSummary(data) {
                 // Only highlight 1st-place Inspire (exclude 2nd place)
                 const inspire1st = (t.years_inspire || []).filter(n => !/2nd/i.test(n));
                 const inspireBadge = inspire1st.length ? '<span class="badge badge-inspire">Inspire</span>' : '';
-                return '<div class="prestige-entry">'
-                    + '<span class="prestige-entry-num">' + t.team_number + '</span>'
-                    + '<span class="prestige-entry-name">' + t.nickname + '</span>'
-                    + '<span class="prestige-entry-year">' + inspireBadge + wonBadge + finBadge + '</span>'
+                return '<div class="adv-qual-row">'
+                    + '<span class="adv-team-num">' + t.team_number + '</span>'
+                    + '<span class="adv-team-name">' + t.nickname + '</span>'
+                    + '<span class="adv-right-group">' + inspireBadge + wonBadge + finBadge + '</span>'
                     + '</div>';
             }).join('');
             pastChampsEl.classList.remove('hidden');
@@ -3585,67 +3893,74 @@ function renderSummary(data) {
             pastChampsEl.classList.add('hidden');
         }
 
-        // FTC: Season Award Winners box (big 3 from prior events this season)
-        let currentAwardsEl = $('summary-current-awards');
-        if (!currentAwardsEl) {
-            currentAwardsEl = document.createElement('div');
-            currentAwardsEl.id = 'summary-current-awards';
-            currentAwardsEl.className = 'summary-card ftc-full-width-card';
-            currentAwardsEl.innerHTML = '<h3>Season Award Winners</h3><div id="summary-current-awards-list"></div>';
-            const demoEl2 = $('summary-demographics');
-            const container2 = demoEl2?.parentNode;
-            if (container2) container2.insertBefore(currentAwardsEl, demoEl2);
-        }
-        if (data.ftc_season_awards && data.ftc_season_awards.length > 0) {
-            $('summary-current-awards-list').innerHTML = data.ftc_season_awards.map(t => {
-                const chips = t.awards.map(a => {
-                    const label = a.type === 'inspire'
-                        ? (/2nd/i.test(a.name) ? 'Inspire 2nd' : 'Inspire')
-                        : a.type === 'winner' ? 'Winner'
-                        : a.type === 'finalist' ? 'Finalist' : a.name;
-                    return '<span class="ftc-event-award-chip ' + a.type + '" title="' + (a.event_name || '') + '">'
-                        + label + ' @ ' + (a.event_name || a.name) + '</span>';
-                }).join(' ');
-                return '<div class="prestige-entry">'
-                    + '<span class="prestige-entry-num">' + t.team_number + '</span>'
-                    + '<span class="prestige-entry-name">' + t.nickname + '</span>'
-                    + '<span class="prestige-entry-year">' + chips + '</span>'
-                    + '</div>';
-            }).join('');
-            currentAwardsEl.classList.remove('hidden');
-        } else {
-            currentAwardsEl.classList.add('hidden');
-        }
-        // Hide FRC season toggle in FTC mode
-        const seasonToggleHideFtc = $('award-season-toggle');
-        if (seasonToggleHideFtc) seasonToggleHideFtc.classList.add('hidden');
+        // Hide FTC dynamic awards card if it exists (migrated to unified card)
+        const ftcAwardsOld = $('summary-current-awards');
+        if (ftcAwardsOld) ftcAwardsOld.classList.add('hidden');
 
-        // FTC: past season awards (right card) — lazy-load
-        // Update filter button: "Impact" → "Inspire" for FTC
+        // FTC: Unified Award-Winning Teams card with season switcher
+        // Reuse the same pastAwardsEl card that FRC uses — move to full-width above connections
+        const historyEl2 = $('summary-history');
+        const container2 = historyEl2?.parentNode;
+        if (container2 && pastAwardsEl) {
+            container2.insertBefore(pastAwardsEl, historyEl2);
+            pastAwardsEl.classList.add('ftc-full-width-card');
+        }
         const impactFilterBtn = pastAwardsEl.querySelector('[data-award-filter="impact"]');
         if (impactFilterBtn) impactFilterBtn.textContent = 'Inspire';
+        pastAwardsEl.querySelector('h3').textContent = 'Award-Winning Teams';
+        const ftcSeasonToggle = $('award-season-toggle');
+        if (ftcSeasonToggle) {
+            ftcSeasonToggle.classList.remove('hidden');
+            const btns = ftcSeasonToggle.querySelectorAll('.award-season-btn');
+            btns[0].textContent = String(currentEventYear);
+            btns[1].textContent = String(data.ftc_past_season_year || (currentEventYear - 1));
+        }
+        const ftcFilterBar = pastAwardsEl.querySelector('.past-awards-filter-bar');
+        if (ftcFilterBar) ftcFilterBar.classList.remove('hidden');
+
+        // Store FTC season awards in summaryData so switchAwardSeason can find them
+        if (data.ftc_season_awards && data.ftc_season_awards.length > 0) {
+            // Convert FTC season awards to the same shape as FRC (past-award-chip format)
+            summaryData.season_awards = data.ftc_season_awards;
+        }
         if (data.ftc_past_season_awards && data.ftc_past_season_awards.length > 0) {
-            pastAwardsEl.querySelector('h3').textContent = `${data.ftc_past_season_year || (currentEventYear - 1)} Award Winners`;
-            const filterBar = pastAwardsEl.querySelector('.past-awards-filter-bar');
-            if (filterBar) filterBar.classList.remove('hidden');
-            renderPastSeasonAwards(data.ftc_past_season_awards);
-            pastAwardsEl.classList.remove('hidden');
+            summaryData.past_season_awards = data.ftc_past_season_awards;
+        }
+
+        // Default to current season tab
+        currentAwardSeason = 'current';
+        currentAwardFilter = 'all';
+        if (ftcSeasonToggle) {
+            ftcSeasonToggle.querySelectorAll('.award-season-btn').forEach(b =>
+                b.classList.toggle('active', b.dataset.season === 'current'));
+        }
+
+        pastAwardsEl.classList.remove('hidden');
+        if (summaryData.season_awards && summaryData.season_awards.length > 0) {
+            renderPastSeasonAwards(summaryData.season_awards);
+        } else if (summaryData.past_season_awards && summaryData.past_season_awards.length > 0) {
+            // No current season awards — fall back to past
+            currentAwardSeason = 'past';
+            if (ftcSeasonToggle) ftcSeasonToggle.querySelectorAll('.award-season-btn').forEach(b =>
+                b.classList.toggle('active', b.dataset.season === 'past'));
+            renderPastSeasonAwards(summaryData.past_season_awards);
         } else if (!data.ftc_past_season_awards) {
-            // Not loaded yet — show placeholder, lazy-load
-            pastAwardsEl.querySelector('h3').textContent = `${currentEventYear - 1} Award Winners`;
             $('summary-past-awards-list').innerHTML = '<p class="empty" style="margin:.5rem 0;font-size:.82rem">Loading\u2026</p>';
-            pastAwardsEl.classList.remove('hidden');
             loadFtcPastAwards();
         } else {
             pastAwardsEl.classList.add('hidden');
         }
     } else {
-        // FRC: restore past-champs into pair-row
+        // FRC: restore past-champs and past-awards into pair-row
         const pairRow = document.querySelector('.summary-pair-row');
         if (pairRow && !pairRow.contains(pastChampsEl)) {
             pairRow.insertBefore(pastChampsEl, pairRow.firstChild);
         }
+        if (pairRow && !pairRow.contains(pastAwardsEl)) {
+            pairRow.appendChild(pastAwardsEl);
+        }
         pastChampsEl.classList.remove('ftc-full-width-card');
+        pastAwardsEl.classList.remove('ftc-full-width-card');
         // Reset titles in case we're switching from a champs to a regular event
         pastChampsEl.querySelector('h3').textContent = 'Returning Champions & Finalists';
         pastAwardsEl.querySelector('h3').textContent = 'Award-Winning Teams';
@@ -3717,6 +4032,9 @@ function renderSummary(data) {
     if (_noChamps && _noAwards && !isFTCMode()) {
         loadSummaryAwards();
     }
+
+    // Pre-qualified teams (FRC only — cross-reference with regional pool)
+    renderPrequalifiedTeams();
 
     // Advancement — lazy-load (only for completed events)
     const advEl = $('summary-advancement');
@@ -4742,10 +5060,6 @@ async function loadAlliances() {
 
 function toggleAllianceAvatars(on) {
     allianceShowAvatars = on;
-    if (allianceData) renderAlliances(allianceData);
-}
-function toggleAllianceNames(on) {
-    allianceShowNames = on;
     if (allianceData) renderAlliances(allianceData);
 }
 function toggleAllianceEpa(on) {
@@ -9238,10 +9552,6 @@ function renderTeamCards(teams) {
         <label class="toggle-label"><input type="checkbox" ${compact ? 'checked' : ''} onchange="toggleRankingsCompact(this.checked)"> Compact</label>
         <label class="toggle-label school-toggle"><input type="checkbox" ${school ? 'checked' : ''} onchange="toggleRankingsSchool(this.checked)"> School / Org</label>
         ${ftcMode ? `<label class="toggle-label"><input type="checkbox" ${autoTele ? 'checked' : ''} onchange="toggleRankingsAutoTele(this.checked)"> Auto / TeleOp</label>` : ''}
-        <button class="rankings-view-toggle" onclick="toggleRankingsView()">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-            ${rankingsCardView ? 'Table View' : 'Card View'}
-        </button>
     </div>`;
 
     if (!rankingsCardView) return toolbar;

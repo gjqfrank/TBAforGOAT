@@ -10,6 +10,8 @@ from typing import Any
 from .ftc_client import get_ftc_client
 from .ftcscout_client import get_ftcscout_client
 from .gatool_client import get_gatool_client
+from .payload_cache import read_payload, write_payload
+from .supabase_client import get_cached_summary, set_cached_summary
 
 log = logging.getLogger(__name__)
 
@@ -662,6 +664,20 @@ async def get_ftc_past_season_awards(event_key: str) -> dict:
 
     Returns {"past_season_awards": [{ team_number, nickname, awards: [{name, event_name, type}] }]}
     """
+    sb_key = f"ftc_{event_key}"
+
+    # 1) Disk cache (30 min TTL — past season data is stable)
+    cached = read_payload("ftc_past_awards", event_key, ttl=1800)
+    if cached:
+        cached.pop("_ts", None)
+        return cached
+
+    # 2) Supabase cache
+    sb_row = await get_cached_summary(sb_key)
+    if sb_row and sb_row.get("awards"):
+        write_payload("ftc_past_awards", event_key, sb_row["awards"])
+        return sb_row["awards"]
+
     year, event_code = _parse_ftc_key(event_key)
     client = get_ftc_client()
     prev_season = year - 1
@@ -700,6 +716,8 @@ async def get_ftc_past_season_awards(event_key: str) -> dict:
 
     # Resolve event codes → names from the season event list (cached by the client)
     event_name_map: dict[str, str] = {}
+    scrimmage_codes: set[str] = set()
+    NON_COMP_TYPES = {"0", "12", "14", "15"}  # Scrimmage, Kickoff, PracticeDay, Volunteer
     if all_event_codes:
         try:
             season_events = await client.get_events(prev_season)
@@ -707,6 +725,8 @@ async def get_ftc_past_season_awards(event_key: str) -> dict:
                 ec = ev.get("code", "")
                 if ec in all_event_codes:
                     event_name_map[ec] = ev.get("name", ec)
+                    if str(ev.get("type", "")) in NON_COMP_TYPES:
+                        scrimmage_codes.add(ec)
         except Exception:
             pass  # Fallback: event code shown as-is
 
@@ -718,6 +738,7 @@ async def get_ftc_past_season_awards(event_key: str) -> dict:
         interesting = [
             a for a in awards
             if a.get("awardId") in _FTC_INTERESTING_AWARD_IDS
+            and a.get("eventCode", "") not in scrimmage_codes
         ]
         if not interesting:
             continue
@@ -746,7 +767,10 @@ async def get_ftc_past_season_awards(event_key: str) -> dict:
         return 2
     past_awards.sort(key=_sort_key)
 
-    return {"past_season_awards": past_awards, "prev_season": prev_season}
+    result = {"past_season_awards": past_awards, "prev_season": prev_season}
+    write_payload("ftc_past_awards", event_key, dict(result))
+    await set_cached_summary(sb_key, awards=result)
+    return result
 
 
 # ── FTC Current Season Awards (big 3 at prior events) ─────
@@ -757,6 +781,20 @@ async def get_ftc_current_season_awards(event_key: str) -> dict:
 
     Returns {"season_awards": [{ team_number, nickname, awards: [{name, event_name, type}] }], "season": int}
     """
+    sb_key = f"ftc_{event_key}"
+
+    # 1) Disk cache (10 min TTL)
+    cached = read_payload("ftc_season_awards", event_key, ttl=600)
+    if cached:
+        cached.pop("_ts", None)
+        return cached
+
+    # 2) Supabase cache
+    sb_row = await get_cached_summary(sb_key)
+    if sb_row and sb_row.get("summary"):
+        write_payload("ftc_season_awards", event_key, sb_row["summary"])
+        return sb_row["summary"]
+
     year, event_code = _parse_ftc_key(event_key)
     client = get_ftc_client()
 
@@ -793,6 +831,8 @@ async def get_ftc_current_season_awards(event_key: str) -> dict:
 
     # Resolve event codes → names
     event_name_map: dict[str, str] = {}
+    scrimmage_codes: set[str] = set()
+    NON_COMP_TYPES = {"0", "12", "14", "15"}  # Scrimmage, Kickoff, PracticeDay, Volunteer
     if all_event_codes:
         try:
             season_events = await client.get_events(year)
@@ -800,10 +840,12 @@ async def get_ftc_current_season_awards(event_key: str) -> dict:
                 ec = ev.get("code", "")
                 if ec in all_event_codes:
                     event_name_map[ec] = ev.get("name", ec)
+                    if str(ev.get("type", "")) in NON_COMP_TYPES:
+                        scrimmage_codes.add(ec)
         except Exception:
             pass
 
-    # Build summary — only big 3 from OTHER events
+    # Build summary — only big 3 from OTHER events (exclude scrimmages)
     season_awards: list[dict] = []
     for num, awards in results:
         if not awards:
@@ -812,6 +854,7 @@ async def get_ftc_current_season_awards(event_key: str) -> dict:
             a for a in awards
             if a.get("awardId") in _FTC_INTERESTING_AWARD_IDS
             and (a.get("eventCode", "").upper() != event_code.upper())
+            and a.get("eventCode", "") not in scrimmage_codes
         ]
         if not interesting:
             continue
@@ -840,7 +883,10 @@ async def get_ftc_current_season_awards(event_key: str) -> dict:
         return 2
     season_awards.sort(key=_sort_key)
 
-    return {"season_awards": season_awards, "season": year}
+    result = {"season_awards": season_awards, "season": year}
+    write_payload("ftc_season_awards", event_key, dict(result))
+    await set_cached_summary(sb_key, summary=result)
+    return result
 
 
 # ── FTC Team Awards Summary (for PbP) ─────────────────────

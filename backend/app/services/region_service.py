@@ -7,10 +7,15 @@ import unicodedata
 from collections import Counter, defaultdict
 from pathlib import Path
 
+from . import payload_cache
+from .supabase_client import get_cached_summary, set_cached_summary
 from .tba_client import get_tba_client
 
 # Concurrency limit for outbound API calls within this module
 _API_SEMAPHORE = asyncio.Semaphore(10)
+
+# History cache TTL — data is very stable
+_HISTORY_TTL = 3600  # 1 hour
 
 
 def _normalize_name(s: str) -> str:
@@ -134,10 +139,33 @@ async def _safe(coro):
 
 async def get_event_history(event_key: str) -> dict:
     """
-    Build the history for a recurring event.
+    Build the history for a recurring event (cached).
     Uses event code aliases and name matching to find all past instances,
     then aggregates award data across years.
     """
+    # 1) Disk cache (1 hour TTL — history data is very stable)
+    cached = payload_cache.read_payload("history", event_key, _HISTORY_TTL)
+    if cached:
+        cached.pop("_ts", None)
+        return cached
+
+    # 2) Supabase cache
+    sb_key = f"hist_{event_key}"
+    sb_row = await get_cached_summary(sb_key)
+    if sb_row and sb_row.get("summary"):
+        payload_cache.write_payload("history", event_key, sb_row["summary"])
+        return sb_row["summary"]
+
+    # 3) Build from scratch
+    result = await _build_event_history(event_key)
+    if "error" not in result:
+        payload_cache.write_payload("history", event_key, result)
+        await set_cached_summary(sb_key, summary=result)
+    return result
+
+
+async def _build_event_history(event_key: str) -> dict:
+    """Build event history from scratch."""
     client = get_tba_client()
 
     # Get the current event's info

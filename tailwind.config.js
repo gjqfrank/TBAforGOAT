@@ -1,6 +1,28 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   content: ['./docs/**/*.{html,js}'],
+
+  /* Classes constructed dynamically in JS (e.g. `past-award-chip-${type}`)
+     can't be detected by Tailwind's content scanner — safelist them here. */
+  safelist: [
+    'past-award-chip-finalist',
+    'past-award-chip-winner',
+    'past-award-chip-impact',
+    'past-award-chip-inspire',
+    'ribbon-winner',
+    'ribbon-finalist',
+    'ribbon-eliminated',
+    'ribbon-playing',
+    'result-W',
+    'result-L',
+    'result-T',
+    'toast-error',
+    'toast-info',
+    'toast-success',
+    'spotlight-badge-blue',
+    'spotlight-badge-red',
+  ],
+
   theme: {
     extend: {
       /* ── Semantic colour tokens (mapped to CSS custom-properties) ── */

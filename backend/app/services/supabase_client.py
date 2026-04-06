@@ -74,3 +74,40 @@ async def fetch_changed(
             query = query.eq(col, val)
     result = await query.execute()
     return result.data or []
+
+
+# ── Event Summary Cache ─────────────────────────────────────
+
+async def get_cached_summary(event_key: str) -> Optional[dict[str, Any]]:
+    """Read cached event summary from Supabase.  Returns None on miss."""
+    try:
+        sb = await get_supabase()
+        result = await (
+            sb.table("event_summary_cache")
+            .select("summary, awards, updated_at")
+            .eq("event_key", event_key)
+            .maybe_single()
+            .execute()
+        )
+        return result.data if result.data else None
+    except Exception as exc:
+        log.warning("Supabase summary cache read failed for %s: %s", event_key, exc)
+        return None
+
+
+async def set_cached_summary(
+    event_key: str,
+    summary: Optional[dict] = None,
+    awards: Optional[dict] = None,
+) -> None:
+    """Write (upsert) event summary / awards into Supabase cache."""
+    try:
+        row: dict[str, Any] = {"event_key": event_key}
+        if summary is not None:
+            row["summary"] = summary
+        if awards is not None:
+            row["awards"] = awards
+        sb = await get_supabase()
+        await sb.table("event_summary_cache").upsert(row).execute()
+    except Exception as exc:
+        log.warning("Supabase summary cache write failed for %s: %s", event_key, exc)

@@ -80,6 +80,9 @@ def check_event_high(event_key: str, event_name: str, high: dict) -> bool:
     global _world_record
     if not high or high.get("score", 0) <= 0:
         return False
+    # Ensure we have the best-known record before comparing
+    if _world_record is None:
+        _load_from_disk()
     if _world_record and high["score"] <= _world_record["score"]:
         return False
     _world_record = {
@@ -95,16 +98,19 @@ def check_event_high(event_key: str, event_name: str, high: dict) -> bool:
 
 
 async def seed_from_tba() -> None:
-    """Scan all started TBA events for the season and find the global high."""
+    """Scan all started TBA events for the season and find the global high.
+
+    The disk cache is loaded immediately so the first API response is fast,
+    but we still do a full TBA scan once per server lifetime to catch scores
+    from events the user hasn't browsed.
+    """
     global _seeded
     async with _seed_lock:
         if _seeded:
             return
-        # Try disk cache first — avoids full season scan
+        # Load disk cache as a quick initial value (may be stale)
         if _load_from_disk():
-            _seeded = True
-            log.info("World record loaded from disk cache: %d", _world_record["score"])
-            return
+            log.info("World record loaded from disk cache: %d (will verify via TBA)", _world_record["score"])
         _seeded = True
 
     try:

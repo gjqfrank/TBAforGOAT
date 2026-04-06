@@ -363,7 +363,7 @@
         transform: none;
         box-shadow: none;
     }
-    
+
     /* ── FTC button category 3: filter pills — small toggles ── */
     [data-mode="ftc"] .past-awards-filter-btn,
     [data-mode="ftc"] .conn-filter-btn,
@@ -1139,6 +1139,16 @@
         background: linear-gradient(135deg, #10b981 0%, #34d399 100%);
         box-shadow: 0 1px 6px rgba(16, 185, 129, .25);
     }
+    /* Keep storyline button purple on hover/active */
+    .pbp-storyline-btn:hover,
+    .spotlight-storyline-btn:hover {
+        background: linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%);
+    }
+    .pbp-storyline-btn:active,
+    .spotlight-storyline-btn:active {
+        background: linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%);
+        box-shadow: 0 1px 6px rgba(139, 92, 246, .25);
+    }
     
     /* Button loading state */
     button.btn-loading {
@@ -1342,7 +1352,7 @@
         box-shadow: none;
         transform: none;
     }
-    
+
     .event-section-card {
         background: rgba(18, 18, 42, .85);
         border: 1px solid rgba(255, 255, 255, 0.1);
@@ -3261,8 +3271,9 @@
         transition: var(--transition);
     }
     .pbp-storyline-btn:hover {
-        box-shadow: 0 4px 16px rgba(139, 92, 246, .35);
+        box-shadow: 0 4px 16px rgba(139, 92, 246, .4);
         transform: translateY(-1px);
+        filter: brightness(1.08);
     }
     .pbp-storyline-btn:disabled {
         opacity: .5;
@@ -4906,9 +4917,16 @@
     }
     
     .compare-bar button {
+        display: inline-flex;
+        align-items: center;
+        gap: .35rem;
         padding: .4rem 1rem;
         font-size: .8rem;
         border-radius: 999px;
+        white-space: nowrap;
+    }
+    .compare-bar button svg {
+        flex-shrink: 0;
     }
     
     .compare-bar-clear {
@@ -5067,6 +5085,9 @@
         max-width: 60px;
     }
     .float-lookup-search button {
+        display: inline-flex;
+        align-items: center;
+        gap: .35rem;
         padding: .45rem 1rem;
         font-size: .78rem;
         font-weight: 600;
@@ -5078,6 +5099,9 @@
         transition: var(--transition);
         box-shadow: 0 2px 8px var(--primary-glow);
         white-space: nowrap;
+    }
+    .float-lookup-search button svg {
+        flex-shrink: 0;
     }
     .float-lookup-search button:hover {
         filter: brightness(1.1);
@@ -5487,6 +5511,8 @@
     .shs-team-num {
         cursor: default;
         border-bottom: 1px dotted var(--text-muted);
+        font-weight: 600;
+        color: var(--text);
     }
     .shs-team-num:hover { color: var(--primary); }
     .shs-nofoul { font-size: .68rem; color: var(--text-muted); }
@@ -5495,8 +5521,17 @@
         font-weight: 700;
     }
     .shs-event-row {
-        background: color-mix(in srgb, var(--primary-soft) 60%, transparent);
+        background: rgba(251, 191, 36, .10);
+        box-shadow: inset 3px 0 0 var(--yellow);
     }
+    .shs-score {
+        font-weight: 800;
+        color: var(--primary);
+        font-size: .85rem;
+    }
+    .shs-match-label { color: var(--text-muted); }
+    .shs-event-name { color: var(--text-secondary); }
+    .shs-team-name { color: var(--text-muted); font-family: var(--font); font-size: .72rem; }
     .shs-loading {
         text-align: center;
         padding: 2rem 1rem;
@@ -5680,6 +5715,7 @@
         border-radius: var(--radius-lg);
         padding: .7rem .9rem;
         margin-bottom: .7rem;
+        overflow: hidden;
     }
     .summary-card h3 {
         font-size: .88rem;
@@ -5690,7 +5726,7 @@
     .summary-card-header {
         display: flex;
         align-items: center;
-        justify-content: space-between;
+        gap: .4rem;
         cursor: pointer;
         user-select: none;
         padding: .35rem .5rem;
@@ -5703,6 +5739,7 @@
     }
     .summary-card-header h3 {
         margin: 0;
+        flex: 1;
     }
     .collapse-toggle {
         display: flex;
@@ -5852,7 +5889,7 @@
     /* Collapsible section body (past champs, past awards) */
     .summary-collapse-body {
         overflow: hidden;
-        max-height: 800px;
+        max-height: 4000px;
         transition: max-height .3s ease, opacity .2s ease, margin .2s ease;
         opacity: 1;
         margin-top: .4rem;
@@ -5879,6 +5916,10 @@
     #summary-past-champs-list {
         max-height: 420px;
         overflow-y: auto;
+    }
+    /* FTC: allow more room for large events */
+    .ftc-full-width-card #summary-past-champs-list {
+        max-height: 800px;
     }
     
     /* ── Shared row styles (HoF, past champs, past awards) ── */
@@ -6028,6 +6069,8 @@
         width: 100%;
         padding-top: .25rem;
         padding-left: 4.1rem;
+        max-width: 100%;
+        overflow: hidden;
     }
     .past-award-chip {
         display: inline-flex;
@@ -6041,6 +6084,9 @@
         white-space: nowrap;
         cursor: default;
         transition: var(--transition);
+        max-width: calc(100% - 1rem);
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
     .past-award-chip-winner {
         background: linear-gradient(135deg, rgba(255, 215, 0, .13), rgba(245, 183, 0, .13));
@@ -6249,6 +6295,7 @@
     }
     .adv-qual-row .adv-team-num {
         min-width: 3em;
+        flex-shrink: 0;
     }
     .adv-qual-row .adv-team-name {
         flex: 1;
@@ -6257,12 +6304,21 @@
         text-overflow: ellipsis;
         white-space: nowrap;
     }
+    .adv-right-group {
+        display: flex;
+        align-items: center;
+        gap: .5rem;
+        flex-shrink: 0;
+        margin-left: auto;
+    }
     .adv-method {
         font-size: .7rem;
         font-weight: 600;
         padding: .15rem .45rem;
         border-radius: var(--radius);
         white-space: nowrap;
+        min-width: 7em;
+        text-align: center;
     }
     .adv-method-ranking {
         background: rgba(34, 197, 94, .12);
@@ -6290,6 +6346,8 @@
         color: var(--text);
         white-space: nowrap;
         cursor: default;
+        min-width: 4.5em;
+        text-align: right;
     }
     .adv-awards-badge {
         font-size: .7rem;
