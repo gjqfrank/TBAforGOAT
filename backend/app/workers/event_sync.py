@@ -24,6 +24,21 @@ log = logging.getLogger(__name__)
 SYNC_INTERVAL = 120  # seconds between full sweeps
 
 
+def _invalidate_snapshot(event_key: str) -> None:
+    """Remove disk-cached snapshot + summary/awards caches so they rebuild."""
+    try:
+        from ..routers.snapshot import invalidate_snapshot
+        invalidate_snapshot(event_key)
+    except Exception:
+        pass
+    try:
+        from ..services import payload_cache
+        payload_cache.invalidate("summary", event_key)
+        payload_cache.invalidate("awards", event_key)
+    except Exception:
+        pass
+
+
 def _event_status(start_date: str, end_date: str) -> str:
     """Return 'upcoming', 'ongoing', or 'completed'."""
     today = date.today()
@@ -161,6 +176,8 @@ async def _sync_teams_and_oprs(event_key: str) -> None:
         except Exception as e:
             log.warning("Supabase event_teams upsert failed for %s: %s", event_key, e)
 
+        _invalidate_snapshot(event_key)
+
 
 async def _sync_alliances(event_key: str) -> None:
     """Fetch playoff alliance selections and store in events.raw_data."""
@@ -198,6 +215,7 @@ async def _sync_alliances(event_key: str) -> None:
             "raw_data": json.dumps(current_raw),
         }])
         log.debug("Stored alliances for %s", event_key)
+        _invalidate_snapshot(event_key)
     except Exception as e:
         log.warning("Alliance upsert failed for %s: %s", event_key, e)
 
@@ -244,6 +262,7 @@ async def _sync_epa(event_key: str) -> None:
         if rows_to_update:
             await upsert_rows("event_teams", rows_to_update)
             log.debug("Merged EPA for %d teams at %s", len(rows_to_update), event_key)
+            _invalidate_snapshot(event_key)
     except Exception as e:
         log.warning("EPA upsert failed for %s: %s", event_key, e)
 

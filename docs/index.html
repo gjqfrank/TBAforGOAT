@@ -8,6 +8,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="css/styles.css">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 </head>
 <body>
     <header>
@@ -138,13 +140,6 @@
                         <span id="aeb-meta" class="aeb-meta"></span>
                     </div>
                 </div>
-                <div class="aeb-right">
-                    <span id="aeb-cache-badge" class="aeb-cache-badge hidden" title="Loaded from saved cache"></span>
-                    <button id="btn-save-event" class="btn-save-event" onclick="saveCurrentEvent()" title="Save event for instant loading">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-                        <span id="save-event-label">Save Event</span>
-                    </button>
-                </div>
             </div>
 
             <!-- Current season quick-select -->
@@ -208,17 +203,6 @@
                         <button id="btn-load-event" onclick="loadEvent()">Load Event</button>
                     </div>
                 </div>
-            </div>
-
-            <!-- Saved Events quick-access -->
-            <div id="saved-events-card" class="event-section-card saved-events-card hidden">
-                <div class="event-section-header">
-                    <h3 class="event-section-title">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px; margin-right:4px"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-                        Saved Events
-                    </h3>
-                </div>
-                <div id="saved-events-list" class="saved-events-list"></div>
             </div>
 
             <!-- Regional Advancement Pool -->
@@ -741,30 +725,34 @@
     </nav>
 
     <!-- ═══ More Menu Scrim ═══ -->
-    <div class="mob-more-scrim" id="mob-more-scrim" onclick="toggleMobileMore()"></div>
+    <div class="mob-more-scrim" id="mob-more-scrim" onclick="closeMobileMore()"></div>
 
-    <!-- ═══ More Menu Popover ═══ -->
-    <div class="mob-more-menu" id="mob-more-menu">
-        <button class="mob-more-item" data-tab="history" onclick="mobileNavTo('history')">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-            History
-        </button>
-        <button class="mob-more-item" data-tab="summary" onclick="mobileNavTo('summary')">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-            Summary
-        </button>
-        <button class="mob-more-item" data-tab="breakdown" onclick="mobileNavTo('breakdown')">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-            Breakdown
-        </button>
-        <button class="mob-more-item" data-tab="alliance" onclick="mobileNavTo('alliance')">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-            Alliances
-        </button>
-        <button class="mob-more-item" data-tab="team" onclick="mobileNavTo('team')">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            Lookup / H2H
-        </button>
+    <!-- ═══ More Menu — Compact popover (iOS context menu style) ═══ -->
+    <div class="mob-more-panel" id="mob-more-menu">
+        <div class="mob-more-panel-body">
+          <div class="mob-more-group">
+            <button class="mob-more-item" data-tab="history" onclick="mobileNavTo('history')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                History
+            </button>
+            <button class="mob-more-item" data-tab="summary" onclick="mobileNavTo('summary')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                Summary
+            </button>
+            <button class="mob-more-item" data-tab="breakdown" onclick="mobileNavTo('breakdown')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                Breakdown
+            </button>
+            <button class="mob-more-item" data-tab="alliance" onclick="mobileNavTo('alliance')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                Alliances
+            </button>
+            <button class="mob-more-item" data-tab="team" onclick="mobileNavTo('team')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                Lookup / H2H
+            </button>
+          </div>
+        </div>
     </div>
 
     <!-- ═══ Landscape Orientation Hint ═══ -->
@@ -775,7 +763,10 @@
 
     <script src="js/api.js"></script>
     <script src="js/ftc-api.js"></script>
-    <script src="js/cache.js"></script>
+    <script src="js/db.js"></script>
+    <script src="js/sync.js"></script>
+    <script src="js/auth.js"></script>
+
     <script src="js/app.js"></script>
 
     <!-- Back to top button -->

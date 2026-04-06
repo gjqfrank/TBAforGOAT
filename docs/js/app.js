@@ -1035,6 +1035,9 @@ document.getElementById('event-year')?.addEventListener('keydown', e => { if (e.
 document.getElementById('event-code')?.addEventListener('keydown', e => { if (e.key === 'Enter') loadEvent(); });
 
 // ── Restore event from URL params or localStorage ─────────
+// Initialize IndexedDB for offline data layer
+if (typeof DB !== 'undefined') DB.initDB().catch(() => {});
+
 (function restoreEvent() {
     // URL ?event= takes priority over localStorage (shareable links)
     const urlParams = new URLSearchParams(location.search);
@@ -1617,9 +1620,6 @@ document.addEventListener('keydown', (e) => {
 
 fetchWorldRecord();
 if (isFTCMode()) loadFtcAvatarMap();
-
-// Load saved events list on startup
-loadSavedEventsList();
 
 
 // ═══════════════════════════════════════════════════════════
@@ -2256,10 +2256,25 @@ async function loadEvent(eventKey) {
     try {
         // ── Phase 1: Fetch essentials, show UI immediately ──
         const api = getActiveAPI();
-        const [info, teams] = await Promise.all([
-            api.eventInfo(code),
-            api.eventTeams(code),
-        ]);
+
+        // Try server snapshot first (single cached request)
+        let _snap = null;
+        if (!isFTCMode()) {
+            try {
+                const _ac = new AbortController();
+                const _tm = setTimeout(() => _ac.abort(), 5000);
+                const _r = await fetch(`/api/events/${code}/snapshot`, { signal: _ac.signal });
+                clearTimeout(_tm);
+                if (_r.ok) _snap = await _r.json();
+            } catch (_) { /* snapshot unavailable — fall back */ }
+        }
+
+        const [info, teams] = _snap
+            ? [_snap.info, _snap.teams]
+            : await Promise.all([
+                  api.eventInfo(code),
+                  api.eventTeams(code),
+              ]);
 
         // Restore the load button and season search
         if (btn) { btn.disabled = false; btn.textContent = btn.dataset.origText || 'Load Event'; btn.classList.remove('btn-loading'); }
@@ -2365,9 +2380,6 @@ async function loadEvent(eventKey) {
         hideSkeleton('team-loading');
         hideSkeleton('h2h-loading');
 
-        // Hide cache badge for fresh loads
-        $('aeb-cache-badge')?.classList.add('hidden');
-
         // Also hide any leftover inline error containers
         hideInlineError('summary-error');
         hideInlineError('alliance-error');
@@ -2387,6 +2399,15 @@ async function loadEvent(eventKey) {
         // Restore tab from URL hash now that the event is loaded
         restorePendingTab();
         _restorePendingUrlState();
+
+        if (_snap) {
+            // Snapshot included all secondary data — hydrate immediately
+            if (_snap.matches) { pbpData = _snap.matches; bdData = _snap.matches; }
+            if (_snap.playoffs && _snap.playoffs.matches) playoffData = _snap.playoffs.matches;
+            if (_snap.alliances) allianceData = _snap.alliances;
+            loading(false);
+            updateTabDots();
+        } else {
 
         // Matches (feeds PBP + Breakdown)
         const p2api = getActiveAPI();
@@ -2439,6 +2460,8 @@ async function loadEvent(eventKey) {
             }, 5000);
         }).finally(phase2Check);
 
+        } // end !_snap fallback
+
     } catch (err) {
         if (btn) { btn.disabled = false; btn.textContent = btn.dataset.origText || 'Load Event'; btn.classList.remove('btn-loading'); }
         $('season-search')?.classList.remove('input-loading');
@@ -2450,355 +2473,8 @@ async function loadEvent(eventKey) {
     }
 }
 
-// ═══════════════════════════════════════════════════════════
-//  Save / Load Event Cache
-// ═══════════════════════════════════════════════════════════
-
-/** Save current event — stores snapshot in browser IndexedDB (per-user) */
-async function saveCurrentEvent() {
-    if (!currentEvent) return;
-    const btn = $('btn-save-event');
-    const label = $('save-event-label');
-    if (!btn || !label) return;
-
-    btn.disabled = true;
-    label.textContent = 'Saving…';
-    btn.classList.add('saving');
-
-    try {
-        // Build the snapshot from already-loaded client data
-        const snapshot = {
-            info:       eventInfoData || null,
-            teams:      teamsData || null,
-            summary:    summaryData || null,
-            matches:    pbpData || null,
-            playoffs:   playoffData ? { matches: playoffData } : null,
-            alliances:  allianceData || null,
-            breakdowns: (bdCache && Object.keys(bdCache).length) ? bdCache : null,
-            connections: null,
-            connections_alltime: null,
-        };
-
-        // Store in browser IndexedDB (per-user, per-browser)
-        await EventCache.put(currentEvent, snapshot);
-
-        label.textContent = 'Saved ✓';
-        btn.classList.remove('saving');
-        btn.classList.add('saved');
-        setTimeout(() => {
-            label.textContent = 'Save Event';
-            btn.classList.remove('saved');
-            btn.disabled = false;
-        }, 3000);
-
-        // Refresh the saved events list
-        loadSavedEventsList();
-    } catch (err) {
-        label.textContent = 'Error!';
-        btn.classList.remove('saving');
-        setTimeout(() => {
-            label.textContent = 'Save Event';
-            btn.disabled = false;
-        }, 2000);
-        console.error('Save event failed:', err);
-    }
-}
-
-/** Load an event from saved cache (instant) — used by saved events list */
-async function loadSavedEvent(eventKey) {
-    // Reset state
-    playoffData = null; allianceData = null; summaryData = null; eventInfoData = null;
-    pbpData = null; pbpIndex = 0; bdData = null; bdIndex = 0; bdCache = {};
-    historyData = null; regionData = null;
-    stopBdPolling(); stopBdListRefresh(); stopPbpRefresh(); stopPlayoffRefresh();
-    _pbpConnCache = {}; _pbpConnAllTime = false;
-    _pbpAwardsCache = {};
-    _gatoolUpdatesCache = {};
-    _sponsorsShownTeams.clear();
-    _playoffFirstsCache = null;
-    _h2hAllTime = false;
-    _loadingAwards = false;
-    _loadingConnections = false;
-    renderedTabs = { playoff: false, alliance: false, playbyplay: false, breakdown: false, history: false };
-
-    // Reset the connections "All Time" toggle to "Past 3 Seasons"
-    const connToggle = $('conn-alltime-toggle');
-    if (connToggle) connToggle.checked = false;
-    const connCard = $('summary-history');
-    if (connCard) {
-        const connSides = connCard.querySelectorAll('.conn-range-side');
-        if (connSides.length === 2) { connSides[0].classList.add('active'); connSides[1].classList.remove('active'); }
-    }
-    // Reset the H2H "All Time" toggle to "Past 3 Seasons"
-    const h2hToggle = $('h2h-all-time-toggle');
-    if (h2hToggle) h2hToggle.checked = false;
-    const h2hSides = document.querySelectorAll('.h2h-range-side');
-    if (h2hSides.length === 2) { h2hSides[0].classList.add('active'); h2hSides[1].classList.remove('active'); }
-
-    try {
-        // Load from browser IndexedDB
-        const snapshot = await EventCache.get(eventKey);
-        if (!snapshot) throw new Error('Event not found in local cache');
-
-        const data = snapshot.data || snapshot;
-        if (!data.info || !data.teams) throw new Error('Incomplete saved data');
-
-        // Parse event key
-        const year = eventKey.substring(0, 4);
-        const eventCode = eventKey.substring(4);
-        $('event-year').value = year;
-        $('event-code').value = eventCode;
-
-        currentEvent = eventKey;
-        currentEventYear = parseInt(year, 10);
-        eventInfoData = data.info;
-        localStorage.setItem('selectedEvent', JSON.stringify({ year, eventCode }));
-        // Cache as last event for this mode (for mode-switch restore)
-        localStorage.setItem(`lastEvent_${competitionMode}`, eventKey);
-
-        // Update URL with event key for shareable links
-        _syncUrl({ event: eventKey });
-
-        // Disable breakdown tab for pre-2025 events
-        updateBreakdownTabState();
-
-        const info = data.info;
-        const teams = data.teams;
-
-        // Sync season search
-        const matchedSeason = seasonEventsRaw.find(e => e.key === eventKey);
-        if (matchedSeason) $('season-search').value = matchedSeason.name;
-
-        // Badge
-        const badge = $('event-badge');
-        badge.textContent = `${info.name} (${info.year})`;
-        badge.classList.remove('status-ongoing', 'status-upcoming', 'status-completed');
-        if (info.status) badge.classList.add(`status-${info.status}`);
-        currentEventStatus = info.status || null;
-        eventCountry = info.country || '';
-        eventRegion = info.region || '';
-
-        // If saved snapshot is missing region, fetch it live
-        if (!eventRegion && currentEvent) {
-            try {
-                const liveInfo = await getActiveAPI().eventInfo(currentEvent);
-                if (liveInfo && liveInfo.region) {
-                    eventRegion = liveInfo.region;
-                    info.region = liveInfo.region;
-                }
-            } catch (_) { /* non-critical */ }
-        }
-
-        show('event-badge');
-
-        // Active event banner
-        const statusBadge = info.status
-            ? `<span class="aeb-status-badge status-${info.status}">${info.status.toUpperCase()}</span>`
-            : '';
-        $('aeb-name').textContent = info.name;
-        $('aeb-meta').innerHTML = `<span>${info.event_type_string || ''} · ${info.city || ''}, ${info.state_prov || ''} · ${_fmtDate(info.start_date)} → ${_fmtDate(info.end_date)} · ${teams.length} teams</span>${statusBadge}`;
-
-        const dot = document.querySelector('.aeb-dot');
-        if (dot) {
-            dot.classList.remove('dot-ongoing', 'dot-upcoming', 'dot-completed');
-            if (info.status) dot.classList.add(`dot-${info.status}`);
-        }
-        show('active-event-banner');
-
-        // Show cache badge
-        const cacheBadge = $('aeb-cache-badge');
-        if (cacheBadge) {
-            const savedTime = snapshot.saved_at
-                ? new Date(typeof snapshot.saved_at === 'number' && snapshot.saved_at > 1e12
-                    ? snapshot.saved_at  // already ms
-                    : snapshot.saved_at * 1000  // unix seconds → ms
-                ).toLocaleString()
-                : 'Unknown';
-            cacheBadge.innerHTML = `<svg class="cache-badge-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Loaded from cache (${savedTime})`;
-            cacheBadge.classList.remove('hidden');
-        }
-
-        // Sort — by team number when no rankings exist
-        const hasRankings = teams.some(t => typeof t.rank === 'number');
-        if (!hasRankings || currentEventStatus === 'upcoming') {
-            teamsSortCol = 'team_number'; teamsSortAsc = true;
-        } else {
-            teamsSortCol = 'rank'; teamsSortAsc = true;
-        }
-        hide('rankings-empty');
-        show('rankings-container');
-        $('event-teams').innerHTML = buildTeamTable(teams);
-
-        // Reset dependent tabs
-        $('summary-empty')?.classList.remove('hidden');
-        $('summary-container')?.classList.add('hidden');
-        hideSkeleton('summary-loading');
-        hideInlineError('summary-error');
-        $('playoff-empty')?.classList.remove('hidden');
-        $('playoff-bracket').innerHTML = '';
-        hideSkeleton('playoff-loading');
-        hideInlineError('playoff-error');
-        $('alliance-empty')?.classList.remove('hidden');
-        $('alliance-grid').innerHTML = '';
-        hideSkeleton('alliance-loading');
-        hideInlineError('alliance-error');
-        $('bd-empty')?.classList.remove('hidden');
-        $('bd-container')?.classList.add('hidden');
-        hideSkeleton('bd-loading');
-        hideInlineError('bd-error');
-        $('pbp-empty')?.classList.remove('hidden');
-        $('pbp-container')?.classList.add('hidden');
-        hideSkeleton('pbp-loading');
-        hideInlineError('pbp-error');
-        $('history-empty')?.classList.remove('hidden');
-        $('history-container')?.classList.add('hidden');
-        hideSkeleton('history-loading');
-        hideInlineError('history-error');
-
-        // Pre-populate tab data from cache
-        if (data.matches) { pbpData = data.matches; bdData = data.matches; }
-        if (data.playoffs && data.playoffs.matches) {
-            playoffData = data.playoffs.matches;
-        }
-        if (data.alliances) allianceData = data.alliances;
-        if (data.breakdowns) bdCache = data.breakdowns;
-        if (data.summary) {
-            summaryData = data.summary;
-            if (data.summary.connections) summaryData._connections_past3 = data.summary.connections;
-        }
-        if (data.connections) {
-            // Pre-populate cache but don't block — this is from a saved snapshot
-        }
-
-        updateTabDots();
-
-        // Restore tab from URL hash now that the saved event is loaded
-        restorePendingTab();
-        _restorePendingUrlState();
-
-        // For ongoing events, do a background refresh
-        if (currentEventStatus === 'ongoing') {
-            backgroundRefreshEvent(eventKey);
-        }
-
-    } catch (err) {
-        showInlineError('summary-error', `Error loading saved event: ${err.message}`, () => loadSavedEvent(eventKey));
-    }
-}
-
-/** Background refresh for ongoing events — update data silently */
-async function backgroundRefreshEvent(eventKey) {
-    try {
-        const bgApi = getActiveAPI();
-        const [freshTeams, freshMatches, freshPlayoffs, freshAlliances] = await Promise.all([
-            bgApi.eventTeams(eventKey).catch(() => null),
-            bgApi.allMatches(eventKey).catch(() => null),
-            bgApi.playoffMatches(eventKey).catch(() => null),
-            bgApi.alliances(eventKey).catch(() => null),
-        ]);
-
-        // Guard: user may have switched events during fetch
-        if (currentEvent !== eventKey) return;
-
-        // Update rankings/teams
-        if (freshTeams) {
-            $('event-teams').innerHTML = buildTeamTable(freshTeams);
-            autoCacheTab('teams', freshTeams);
-        }
-
-        // Update match data (PBP + Breakdown share this)
-        if (freshMatches) {
-            pbpData = freshMatches;
-            bdData  = freshMatches;
-            autoCacheTab('matches', freshMatches);
-            // If PBP or Breakdown tab was already rendered, refresh their selectors + re-render
-            if (renderedTabs.playbyplay) {
-                buildPbpSelector();
-                renderPbpMatch();
-            }
-            if (renderedTabs.breakdown)  buildBdSelector();
-        }
-
-        // Update playoff bracket
-        if (freshPlayoffs && freshPlayoffs.matches) {
-            playoffData = freshPlayoffs.matches;
-            if (renderedTabs.playoff) renderBracketTree();
-        }
-
-        // Update alliance data
-        if (freshAlliances) {
-            if (isFTCMode() && Array.isArray(freshAlliances)) {
-                allianceData = _wrapFtcAlliances(freshAlliances);
-            } else {
-                allianceData = freshAlliances;
-            }
-            if (renderedTabs.alliance) renderAlliances(allianceData);
-        }
-
-        // Brief "updated" flash on cache badge
-        const cacheBadge = $('aeb-cache-badge');
-        if (cacheBadge && !cacheBadge.classList.contains('hidden')) {
-            const prev = cacheBadge.textContent;
-            cacheBadge.innerHTML = '<svg class="cache-badge-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Live data refreshed';
-            cacheBadge.classList.add('cache-badge-flash');
-            setTimeout(() => {
-                cacheBadge.textContent = prev;
-                cacheBadge.classList.remove('cache-badge-flash');
-            }, 3000);
-        }
-    } catch (_) { /* silent */ }
-}
-
-/** Auto-cache tab data to IndexedDB as user visits each tab */
-async function autoCacheTab(tabName, tabData) {
-    if (!currentEvent || !tabData) return;
-    await EventCache.patchTab(currentEvent, tabName, tabData);
-}
-
-/** Load and render the saved events list on the Events tab */
-async function loadSavedEventsList() {
-    try {
-        // Load saved events from browser IndexedDB only (per-user)
-        const events = (await EventCache.list()).sort((a, b) => (b.saved_at || 0) - (a.saved_at || 0));
-
-        const card = $('saved-events-card');
-        const list = $('saved-events-list');
-        if (!card || !list) return;
-
-        if (events.length === 0) {
-            card.classList.add('hidden');
-            return;
-        }
-
-        card.classList.remove('hidden');
-        list.innerHTML = events.map(e => {
-            const time = e.saved_at
-                ? new Date(e.saved_at > 1e12 ? e.saved_at : e.saved_at * 1000).toLocaleString()
-                : '';
-            const statusCls = e.status ? `status-${e.status}` : '';
-            const statusLabel = e.status ? e.status.charAt(0).toUpperCase() + e.status.slice(1) : '';
-            return `
-                <div class="saved-event-item" onclick="loadSavedEvent('${e.event_key}')">
-                    <div class="saved-event-info">
-                        <span class="saved-event-name">${e.name || e.event_key}</span>
-                        ${statusLabel ? `<span class="saved-event-status ${statusCls}">${statusLabel}</span>` : ''}
-                    </div>
-                    <div class="saved-event-meta">
-                        <span class="saved-event-time">${time}</span>
-                        <button class="saved-event-delete" onclick="event.stopPropagation(); deleteSavedEvent('${e.event_key}')" title="Remove saved event">✕</button>
-                    </div>
-                </div>`;
-        }).join('');
-    } catch (err) {
-        console.error('Failed to load saved events:', err);
-    }
-}
-
-/** Delete a saved event from browser cache */
-async function deleteSavedEvent(eventKey) {
-    await EventCache.remove(eventKey);
-    loadSavedEventsList();
-}
+// No-op stub — save event functionality removed
+async function autoCacheTab() {}
 
 let teamsData = null;      // cached teams list for sorting
 let teamsSortCol = 'rank';  // current sort column
@@ -9329,11 +9005,8 @@ function _fmtDate(dateStr) {
 
 // ── 1. Mobile Bottom Navigation ────────────────────────────
 function mobileNavTo(tabName) {
-    // Close the more menu if open
-    const moreMenu = document.getElementById('mob-more-menu');
-    if (moreMenu) moreMenu.classList.remove('open');
-    const scrim = document.getElementById('mob-more-scrim');
-    if (scrim) scrim.classList.remove('open');
+    // Close the more panel if open
+    closeMobileMore();
 
     // Use the existing tab switching mechanism
     const tabBtn = document.querySelector(`.tab[data-tab="${tabName}"]`);
@@ -9361,10 +9034,22 @@ function syncMobileNav(tabName) {
 }
 
 function toggleMobileMore() {
-    const menu = document.getElementById('mob-more-menu');
+    const panel = document.getElementById('mob-more-menu');
     const scrim = document.getElementById('mob-more-scrim');
-    menu.classList.toggle('open');
-    if (scrim) scrim.classList.toggle('open', menu.classList.contains('open'));
+    const isOpen = panel.classList.contains('open');
+    if (isOpen) {
+        closeMobileMore();
+    } else {
+        panel.classList.add('open');
+        if (scrim) scrim.classList.add('open');
+    }
+}
+
+function closeMobileMore() {
+    const panel = document.getElementById('mob-more-menu');
+    const scrim = document.getElementById('mob-more-scrim');
+    if (panel) panel.classList.remove('open');
+    if (scrim) scrim.classList.remove('open');
 }
 
 // Close more menu on outside click
@@ -9372,9 +9057,7 @@ document.addEventListener('click', e => {
     const menu = document.getElementById('mob-more-menu');
     if (!menu || !menu.classList.contains('open')) return;
     if (!e.target.closest('#mob-more-menu') && !e.target.closest('.mob-nav-btn[data-tab="more"]')) {
-        menu.classList.remove('open');
-        const scrim = document.getElementById('mob-more-scrim');
-        if (scrim) scrim.classList.remove('open');
+        closeMobileMore();
     }
 });
 

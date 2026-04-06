@@ -5,6 +5,7 @@ from ..services import event_service
 from ..services import summary_service
 from ..services import region_service
 from ..services import world_record_service
+from ..services import payload_cache
 from ..services.tba_client import get_tba_client
 from ..services.frc_client import get_frc_client
 from ..services.statbotics_client import get_statbotics_client
@@ -34,6 +35,11 @@ async def world_record():
 async def season_high_scores(year: int = Query(2026)):
     """Top match scores and top EPA teams for a season (from Statbotics)."""
     try:
+        # Disk cache — Statbotics data changes infrequently
+        cached = payload_cache.read_payload("season_high", str(year), 600)
+        if cached:
+            return cached
+
         sb = get_statbotics_client()
         data = await sb.get_season_high_scores(year, limit=5)
 
@@ -53,6 +59,7 @@ async def season_high_scores(year: int = Query(2026)):
             raw = m.get("key", "")
             m["match_label"] = _parse_match_label(raw)
 
+        payload_cache.write_payload("season_high", str(year), data)
         return data
     except HTTPException:
         raise
@@ -127,6 +134,8 @@ async def event_summary(event_key: str):
 @router.get("/{event_key}/summary/refresh-stats")
 async def event_summary_refresh_stats(event_key: str):
     try:
+        # Invalidate the summary disk cache so the next full load is fresh
+        payload_cache.invalidate("summary", event_key)
         return await summary_service.get_event_summary_stats(event_key)
     except HTTPException:
         raise
@@ -184,10 +193,53 @@ async def event_connections(
         raise_api_error(e, fallback_detail=f"Could not load connections for event '{event_key}'.")
 
 
+@router.get("/{event_key}/refresh")
+async def refresh_event(event_key: str):
+    """Full refresh — clears all TBA + disk caches for an event and rebuilds.
+
+    Use when data may be stale (e.g. a team won an award between polls)
+    and the user wants the latest data immediately.
+    """
+    try:
+        # 1. Clear TBA in-memory cache for this event
+        client = get_tba_client()
+        client.clear_cache_for(
+            f"/event/{event_key}",
+            f"/event/{event_key}/teams",
+            f"/event/{event_key}/oprs",
+            f"/event/{event_key}/rankings",
+            f"/event/{event_key}/matches",
+            f"/event/{event_key}/alliances",
+            f"/event/{event_key}/awards",
+        )
+
+        # 2. Clear disk caches (summary, awards, snapshot)
+        payload_cache.invalidate("summary", event_key)
+        payload_cache.invalidate("awards", event_key)
+        from .snapshot import invalidate_snapshot
+        invalidate_snapshot(event_key)
+
+        # 3. Rebuild snapshot (pulls fresh data from TBA)
+        from .snapshot import _build_snapshot, _write_snapshot
+        payload = await _build_snapshot(event_key)
+        _write_snapshot(event_key, payload)
+
+        return {"status": "refreshed", "event_key": event_key}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise_api_error(e, fallback_detail=f"Could not refresh event '{event_key}'.")
+
+
 @router.get("/{event_key}/clear-cache")
 async def clear_cache(event_key: str):
     try:
         get_tba_client().clear_cache()
+        # Also clear disk-level caches for this event
+        payload_cache.invalidate("summary", event_key)
+        payload_cache.invalidate("awards", event_key)
+        from .snapshot import invalidate_snapshot
+        invalidate_snapshot(event_key)
         return {"status": "cache cleared"}
     except HTTPException:
         raise
@@ -321,3 +373,48 @@ async def gatool_updates(event_key: str):
         raise
     except Exception as e:
         raise_api_error(e, fallback_detail=f"Could not load GATool updates for event '{event_key}'.")
+
+
+# ═════════════════════════════════════════════════════════════
+#  Notes — event-scoped and match-scoped queries
+# ═════════════════════════════════════════════════════════════
+
+@router.get("/{event_key}/notes")
+async def get_event_notes(
+    event_key: str,
+    team_key: str = Query(None, description="Filter to notes about this team"),
+    match_key: str = Query(None, description="Filter to notes about this match"),
+    category: str = Query(None, description="Filter by category"),
+    sort: str = Query("desc", pattern="^(asc|desc)$", description="Sort by created_at"),
+):
+    """Return all notes for an event, with optional team/match/category filters.
+
+    Supports cross-dimensional queries:
+    - /events/2026tuak/notes → all notes at event
+    - /events/2026tuak/notes?team_key=frc254 → team notes at this event
+    - /events/2026tuak/notes?match_key=2026tuak_qm42 → match notes
+    - /events/2026tuak/notes?category=strategy → strategy notes
+    - /events/2026tuak/notes?sort=asc → oldest first
+    """
+    try:
+        from ..services.supabase_client import get_supabase
+        sb = await get_supabase()
+
+        q = (
+            sb.table("notes")
+            .select("*")
+            .eq("event_key", event_key)
+            .eq("is_deleted", False)
+            .order("created_at", desc=(sort == "desc"))
+        )
+        if team_key:
+            q = q.eq("team_key", team_key)
+        if match_key:
+            q = q.eq("match_key", match_key)
+        if category:
+            q = q.eq("category", category)
+
+        resp = await q.execute()
+        return resp.data or []
+    except Exception as e:
+        raise_api_error(e, fallback_detail=f"Could not load notes for event '{event_key}'.")

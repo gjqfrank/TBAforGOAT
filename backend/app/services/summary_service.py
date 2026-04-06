@@ -3,12 +3,23 @@ from __future__ import annotations
 
 import asyncio
 from datetime import date
+from . import payload_cache
 from .region_service import _load_region_stats, get_event_history
 from .tba_client import get_tba_client
 from .statbotics_client import get_epa_map
 
 # Concurrency limit for outbound API calls within this module
 _API_SEMAPHORE = asyncio.Semaphore(10)
+
+# Cache TTLs (seconds)
+_SUMMARY_TTL = 300       # 5 min — demographics, HoF, scorers (cheap but still save time)
+_AWARDS_TTL = 600        # 10 min — expensive awards section
+
+
+def invalidate_event_caches(event_key: str) -> None:
+    """Clear all disk-cached summary/awards for an event."""
+    payload_cache.invalidate("summary", event_key)
+    payload_cache.invalidate("awards", event_key)
 
 
 # ── Static HoF / Impact lookup (built once from region_stats.json) ───
@@ -50,6 +61,18 @@ async def _safe(coro):
 
 
 async def get_event_summary(event_key: str) -> dict:
+    """Build the full event summary payload (cached to disk)."""
+    cached = payload_cache.read_payload("summary", event_key, _SUMMARY_TTL)
+    if cached:
+        return cached
+
+    result = await _build_event_summary(event_key)
+    if "error" not in result:
+        payload_cache.write_payload("summary", event_key, result)
+    return result
+
+
+async def _build_event_summary(event_key: str) -> dict:
     """Build the full event summary payload."""
     client = get_tba_client()
     year = int(event_key[:4])
@@ -148,6 +171,17 @@ async def get_event_summary(event_key: str) -> dict:
 
 
 async def get_event_summary_awards(event_key: str) -> dict:
+    """Deferred summary data — cached to disk."""
+    cached = payload_cache.read_payload("awards", event_key, _AWARDS_TTL)
+    if cached:
+        return cached
+
+    result = await _build_event_summary_awards(event_key)
+    payload_cache.write_payload("awards", event_key, result)
+    return result
+
+
+async def _build_event_summary_awards(event_key: str) -> dict:
     """Deferred summary data — event history champions & previous-season awards.
 
     This is intentionally separated from the main summary so the UI can

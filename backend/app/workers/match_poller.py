@@ -20,8 +20,23 @@ log = logging.getLogger(__name__)
 POLL_INTERVAL = 5       # seconds between sweeps
 RANKINGS_INTERVAL = 15  # seconds between ranking refreshes
 
+
+def _invalidate_snapshot(event_key: str) -> None:
+    """Remove disk-cached snapshot + summary caches so they rebuild."""
+    try:
+        from ..routers.snapshot import invalidate_snapshot
+        invalidate_snapshot(event_key)
+    except Exception:
+        pass
+    try:
+        from ..services import payload_cache
+        payload_cache.invalidate("summary", event_key)
+    except Exception:
+        pass
+
 # ── State ───────────────────────────────────────────────────
 _active_event_keys: set[str] = set()
+_watched_event_keys: set[str] = set()   # user-triggered events
 _last_rankings_poll: float = 0
 
 
@@ -31,8 +46,13 @@ def set_active_events(keys: set[str]) -> None:
     _active_event_keys = keys
 
 
+def add_watched_event(event_key: str) -> None:
+    """Register a user-loaded event for ongoing polling."""
+    _watched_event_keys.add(event_key)
+
+
 def get_active_events() -> set[str]:
-    return _active_event_keys
+    return _active_event_keys | _watched_event_keys
 
 
 async def _poll_matches(event_key: str) -> None:
@@ -80,15 +100,26 @@ async def _poll_matches(event_key: str) -> None:
         else:
             status = "upcoming"
 
-        # Build alliances jsonb
+        # Build alliances jsonb with per-alliance team_keys
+        frc_teams = m.get("teams", [])
+        red_keys = sorted(
+            f"frc{t['teamNumber']}" for t in frc_teams
+            if "Red" in (t.get("station") or "")
+        )
+        blue_keys = sorted(
+            f"frc{t['teamNumber']}" for t in frc_teams
+            if "Blue" in (t.get("station") or "")
+        )
         alliances = {
             "red": {
                 "score": score_red if score_red is not None else -1,
-                "teams": m.get("teams", []),
+                "teams": frc_teams,
+                "team_keys": red_keys,
             },
             "blue": {
                 "score": score_blue if score_blue is not None else -1,
-                "teams": m.get("teams", []),
+                "teams": frc_teams,
+                "team_keys": blue_keys,
             },
         }
 
@@ -111,6 +142,7 @@ async def _poll_matches(event_key: str) -> None:
         try:
             await upsert_rows("matches", rows)
             log.debug("Upserted %d matches for %s", len(rows), event_key)
+            _invalidate_snapshot(event_key)
         except Exception as e:
             log.warning("Supabase match upsert failed for %s: %s", event_key, e)
 
@@ -159,6 +191,7 @@ async def _poll_rankings(event_key: str) -> None:
         try:
             await upsert_rows("event_teams", rows)
             log.debug("Upserted %d rankings for %s", len(rows), event_key)
+            _invalidate_snapshot(event_key)
         except Exception as e:
             log.warning("Supabase rankings upsert failed for %s: %s", event_key, e)
 
@@ -172,7 +205,7 @@ async def run_match_poller() -> None:
 
     while True:
         try:
-            events = _active_event_keys.copy()
+            events = get_active_events()
             if events:
                 # Always poll matches
                 await asyncio.gather(

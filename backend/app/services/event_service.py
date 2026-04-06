@@ -2,10 +2,14 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from datetime import date
 from .tba_client import get_tba_client
 from .frc_client import get_frc_client
 from .statbotics_client import get_epa_map
+from .supabase_client import get_supabase
+
+log = logging.getLogger(__name__)
 
 # Concurrency limit for outbound API calls within this module
 _API_SEMAPHORE = asyncio.Semaphore(10)
@@ -142,6 +146,53 @@ async def _safe(coro):
         return await coro
     except Exception:
         return None
+
+
+async def _load_tims_overrides(team_keys: list[str]) -> dict[str, dict]:
+    """Load active TIMS overrides from Supabase for the given team keys.
+
+    Returns ``{team_key: {custom_nickname, custom_sponsor_read, ...}}``
+    with only non-null override fields included.
+    """
+    if not team_keys:
+        return {}
+    try:
+        sb = await get_supabase()
+        resp = (
+            await sb.table("tims_overrides")
+            .select("team_key, custom_nickname, custom_sponsor_read, "
+                    "custom_robot_name, custom_motto")
+            .in_("team_key", team_keys)
+            .eq("is_deleted", False)
+            .execute()
+        )
+        result: dict[str, dict] = {}
+        for row in resp.data or []:
+            overrides = {}
+            for field in ("custom_nickname", "custom_sponsor_read",
+                          "custom_robot_name", "custom_motto"):
+                if row.get(field) is not None:
+                    overrides[field] = row[field]
+            if overrides:
+                result[row["team_key"]] = overrides
+        return result
+    except Exception as e:
+        log.warning("Failed to load TIMS overrides: %s", e)
+        return {}
+
+
+def _apply_tims_overrides(team: dict, overrides: dict) -> None:
+    """Mutate a team dict in-place, replacing FIRST defaults with user edits."""
+    if "custom_nickname" in overrides:
+        team["nickname"] = overrides["custom_nickname"]
+    if "custom_sponsor_read" in overrides:
+        team["sponsor_read"] = overrides["custom_sponsor_read"]
+    if "custom_robot_name" in overrides:
+        team["robot_name"] = overrides["custom_robot_name"]
+    if "custom_motto" in overrides:
+        team["motto"] = overrides["custom_motto"]
+    if overrides:
+        team["has_tims_overrides"] = True
 
 
 def _event_status(start_date: str, end_date: str) -> str:
@@ -283,6 +334,15 @@ async def get_event_teams_with_stats(event_key: str) -> list[dict]:
         )
 
     result.sort(key=lambda x: x["rank"] if isinstance(x["rank"], int) else 999)
+
+    # ── Merge TIMS overrides (user-edited team names, sponsors, etc.) ──
+    all_team_keys = [t["team_key"] for t in result]
+    tims_map = await _load_tims_overrides(all_team_keys)
+    for t in result:
+        overrides = tims_map.get(t["team_key"])
+        if overrides:
+            _apply_tims_overrides(t, overrides)
+
     return result
 
 

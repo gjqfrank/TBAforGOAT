@@ -130,23 +130,14 @@ async def get_alliances_with_stats(event_key: str) -> dict:
                 "epa_endgame": epa_info.get("epa_endgame"),
             }
 
-    # ── Fetch avatars for all alliance teams ────────────────
+    # ── Fetch avatars for all alliance teams (cached) ───────
+    from .avatar_cache import get_avatars
+
     all_alliance_keys: list[str] = []
     for a in alliances_raw:
         all_alliance_keys.extend(a.get("picks", []))
 
-    async def _fetch_avatar(tk: str):
-        media = await _safe(client.get_team_media(tk, year))
-        if media:
-            for item in media:
-                if item.get("type") == "avatar":
-                    b64 = (item.get("details") or {}).get("base64Image")
-                    if b64:
-                        return (tk, f"data:image/png;base64,{b64}")
-        return (tk, None)
-
-    avatar_results = await asyncio.gather(*[_fetch_avatar(tk) for tk in all_alliance_keys])
-    avatar_map = {tk: url for tk, url in avatar_results if url}
+    avatar_map = await get_avatars(all_alliance_keys, year)
 
     # ── Pick labels ───────────────────────────────────────
     _pick_labels = ['Captain', '1st Pick', '2nd Pick', '3rd Pick', 'Backup']

@@ -15,10 +15,13 @@ thanks to the TBA scan.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import time
+from pathlib import Path
 from typing import Optional
 
+from .cache_service import CACHE_DIR
 from .tba_client import get_tba_client
 
 log = logging.getLogger(__name__)
@@ -28,6 +31,36 @@ _world_record: dict | None = None  # {score, event_key, event_name, match, teams
 _seeded = False
 _seed_lock = asyncio.Lock()
 _CURRENT_YEAR = 2026
+
+
+def _disk_path() -> Path:
+    return CACHE_DIR / f"world_record_{_CURRENT_YEAR}.json"
+
+
+def _load_from_disk() -> bool:
+    """Try to load the world record from disk cache.  Returns True on success."""
+    global _world_record
+    p = _disk_path()
+    if not p.exists():
+        return False
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+        if data.get("score", 0) > 0:
+            _world_record = data
+            return True
+    except Exception:
+        pass
+    return False
+
+
+def _save_to_disk() -> None:
+    """Persist the world record to disk."""
+    if not _world_record:
+        return
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    _disk_path().write_text(
+        json.dumps(_world_record, separators=(",", ":")), encoding="utf-8",
+    )
 
 # Limit concurrent TBA requests during seeding
 _CONCURRENCY = 6
@@ -57,6 +90,7 @@ def check_event_high(event_key: str, event_name: str, high: dict) -> bool:
         "teams": high.get("teams", []),
         "updated_at": time.time(),
     }
+    _save_to_disk()
     return True
 
 
@@ -65,6 +99,11 @@ async def seed_from_tba() -> None:
     global _seeded
     async with _seed_lock:
         if _seeded:
+            return
+        # Try disk cache first — avoids full season scan
+        if _load_from_disk():
+            _seeded = True
+            log.info("World record loaded from disk cache: %d", _world_record["score"])
             return
         _seeded = True
 

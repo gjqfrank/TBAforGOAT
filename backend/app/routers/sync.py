@@ -155,20 +155,27 @@ async def _fetch_delta(event_key: str, since: str) -> dict[str, list[dict]]:
         if scoped_teams:
             changes["teams"] = scoped_teams
 
-    # 5) Notes — target_key can be event_key, a match_key, or a team_key
+    # 5) Notes — now using explicit team_key, match_key, event_key columns.
     #    For sync we send ALL notes changed since last_sync that are
-    #    relevant to this event.  That means:
-    #    - target_key == event_key
-    #    - target_key starts with event_key (matches like "2026tuak_qm1")
-    #    - target_key in team_keys at this event
+    #    relevant to this event:
+    #    - event_key matches this event
+    #    - match_key starts with this event key (matches like "2026tuak_qm1")
+    #    - team_key is one of the teams at this event (cross-event team notes)
     all_notes = await fetch_changed("notes", since)
     if all_notes:
         relevant_notes = []
         for n in all_notes:
-            tk = n.get("target_key", "")
-            if (tk == event_key
-                    or tk.startswith(event_key + "_")
-                    or tk in team_keys):
+            n_ek = n.get("event_key") or ""
+            n_mk = n.get("match_key") or ""
+            n_tk = n.get("team_key") or ""
+            # Legacy: also check target_key for old rows
+            n_legacy = n.get("target_key") or ""
+            if (n_ek == event_key
+                    or n_mk.startswith(event_key + "_")
+                    or n_tk in team_keys
+                    or n_legacy == event_key
+                    or n_legacy.startswith(event_key + "_")
+                    or n_legacy in team_keys):
                 relevant_notes.append(n)
         if relevant_notes:
             changes["notes"] = relevant_notes

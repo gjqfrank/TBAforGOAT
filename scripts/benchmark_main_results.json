@@ -1,0 +1,146 @@
+[
+  {
+    "label": "main:event-info",
+    "path": "/api/events/2025tuhc/info",
+    "status": 200,
+    "time_s": 0.2006738239997503,
+    "size_kb": 0.2451171875,
+    "ok": true
+  },
+  {
+    "label": "main:event-teams",
+    "path": "/api/events/2025tuhc/teams",
+    "status": 200,
+    "time_s": 5.364981494998574,
+    "size_kb": 130.0390625,
+    "ok": true
+  },
+  {
+    "label": "main:phase1-total",
+    "path": "parallel",
+    "status": 200,
+    "time_s": 5.365521681000246,
+    "size_kb": 130.2841796875,
+    "ok": true
+  },
+  {
+    "label": "main:all-matches",
+    "path": "/api/matches/2025tuhc/all",
+    "status": 200,
+    "time_s": 0.7817322299997613,
+    "size_kb": 216.3525390625,
+    "ok": true
+  },
+  {
+    "label": "main:playoff-matches",
+    "path": "/api/matches/2025tuhc/playoffs",
+    "status": 200,
+    "time_s": 0.35310228299931623,
+    "size_kb": 64.7431640625,
+    "ok": true
+  },
+  {
+    "label": "main:alliances",
+    "path": "/api/alliances/2025tuhc",
+    "status": 200,
+    "time_s": 8.299829116000183,
+    "size_kb": 75.1337890625,
+    "ok": true
+  },
+  {
+    "label": "main:phase2-total",
+    "path": "parallel",
+    "status": 200,
+    "time_s": 8.30049119600153,
+    "size_kb": 356.2294921875,
+    "ok": true
+  },
+  {
+    "label": "main:full-event-load",
+    "path": "sum",
+    "status": 200,
+    "time_s": 13.666012877001776,
+    "size_kb": 486.513671875,
+    "ok": true
+  },
+  {
+    "label": "main:summary-cold",
+    "path": "/api/events/2025tuhc/summary",
+    "status": 200,
+    "time_s": 0.026640722000593087,
+    "size_kb": 1.4462890625,
+    "ok": true
+  },
+  {
+    "label": "main:summary-awards-cold",
+    "path": "/api/events/2025tuhc/summary/awards",
+    "status": 200,
+    "time_s": 4.132426802001646,
+    "size_kb": 1.498046875,
+    "ok": true
+  },
+  {
+    "label": "main:team-stats-cold",
+    "path": "/api/teams/7672/stats?year=2025",
+    "status": 200,
+    "time_s": 0.4436621009990631,
+    "size_kb": 5.13671875,
+    "ok": true
+  },
+  {
+    "label": "main:h2h-cold",
+    "path": "/api/teams/head-to-head/7672/8562?year=2025",
+    "status": 200,
+    "time_s": 0.7551220949990238,
+    "size_kb": 0.2314453125,
+    "ok": true
+  },
+  {
+    "label": "main-warm:event-info",
+    "path": "/api/events/2025tuhc/info",
+    "status": 200,
+    "time_s": 0.015789241000675247,
+    "size_kb": 0.2451171875,
+    "ok": true
+  },
+  {
+    "label": "main-warm:event-teams",
+    "path": "/api/events/2025tuhc/teams",
+    "status": 200,
+    "time_s": 0.0998801679997996,
+    "size_kb": 130.0390625,
+    "ok": true
+  },
+  {
+    "label": "main-warm:all-matches",
+    "path": "/api/matches/2025tuhc/all",
+    "status": 200,
+    "time_s": 0.09339290900061314,
+    "size_kb": 216.353515625,
+    "ok": true
+  },
+  {
+    "label": "main-warm:playoff-matches",
+    "path": "/api/matches/2025tuhc/playoffs",
+    "status": 200,
+    "time_s": 0.09266036300141423,
+    "size_kb": 64.7431640625,
+    "ok": true
+  },
+  {
+    "label": "main-warm:alliances",
+    "path": "/api/alliances/2025tuhc",
+    "status": 200,
+    "time_s": 0.4693234250007663,
+    "size_kb": 75.1337890625,
+    "ok": true
+  },
+  {
+    "label": "main-warm:full-event-load",
+    "path": "parallel",
+    "status": 200,
+    "time_s": 0.5692035930005659,
+    "size_kb": 486.5146484375,
+    "ok": true
+  }
+]
