@@ -1,0 +1,30 @@
+{
+  "name": "casters-tool",
+  "version": "1.0.0",
+  "description": "A read-only **FIRST Robotics Competition (FRC)** and **FIRST Tech Challenge (FTC)** event dashboard, built for broadcasters, commentators and FIRST Community. Displays team stats, alliance breakdowns, playoff brackets, play-by-play data, AI-generated broadcast storylines, and historical context. All a caster needs at a glance!",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "css": "tailwindcss -i docs/css/input.css -o docs/css/tailwind.css",
+    "css:watch": "tailwindcss -i docs/css/input.css -o docs/css/tailwind.css --watch",
+    "css:min": "tailwindcss -i docs/css/input.css -o docs/css/tailwind.css --minify",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kleium/casters-tool.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/kleium/casters-tool/issues"
+  },
+  "homepage": "https://github.com/kleium/casters-tool#readme",
+  "devDependencies": {
+    "tailwindcss": "^3.4.19"
+  }
+}

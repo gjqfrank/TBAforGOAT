@@ -7,22 +7,22 @@
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="stylesheet" href="css/tailwind.css">
+    <link rel="stylesheet" href="css/styles.css">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 </head>
-<body class="min-h-screen bg-ct-bg text-ct-text font-sans antialiased leading-normal [font-variant-numeric:tabular-nums] overflow-x-hidden [background-image:var(--bg-gradient)]">
-    <header class="flex items-center justify-between py-[.85rem] px-10 bg-ct-glass backdrop-blur-[20px] backdrop-saturate-[1.4] border-b border-ct-border shadow-[0_1px_20px_rgba(0,0,0,.3)] relative z-[1000]">
-        <div class="header-brand flex items-center gap-3">
-            <div class="brand-icon-btn bg-none border-none p-0 cursor-pointer flex items-center justify-center relative outline-none [-webkit-tap-highlight-color:transparent]" id="mode-toggle-btn" onclick="toggleCompetitionMode()" title="Click to switch between FRC and FTC modes">
-                <svg id="brand-icon-svg" class="brand-icon text-ct-primary shrink-0 drop-shadow-[0_0_8px_var(--primary-glow)] transition-[color,filter,transform] duration-[.4s] ease-in-out" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5 12 2"/><line x1="12" y1="22" x2="12" y2="15.5"/><polyline points="22 8.5 12 15.5 2 8.5"/><polyline points="2 15.5 12 8.5 22 15.5"/><line x1="12" y1="2" x2="12" y2="8.5"/></svg>
+<body>
+    <header>
+        <div class="header-brand">
+            <div class="brand-icon-btn" id="mode-toggle-btn" onclick="toggleCompetitionMode()" title="Click to switch between FRC and FTC modes">
+                <svg id="brand-icon-svg" class="brand-icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5 12 2"/><line x1="12" y1="22" x2="12" y2="15.5"/><polyline points="22 8.5 12 15.5 2 8.5"/><polyline points="2 15.5 12 8.5 22 15.5"/><line x1="12" y1="2" x2="12" y2="8.5"/></svg>
             </div>
-            <div class="brand-text flex flex-col leading-[1.15]">
-                <h1 class="text-[1.15rem] font-[800] tracking-tight bg-gradient-to-br from-[#e8ecf4] to-ct-primary bg-clip-text [-webkit-background-clip:text] [-webkit-text-fill-color:transparent]">Caster's Tool</h1>
-                <span id="brand-sub" class="brand-sub text-[.68rem] font-medium text-ct-muted tracking-[.04em]">Events at a glance!</span>
+            <div class="brand-text">
+                <h1>Caster's Tool</h1>
+                <span id="brand-sub" class="brand-sub">Events at a glance!</span>
             </div>
         </div>
-        <div class="header-right flex items-center gap-3">
+        <div class="header-right">
             <div id="event-badge" class="hidden"></div>
             <button class="settings-btn" id="fullscreen-btn" onclick="togglePresentation()" title="Presentation Mode">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
@@ -30,7 +30,7 @@
             <button class="settings-btn" id="float-lookup-btn" onclick="toggleFloatingLookup()" title="Quick Team Lookup">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
             </button>
-            <div class="settings-wrapper relative">
+            <div class="settings-wrapper">
                 <button class="settings-btn" onclick="toggleSettings()" title="Settings">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
                 </button>
@@ -86,48 +86,48 @@
         </div>
     </header>
 
-    <div class="tabs-wrap relative">
-    <nav class="tabs flex justify-center items-center bg-ct-glass backdrop-blur-[16px] border-b border-ct-border py-2 px-3 gap-[.35rem] overflow-x-auto [scrollbar-width:none] [-webkit-overflow-scrolling:touch]">
+    <div class="tabs-wrap">
+    <nav class="tabs">
         <button class="tab active" data-tab="event">
-            <svg class="tab-icon w-4 h-4 shrink-0 [stroke-width:2] opacity-70 transition-opacity duration-ct ease-ct" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
             Events
         </button>
         <button class="tab" data-tab="history">
-            <svg class="tab-icon w-4 h-4 shrink-0 [stroke-width:2] opacity-70 transition-opacity duration-ct ease-ct" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
             History
         </button>
         <button class="tab" data-tab="rankings">
-            <svg class="tab-icon w-4 h-4 shrink-0 [stroke-width:2] opacity-70 transition-opacity duration-ct ease-ct" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
+            <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
             Rankings
         </button>
         <button class="tab" data-tab="summary">
-            <svg class="tab-icon w-4 h-4 shrink-0 [stroke-width:2] opacity-70 transition-opacity duration-ct ease-ct" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+            <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
             Summary
         </button>
         <button class="tab" data-tab="playbyplay">
-            <svg class="tab-icon w-4 h-4 shrink-0 [stroke-width:2] opacity-70 transition-opacity duration-ct ease-ct" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
             Play by Play
         </button>
         <button class="tab" data-tab="breakdown">
-            <svg class="tab-icon w-4 h-4 shrink-0 [stroke-width:2] opacity-70 transition-opacity duration-ct ease-ct" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+            <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
             Breakdown
         </button>
         <button class="tab" data-tab="alliance">
-            <svg class="tab-icon w-4 h-4 shrink-0 [stroke-width:2] opacity-70 transition-opacity duration-ct ease-ct" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
             Alliances
         </button>
         <button class="tab" data-tab="playoff">
-            <svg class="tab-icon w-4 h-4 shrink-0 [stroke-width:2] opacity-70 transition-opacity duration-ct ease-ct" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5C7 4 9 7 12 7s5-3 7.5-3a2.5 2.5 0 0 1 0 5H18"/><path d="M18 15h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M6 15H4.5a2.5 2.5 0 0 1 0 5H6"/><line x1="6" y1="9" x2="6" y2="15"/><line x1="18" y1="9" x2="18" y2="15"/><path d="M6 20h12a2 2 0 0 0 2-2v-2H4v2a2 2 0 0 0 2 2z"/></svg>
+            <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5C7 4 9 7 12 7s5-3 7.5-3a2.5 2.5 0 0 1 0 5H18"/><path d="M18 15h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M6 15H4.5a2.5 2.5 0 0 1 0 5H6"/><line x1="6" y1="9" x2="6" y2="15"/><line x1="18" y1="9" x2="18" y2="15"/><path d="M6 20h12a2 2 0 0 0 2-2v-2H4v2a2 2 0 0 0 2 2z"/></svg>
             Playoffs
         </button>
         <button class="tab" data-tab="team">
-            <svg class="tab-icon w-4 h-4 shrink-0 [stroke-width:2] opacity-70 transition-opacity duration-ct ease-ct" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
             Lookup / H2H
         </button>
     </nav>
     </div>
 
-    <main class="py-8 px-10 max-w-[1440px] mx-auto flex-1 w-full box-border">
+    <main>
         <!-- ═══ Event Selection ═══ -->
         <section id="tab-event" class="tab-content active">
 
@@ -171,7 +171,7 @@
                             <div id="season-dropdown-list"></div>
                         </div>
                     </div>
-                    <!-- Selected event confirmation bar -->
+                    <!-- Selected event confirmation bar (right after search for proximity) -->
                     <div id="season-selected-bar" class="season-selected-bar hidden">
                         <div class="ssb-info">
                             <span class="ssb-dot"></span>
@@ -228,7 +228,8 @@
         </section>
 
         <!-- ═══ Rankings & Teams ═══ -->
-        <section id="tab-rankings" class="tab-content">
+        <section id="tab-rankings" class="tab-content" data-ptr="rankings">
+            <div class="ptr-indicator" id="ptr-rankings"><span class="ptr-arrow">↓</span> Pull to refresh</div>
             <div id="rankings-empty" class="empty empty-state">
                 <svg class="empty-icon" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
                 <p>Load an event first to see rankings and team list.</p>
@@ -240,7 +241,8 @@
         </section>
 
         <!-- ═══ Event Summary ═══ -->
-        <section id="tab-summary" class="tab-content">
+        <section id="tab-summary" class="tab-content" data-ptr="summary">
+            <div class="ptr-indicator" id="ptr-summary"><span class="ptr-arrow">↓</span> Pull to refresh</div>
             <div id="summary-empty" class="empty empty-state">
                 <svg class="empty-icon" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
                 <p>Load an event first, then switch here for the event summary.</p>
@@ -377,8 +379,10 @@
             <div id="summary-error" class="hidden"></div>
         </section>
 
-        <!-- ═══ Play by Play ═══ -->
-        <section id="tab-playbyplay" class="tab-content">
+        <!-- Inline error containers for tabs that use alert() -->
+        <!-- pbp and breakdown errors -->
+        <section id="tab-playbyplay" class="tab-content" data-ptr="playbyplay">
+            <div class="ptr-indicator" id="ptr-playbyplay"><span class="ptr-arrow">↓</span> Pull to refresh</div>
             <div id="pbp-empty" class="empty empty-state">
                 <svg class="empty-icon" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
                 <p>Load an event first, then switch here for the play-by-play view.</p>
@@ -548,7 +552,7 @@
 
         <!-- ═══ Team Lookup ═══ -->
         <section id="tab-team" class="tab-content">
-            <h3 class="section-title text-[1.05rem] font-bold text-ct-text mb-4 tracking-tight">Team Lookup</h3>
+            <h3 class="section-title">Team Lookup</h3>
             <div class="input-row">
                 <input type="text" id="team-number"
                        placeholder="Enter team number (e.g. 148)" />
@@ -692,7 +696,70 @@
         <button class="compare-bar-clear" onclick="clearCompareSelection()">Clear</button>
     </div>
 
-    <!-- Mobile nav stripped — will be rebuilt with Konsta UI -->
+    <!-- ═══ Mobile Bottom Navigation ═══ -->
+    <nav class="mobile-bottom-nav" id="mobile-bottom-nav">
+        <div class="mobile-bottom-nav-inner">
+            <button class="mob-nav-btn active" data-tab="event" onclick="mobileNavTo('event')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                Events
+            </button>
+            <button class="mob-nav-btn" data-tab="rankings" onclick="mobileNavTo('rankings')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
+                Rankings
+                <span class="mob-nav-badge" id="mob-badge-rankings"></span>
+            </button>
+            <button class="mob-nav-btn" data-tab="playbyplay" onclick="mobileNavTo('playbyplay')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                PBP
+                <span class="mob-nav-badge" id="mob-badge-pbp"></span>
+            </button>
+            <button class="mob-nav-btn" data-tab="playoff" onclick="mobileNavTo('playoff')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5C7 4 9 7 12 7s5-3 7.5-3a2.5 2.5 0 0 1 0 5H18"/><path d="M18 15h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M6 15H4.5a2.5 2.5 0 0 1 0 5H6"/><line x1="6" y1="9" x2="6" y2="15"/><line x1="18" y1="9" x2="18" y2="15"/><path d="M6 20h12a2 2 0 0 0 2-2v-2H4v2a2 2 0 0 0 2 2z"/></svg>
+                Playoffs
+            </button>
+            <button class="mob-nav-btn" data-tab="more" onclick="toggleMobileMore()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                More
+            </button>
+        </div>
+    </nav>
+
+    <!-- ═══ More Menu Scrim ═══ -->
+    <div class="mob-more-scrim" id="mob-more-scrim" onclick="closeMobileMore()"></div>
+
+    <!-- ═══ More Menu — Compact popover (iOS context menu style) ═══ -->
+    <div class="mob-more-panel" id="mob-more-menu">
+        <div class="mob-more-panel-body">
+          <div class="mob-more-group">
+            <button class="mob-more-item" data-tab="history" onclick="mobileNavTo('history')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                History
+            </button>
+            <button class="mob-more-item" data-tab="summary" onclick="mobileNavTo('summary')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                Summary
+            </button>
+            <button class="mob-more-item" data-tab="breakdown" onclick="mobileNavTo('breakdown')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                Breakdown
+            </button>
+            <button class="mob-more-item" data-tab="alliance" onclick="mobileNavTo('alliance')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                Alliances
+            </button>
+            <button class="mob-more-item" data-tab="team" onclick="mobileNavTo('team')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                Lookup / H2H
+            </button>
+          </div>
+        </div>
+    </div>
+
+    <!-- ═══ Landscape Orientation Hint ═══ -->
+    <div class="landscape-hint" id="landscape-hint">
+        📱 Rotate to portrait for the best experience on data-heavy tabs
+        <button class="landscape-hint-close" onclick="dismissLandscapeHint()">&times;</button>
+    </div>
 
     <script src="js/api.js"></script>
     <script src="js/ftc-api.js"></script>
@@ -721,27 +788,27 @@
         <span class="footer-wr-detail" id="footer-wr-detail"></span>
     </div>
 
-    <footer class="site-footer flex flex-col items-center justify-center gap-[.35rem] py-5 px-8 mt-auto text-[.74rem] font-medium text-ct-muted tracking-[.02em] border-t border-ct-border relative z-0 text-center">
-        <div class="footer-top flex items-center justify-center gap-2 flex-wrap">
+    <footer class="site-footer">
+        <div class="footer-top">
             <span>Built by Gürsel &amp; <span class="team-9020">Team 9020</span> for FIRST Community</span>
-            <span class="footer-sep opacity-[.35]">·</span>
+            <span class="footer-sep">·</span>
             <a href="/about" class="footer-about-link">Guide</a>
-            <span class="footer-sep opacity-[.35]">·</span>
+            <span class="footer-sep">·</span>
             <a href="mailto:gurselgenc27@gmail.com" class="footer-about-link">Contact</a>
-            <span class="footer-sep opacity-[.35]">·</span>
+            <span class="footer-sep">·</span>
             <a href="https://github.com/kleium/casters-tool/releases" target="_blank" rel="noopener" class="footer-about-link">Release Notes</a>
-            <span class="footer-sep opacity-[.35]">·</span>
-            <span class="footer-version font-mono text-[.68rem] bg-ct-primary-soft text-ct-primary-hover py-[.15rem] px-[.55rem] rounded-full border border-ct-border">v1.3</span>
+            <span class="footer-sep">·</span>
+            <span class="footer-version">v1.3</span>
         </div>
-        <div class="footer-attribution flex items-center justify-center gap-2 flex-wrap text-[.68rem] text-ct-muted opacity-[.85]" id="footer-status">
+        <div class="footer-attribution" id="footer-status">
             <span class="status-item" id="status-frc" title="The Blue Alliance API">
                 Powered by <a href="https://www.thebluealliance.com" target="_blank" rel="noopener">The Blue Alliance</a>
             </span>
-            <span class="footer-sep opacity-[.35]">·</span>
+            <span class="footer-sep">·</span>
             <span class="status-item" id="status-tba" title="FIRST FRC Events API">
                 Event Data provided by <a href="https://frc-events.firstinspires.org/services/API" target="_blank" rel="noopener"><em>FIRST</em></a>
             </span>
-            <span class="footer-sep opacity-[.35]">·</span>
+            <span class="footer-sep">·</span>
             <span class="status-item" id="status-statbotics" title="Statbotics & GATool">
                 Additional data provided by <a href="https://gatool.org" target="_blank" rel="noopener">GATool</a> and <a href="https://www.statbotics.io" target="_blank" rel="noopener">Statbotics</a>
             </span>
