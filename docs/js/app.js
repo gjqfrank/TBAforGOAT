@@ -8303,6 +8303,9 @@ function updateCompareBar() {
         if (lkBtn) { n === 1 ? show('compare-bar-lookup') : hide('compare-bar-lookup'); }
         const mhBtn = $('compare-bar-match-history');
         if (mhBtn) { n === 1 ? show('compare-bar-match-history') : hide('compare-bar-match-history'); }
+        // Edit Details: show when exactly 1 team selected and user is authenticated
+        const edBtn = $('compare-bar-edit');
+        if (edBtn) { (n === 1 && !window.isGuest) ? show('compare-bar-edit') : hide('compare-bar-edit'); }
     } else {
         hide('compare-bar');
     }
@@ -8397,6 +8400,18 @@ document.addEventListener('keydown', e => {
         if (compareSelection.size === 1) {
             e.preventDefault();
             launchMatchHistoryFromSelection();
+        }
+    }
+    if ((e.key === 'e' || e.key === 'E') && !e.ctrlKey && !e.metaKey) {
+        // Toggle: close if already open
+        if (!$('editor-overlay')?.classList.contains('hidden')) {
+            e.preventDefault();
+            closeEditor();
+            return;
+        }
+        if (compareSelection.size === 1 && !window.isGuest) {
+            e.preventDefault();
+            launchEditorFromSelection();
         }
     }
 });
