@@ -8017,6 +8017,64 @@
     }
     .auth-initials.hidden { display: none; }
 
+    /* ── Login modal — Light mode overrides ─────────────────── */
+    [data-theme="light"] .login-modal {
+        background: rgba(255, 255, 255, .92);
+        border-color: rgba(99, 102, 241, .15);
+        box-shadow: 0 24px 64px rgba(0, 0, 0, .12), 0 0 0 1px rgba(0,0,0,.04) inset;
+    }
+    [data-theme="light"] .login-input {
+        background: rgba(0, 0, 0, .04);
+        border-color: rgba(0, 0, 0, .12);
+        color: #1a1a2e;
+    }
+    [data-theme="light"] .login-input::placeholder {
+        color: #8888a8;
+    }
+    [data-theme="light"] .login-input:focus {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 2px rgba(99, 102, 241, .15);
+    }
+    [data-theme="light"] .login-btn-ghost {
+        background: rgba(0, 0, 0, .04);
+        border-color: rgba(0, 0, 0, .1);
+        color: #1a1a2e;
+    }
+    [data-theme="light"] .login-btn-ghost:hover {
+        background: rgba(0, 0, 0, .08);
+    }
+    [data-theme="light"] .login-btn-subtle {
+        color: #4a4a6a;
+    }
+    [data-theme="light"] .login-btn-subtle:hover {
+        color: #1a1a2e;
+    }
+    [data-theme="light"] .login-close:hover {
+        background: rgba(0, 0, 0, .06);
+    }
+    [data-theme="light"] .login-divider {
+        color: #8888a8;
+    }
+    [data-theme="light"] .login-divider::before,
+    [data-theme="light"] .login-divider::after {
+        background: rgba(0, 0, 0, .1);
+    }
+    [data-theme="light"] .login-link:hover {
+        background: rgba(0, 0, 0, .04);
+    }
+    [data-theme="light"] .login-radio-mark {
+        border-color: rgba(0, 0, 0, .2);
+        background: rgba(0, 0, 0, .03);
+    }
+    [data-theme="light"] .login-check-mark {
+        border-color: rgba(0, 0, 0, .2);
+        background: rgba(0, 0, 0, .03);
+    }
+    [data-theme="light"] .login-error {
+        background: rgba(220, 38, 38, .06);
+        border-color: rgba(220, 38, 38, .15);
+    }
+
     /* ═══════════════════════════════════════════════════════════
        UX ENHANCEMENTS — Toast / Back-to-top / Presentation /
        Empty State / Tab Indicators
