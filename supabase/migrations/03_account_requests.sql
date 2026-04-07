@@ -3,12 +3,15 @@
 -- ══════════════════════════════════════════════════════════
 
 CREATE TABLE IF NOT EXISTS public.account_requests (
-    id         UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    name       TEXT NOT NULL,
-    email      TEXT NOT NULL,
-    status     TEXT NOT NULL DEFAULT 'pending'
-               CHECK (status IN ('pending', 'approved', 'rejected')),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    id          UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    name        TEXT NOT NULL,
+    email       TEXT NOT NULL,
+    role        TEXT NOT NULL DEFAULT 'volunteer'
+                CHECK (role IN ('volunteer', 'third_party')),
+    event_name  TEXT,
+    status      TEXT NOT NULL DEFAULT 'pending'
+                CHECK (status IN ('pending', 'approved', 'rejected')),
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 -- Index for admin queries

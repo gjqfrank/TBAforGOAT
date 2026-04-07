@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════
-   auth.js — Email/Password + Request Account auth via Supabase
+   auth.js — Email OTP + Request Account auth via Supabase
    GoTrue REST API.  Read-First model: app loads as guest,
    authenticated session restores silently in background.
 
@@ -7,16 +7,17 @@
    No @supabase/supabase-js SDK.
 
    Public API (window.Auth):
-     login(email, password)     — email/password sign-in
-     getSession()               — current session or null
-     getAccessToken()           — JWT string or null
-     getAuthHeader()            — { Authorization: 'Bearer ...' } or {}
-     getUser()                  — user object or null
-     isAuthenticated()          — boolean
-     refreshSession()           — exchange refresh_token for new JWT
-     logout()                   — clear session from localStorage
-     onAuthChange(cb)           — register listener for auth state changes
-     requestAccount(name,email) — insert into account_requests via REST
+     sendOtp(email)                        — send magic-link / OTP code
+     verifyOtp(email, code)                — verify OTP, store session
+     getSession()                          — current session or null
+     getAccessToken()                      — JWT string or null
+     getAuthHeader()                       — { Authorization: 'Bearer ...' } or {}
+     getUser()                             — user object or null
+     isAuthenticated()                     — boolean
+     refreshSession()                      — exchange refresh_token for new JWT
+     logout()                              — clear session from localStorage
+     onAuthChange(cb)                      — register listener for auth state changes
+     requestAccount(name,email,role,event) — insert into account_requests via REST
    ═══════════════════════════════════════════════════════════ */
 
 const Auth = (() => {
@@ -91,18 +92,44 @@ const Auth = (() => {
         };
     }
 
-    // ── Email/Password login ───────────────────────────────
-    async function login(email, password) {
+    // ── Send OTP ───────────────────────────────────────────
+    async function sendOtp(email) {
         try {
-            const resp = await fetch(AUTH_BASE + '/token?grant_type=password', {
+            const resp = await fetch(AUTH_BASE + '/otp', {
                 method: 'POST',
                 headers: _headers(),
-                body: JSON.stringify({ email, password }),
+                body: JSON.stringify({
+                    email,
+                    create_user: false,   // only pre-approved users
+                }),
             });
 
             if (!resp.ok) {
                 const body = await resp.json().catch(() => ({}));
-                return { user: null, error: body.error_description || body.msg || `HTTP ${resp.status}` };
+                return { error: body.msg || body.error_description || `HTTP ${resp.status}` };
+            }
+            return { error: null };
+        } catch (e) {
+            return { error: e.message || 'Network error' };
+        }
+    }
+
+    // ── Verify OTP ─────────────────────────────────────────
+    async function verifyOtp(email, code) {
+        try {
+            const resp = await fetch(AUTH_BASE + '/verify', {
+                method: 'POST',
+                headers: _headers(),
+                body: JSON.stringify({
+                    type:  'email',
+                    email,
+                    token: code,
+                }),
+            });
+
+            if (!resp.ok) {
+                const body = await resp.json().catch(() => ({}));
+                return { user: null, error: body.msg || body.error_description || `HTTP ${resp.status}` };
             }
 
             const data = await resp.json();
@@ -195,7 +222,12 @@ const Auth = (() => {
     }
 
     // ── Request Account (anon insert into account_requests) ─
-    async function requestAccount(name, email) {
+    async function requestAccount(name, email, role, eventName) {
+        const payload = { name, email, role };
+        if (role === 'volunteer' && eventName) {
+            payload.event_name = eventName;
+        }
+
         try {
             const resp = await fetch(REST_BASE + '/account_requests', {
                 method: 'POST',
@@ -203,7 +235,7 @@ const Auth = (() => {
                     ..._headers(),
                     'Prefer': 'return=minimal',
                 },
-                body: JSON.stringify({ name, email }),
+                body: JSON.stringify(payload),
             });
 
             if (!resp.ok) {
@@ -224,7 +256,8 @@ const Auth = (() => {
 
     // ── Public API ─────────────────────────────────────────
     return {
-        login,
+        sendOtp,
+        verifyOtp,
         getSession,
         getAccessToken,
         getAuthHeader,
@@ -252,16 +285,9 @@ function updateAuthUI() {
     window.isGuest = !authed;
 
     const btn = document.getElementById('auth-trigger-btn');
-    const icon = document.getElementById('auth-trigger-icon');
     if (btn) {
-        btn.title = authed ? 'Logged in' : 'Admin Login';
+        btn.title = authed ? 'Logged in' : "Caster's Login";
         btn.classList.toggle('auth-active', authed);
-    }
-    // Swap lock icon to unlocked when authenticated
-    if (icon) {
-        icon.innerHTML = authed
-            ? '<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/>'
-            : '<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>';
     }
 
     // Toggle visibility of auth-only elements
@@ -276,7 +302,6 @@ function updateAuthUI() {
 // ── Modal state management ─────────────────────────────────
 function showLoginModal() {
     if (Auth.isAuthenticated()) {
-        // Already logged in — show a quick logout prompt instead
         if (confirm('You are logged in. Log out?')) {
             Auth.logout().then(() => { updateAuthUI(); });
         }
@@ -289,11 +314,21 @@ function showLoginModal() {
 
 function hideLoginModal() {
     document.getElementById('login-overlay').classList.add('hidden');
-    // Clear forms
+    // Clear forms and reset to email step
     document.getElementById('login-form')?.reset();
     document.getElementById('request-form')?.reset();
     _hideEl('login-error');
     _hideEl('request-error');
+    // Reset OTP state
+    const otpGroup = document.getElementById('otp-group');
+    const emailInput = document.getElementById('login-email');
+    const submitBtn = document.getElementById('login-submit-btn');
+    if (otpGroup) otpGroup.classList.add('hidden');
+    if (emailInput) emailInput.readOnly = false;
+    if (submitBtn) {
+        submitBtn.dataset.step = 'email';
+        submitBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg> Send Code';
+    }
 }
 
 function showLoginState() {
@@ -326,45 +361,94 @@ function _showError(id, msg) {
     if (el) { el.textContent = msg; el.classList.remove('hidden'); }
 }
 
-// ── Form handlers ──────────────────────────────────────────
+// ── OTP two-step login handler ─────────────────────────────
 async function handleLogin(e) {
     e.preventDefault();
-    const email = document.getElementById('login-email').value.trim();
-    const password = document.getElementById('login-password').value;
-    if (!email || !password) return false;
-
     const btn = document.getElementById('login-submit-btn');
-    btn.disabled = true;
-    btn.textContent = 'Signing in…';
-    _hideEl('login-error');
+    const step = btn.dataset.step || 'email';
 
-    const { user, error } = await Auth.login(email, password);
+    if (step === 'email') {
+        // Step 1: send OTP
+        const email = document.getElementById('login-email').value.trim();
+        if (!email) return false;
 
-    btn.disabled = false;
-    btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg> Sign In';
+        btn.disabled = true;
+        btn.textContent = 'Sending…';
+        _hideEl('login-error');
 
-    if (error) {
-        _showError('login-error', error);
-        return false;
+        const { error } = await Auth.sendOtp(email);
+
+        btn.disabled = false;
+
+        if (error) {
+            btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg> Send Code';
+            _showError('login-error', error);
+            return false;
+        }
+
+        // Transition to OTP step
+        document.getElementById('login-email').readOnly = true;
+        document.getElementById('otp-group').classList.remove('hidden');
+        document.getElementById('login-otp').focus();
+        btn.dataset.step = 'otp';
+        btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg> Verify &amp; Sign In';
+
+    } else {
+        // Step 2: verify OTP
+        const email = document.getElementById('login-email').value.trim();
+        const code  = document.getElementById('login-otp').value.trim();
+        if (!email || !code) return false;
+
+        btn.disabled = true;
+        btn.textContent = 'Verifying…';
+        _hideEl('login-error');
+
+        const { user, error } = await Auth.verifyOtp(email, code);
+
+        btn.disabled = false;
+        btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg> Verify &amp; Sign In';
+
+        if (error) {
+            _showError('login-error', error);
+            return false;
+        }
+
+        hideLoginModal();
+        updateAuthUI();
     }
-
-    hideLoginModal();
-    updateAuthUI();
     return false;
 }
 
+// ── Request account handler (with role + event_name) ───────
 async function handleAccountRequest(e) {
     e.preventDefault();
     const name  = document.getElementById('request-name').value.trim();
     const email = document.getElementById('request-email').value.trim();
-    if (!name || !email) return false;
+    const agree = document.getElementById('request-agree')?.checked;
+
+    // Role
+    const roleEl = document.querySelector('input[name="request-role"]:checked');
+    const role = roleEl ? roleEl.value : '';
+
+    // Event name (only for volunteer)
+    const eventName = document.getElementById('request-event')?.value.trim() || '';
+
+    if (!name || !email || !role) return false;
+    if (role === 'volunteer' && !eventName) {
+        _showError('request-error', 'Please enter the event you are volunteering at.');
+        return false;
+    }
+    if (!agree) {
+        _showError('request-error', 'You must agree to the usage terms.');
+        return false;
+    }
 
     const btn = document.getElementById('request-submit-btn');
     btn.disabled = true;
     btn.textContent = 'Submitting…';
     _hideEl('request-error');
 
-    const { error } = await Auth.requestAccount(name, email);
+    const { error } = await Auth.requestAccount(name, email, role, eventName);
 
     btn.disabled = false;
     btn.textContent = 'Submit Request';
@@ -378,8 +462,16 @@ async function handleAccountRequest(e) {
     return false;
 }
 
+// ── Toggle volunteer event field visibility ────────────────
+function handleRoleChange() {
+    const volunteerChecked = document.getElementById('role-volunteer')?.checked;
+    const eventGroup = document.getElementById('request-event-group');
+    if (eventGroup) {
+        eventGroup.classList.toggle('hidden', !volunteerChecked);
+    }
+}
+
 // ── Silent restore on load ─────────────────────────────────
-// App already loads as guest — this upgrades silently if session exists
 Auth.silentRestore().then(restored => {
     if (restored) {
         console.info('[Auth] Session restored silently');
@@ -387,5 +479,4 @@ Auth.silentRestore().then(restored => {
     updateAuthUI();
 });
 
-// Listen for future auth changes
 Auth.onAuthChange(() => updateAuthUI());
