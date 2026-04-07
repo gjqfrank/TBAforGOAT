@@ -3469,8 +3469,8 @@ function renderPrequalifiedTeams() {
     const content = $('summary-prequalified-content');
     if (!el || !content) return;
 
-    // Only for FRC events with loaded team data
-    if (isFTCMode() || !teamsData || !teamsData.length) {
+    // Only for FRC 2026+ events with loaded team data
+    if (isFTCMode() || !teamsData || !teamsData.length || (currentEventYear && currentEventYear < 2026)) {
         el.classList.add('hidden');
         return;
     }
