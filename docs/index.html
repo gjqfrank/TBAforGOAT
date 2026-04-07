@@ -789,28 +789,35 @@
     </footer>
 
     <!-- ═══ TEAM CONTEXT MENU ════════════════════════════ -->
-    <div id="team-ctx-menu" class="team-ctx-menu hidden">
-        <button onclick="_handleCtxAction('lookup')">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            Lookup
-        </button>
-        <button onclick="_handleCtxAction('matches')">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="10"/></svg>
-            Matches
-        </button>
+    <div id="team-ctx-menu" class="team-ctx-menu hidden" role="menu">
+        <div class="ctx-header">
+            <span class="ctx-team-label">Team</span>
+        </div>
+        <div class="ctx-group">
+            <button role="menuitem" onclick="_handleCtxAction('lookup')">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <span>Lookup</span>
+            </button>
+            <button role="menuitem" onclick="_handleCtxAction('matches')">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="10"/></svg>
+                <span>Match History</span>
+            </button>
+        </div>
         <div class="ctx-divider"></div>
-        <button data-ctx-auth onclick="_handleCtxAction('edit-identity')">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-            Edit Team Identity
-        </button>
-        <button data-ctx-auth onclick="_handleCtxAction('edit-hardware')">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
-            Edit Hardware
-        </button>
-        <button data-ctx-auth onclick="_handleCtxAction('edit-playstyle')">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-            Edit Playstyle
-        </button>
+        <div class="ctx-group">
+            <button role="menuitem" data-ctx-auth onclick="_handleCtxAction('edit-identity')">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                <span>Edit Identity</span>
+            </button>
+            <button role="menuitem" data-ctx-auth onclick="_handleCtxAction('edit-hardware')">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+                <span>Edit Hardware</span>
+            </button>
+            <button role="menuitem" data-ctx-auth onclick="_handleCtxAction('edit-playstyle')">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                <span>Edit Playstyle</span>
+            </button>
+        </div>
     </div>
 
     <!-- ═══ TIMS OVERRIDE EDITOR MODAL ═════════════════════ -->
@@ -819,29 +826,28 @@
             <!-- Header -->
             <div class="editor-header">
                 <div class="editor-header-left">
-                    <span class="editor-team-badge" id="editor-team-num"></span>
-                    <h2 class="editor-title">Edit Team Details</h2>
+                    <div class="editor-avatar" id="editor-header-avatar">
+                        <span class="editor-avatar-placeholder"></span>
+                    </div>
+                    <div class="editor-header-info">
+                        <div class="editor-header-top-row">
+                            <span class="editor-team-badge" id="editor-team-num"></span>
+                            <span class="editor-header-name" id="editor-header-name"></span>
+                        </div>
+                        <span class="editor-header-subtitle">Edit Team Details</span>
+                    </div>
                 </div>
                 <button class="editor-close" onclick="closeEditor()" title="Close">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                 </button>
             </div>
 
-            <!-- Tab Toggle -->
-            <div class="editor-tabs">
-                <button class="editor-tab active" id="editor-tab-identity" onclick="_switchEditorTab('identity')">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                    Identity
-                </button>
-                <button class="editor-tab" id="editor-tab-hardware" onclick="_switchEditorTab('hardware')">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
-                    Hardware
-                </button>
-                <button class="editor-tab" id="editor-tab-playstyle" onclick="_switchEditorTab('playstyle')">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-                    Playstyle
-                </button>
-            </div>
+            <!-- Tab Nav (pill-style) -->
+            <nav class="editor-tabs">
+                <button class="editor-tab active" id="editor-tab-identity" onclick="_switchEditorTab('identity')">Identity</button>
+                <button class="editor-tab" id="editor-tab-hardware" onclick="_switchEditorTab('hardware')">Hardware</button>
+                <button class="editor-tab" id="editor-tab-playstyle" onclick="_switchEditorTab('playstyle')">Playstyle</button>
+            </nav>
 
             <!-- Tab Bodies -->
             <div class="editor-body">
@@ -880,7 +886,7 @@
                 <!-- Tab 2: Hardware -->
                 <div id="editor-body-hardware" class="editor-tab-body hidden">
                     <div class="editor-field-group">
-                        <label class="editor-label">Drive Base</label>
+                        <label class="editor-label">Drive Base &amp; Mechanisms</label>
                         <div class="editor-tag-input-wrap">
                             <div class="editor-tag-container" id="editor-hardware-tags"></div>
                             <input class="editor-tag-input" id="editor-hardware-input" type="text" placeholder='Type a trait and press Enter (e.g. "Swerve", "Trap")'>
@@ -912,7 +918,7 @@
             <div class="editor-footer">
                 <button class="editor-btn editor-btn-reset" onclick="_handleEditorReset()">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
-                    Reset to FIRST Defaults
+                    Reset
                 </button>
                 <div class="editor-footer-right">
                     <button class="editor-btn editor-btn-cancel" onclick="closeEditor()">Cancel</button>

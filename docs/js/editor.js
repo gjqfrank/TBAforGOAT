@@ -18,6 +18,43 @@ let _hardwareTags   = [];
 let _autoTags       = [];
 let _teleopTags     = [];
 
+// ═══════════════════════════════════════════════════════════
+// TIMS DATA + FIELD PRE-POPULATION
+// ═══════════════════════════════════════════════════════════
+
+function _findTeamInEvent(teamNumber) {
+    // teamsData is the in-memory array built by app.js: buildTeamTable()
+    if (!window.teamsData) return null;
+    return window.teamsData.find(t => t.team_number === teamNumber) || null;
+}
+
+function _populateEditorFromTIMS(teamNumber) {
+    const t = _findTeamInEvent(teamNumber);
+    if (!t) return;
+
+    // Header — team name + avatar
+    const nameEl = document.getElementById('editor-header-name');
+    if (nameEl) nameEl.textContent = t.nickname || '';
+
+    const avatarEl = document.getElementById('editor-header-avatar');
+    if (avatarEl) {
+        if (t.avatar) {
+            avatarEl.innerHTML = `<img src="${t.avatar}" alt="" class="editor-avatar-img">`;
+        } else {
+            avatarEl.innerHTML = `<span class="editor-avatar-placeholder">${teamNumber}</span>`;
+        }
+    }
+
+    // Identity fields — pre-fill from TIMS data
+    const setVal = (id, val) => {
+        const el = document.getElementById(id);
+        if (el && val) el.placeholder = val;
+    };
+    setVal('editor-nickname', t.nickname);
+    setVal('editor-org', t.school_name);
+    setVal('editor-location', [t.city, t.state_prov].filter(Boolean).join(', '));
+}
+
 // ── Open / Close ───────────────────────────────────────────
 function openEditor(teamNumber, defaultTab) {
     if (window.isGuest) {
@@ -41,18 +78,22 @@ function openEditor(teamNumber, defaultTab) {
     // Clear all form fields
     _resetEditorForm();
 
+    // Pre-populate from available TIMS data
+    _populateEditorFromTIMS(teamNumber);
+
     // Show modal
-    document.getElementById('editor-overlay').classList.remove('hidden');
+    const overlay = document.getElementById('editor-overlay');
+    overlay.classList.remove('hidden');
     document.body.style.overflow = 'hidden';
 
     // Activate requested tab
     _switchEditorTab(_editorTab);
-
-    // TODO: Fetch existing overrides from backend and populate fields
 }
 
 function closeEditor() {
-    document.getElementById('editor-overlay')?.classList.add('hidden');
+    const overlay = document.getElementById('editor-overlay');
+    if (!overlay || overlay.classList.contains('hidden')) return;
+    overlay.classList.add('hidden');
     document.body.style.overflow = '';
     _editorTeam = null;
     _hideCtxMenu();
@@ -190,6 +231,8 @@ async function _handleEditorSave() {
 
 function _handleEditorReset() {
     _resetEditorForm();
+    // Re-populate from TIMS data
+    if (_editorTeam) _populateEditorFromTIMS(_editorTeam);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -199,7 +242,13 @@ function _handleEditorReset() {
 let _ctxTeamNumber = null;
 
 function _hideCtxMenu() {
-    document.getElementById('team-ctx-menu')?.classList.add('hidden');
+    const menu = document.getElementById('team-ctx-menu');
+    if (!menu || menu.classList.contains('hidden')) return;
+    menu.classList.add('ctx-out');
+    menu.addEventListener('animationend', () => {
+        menu.classList.add('hidden');
+        menu.classList.remove('ctx-out');
+    }, { once: true });
     _ctxTeamNumber = null;
 }
 
@@ -208,24 +257,32 @@ function _showCtxMenu(x, y, teamNumber) {
     const menu = document.getElementById('team-ctx-menu');
     if (!menu) return;
 
+    // Set the team number label in the menu header
+    const label = menu.querySelector('.ctx-team-label');
+    if (label) label.textContent = `Team ${teamNumber}`;
+
     // Auth-gate the edit options
     const editItems = menu.querySelectorAll('[data-ctx-auth]');
     editItems.forEach(el => {
         el.classList.toggle('ctx-disabled', window.isGuest);
     });
 
-    menu.classList.remove('hidden');
+    menu.classList.remove('hidden', 'ctx-out');
 
     // Position at cursor, clamped to viewport
-    const rect = menu.getBoundingClientRect();
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    let left = x;
-    let top = y;
-    if (left + rect.width > vw - 8) left = vw - rect.width - 8;
-    if (top + rect.height > vh - 8) top = vh - rect.height - 8;
-    menu.style.left = left + 'px';
-    menu.style.top  = top + 'px';
+    requestAnimationFrame(() => {
+        const rect = menu.getBoundingClientRect();
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        let left = x;
+        let top = y;
+        if (left + rect.width > vw - 8) left = vw - rect.width - 8;
+        if (top + rect.height > vh - 8) top = vh - rect.height - 8;
+        if (left < 8) left = 8;
+        if (top < 8)  top = 8;
+        menu.style.left = left + 'px';
+        menu.style.top  = top + 'px';
+    });
 }
 
 function _handleCtxAction(action) {
@@ -250,7 +307,7 @@ function _handleCtxAction(action) {
     }
 }
 
-// ── Context menu on team numbers ───────────────────────────
+// ── Context menu on team numbers + full ranking rows ───────
 const _CTX_SELECTORS = [
     '.team-num', '.adv-team-num', '.pbp-team-number', '.top-team-num',
     '.high-score-team', '.summary-hof-num', '.prestige-entry-num',
@@ -258,12 +315,31 @@ const _CTX_SELECTORS = [
     '.bkt-team-num', '.spotlight-team-num'
 ];
 
-document.addEventListener('contextmenu', e => {
-    const el = e.target.closest(_CTX_SELECTORS.join(','));
-    if (!el) return;
+function _extractTeamNumber(el) {
+    // Try from team-num-type element first
+    const numEl = el.closest(_CTX_SELECTORS.join(','));
+    if (numEl) {
+        const n = parseInt(numEl.childNodes[0]?.textContent?.trim() || numEl.textContent.trim(), 10);
+        if (n > 0 && n < 100000) return n;
+    }
+    // Try from ranking row (tr[data-team-key] or .rank-card[data-team-key])
+    const row = el.closest('tr[data-team-key], .rank-card[data-team-key]');
+    if (row) {
+        const key = row.dataset.teamKey;
+        const n = parseInt((key || '').replace(/^(frc|ftc)/, ''), 10);
+        if (n > 0 && n < 100000) return n;
+    }
+    return null;
+}
 
-    const num = parseInt(el.childNodes[0]?.textContent?.trim() || el.textContent.trim(), 10);
-    if (!num || num <= 0 || num >= 100000) return;
+document.addEventListener('contextmenu', e => {
+    // Check: is the target within a team number element OR a ranking row?
+    const isTeamEl = e.target.closest(_CTX_SELECTORS.join(','));
+    const isRankRow = e.target.closest('tr[data-team-key], .rank-card[data-team-key]');
+    if (!isTeamEl && !isRankRow) return;
+
+    const num = _extractTeamNumber(e.target);
+    if (!num) return;
 
     e.preventDefault();
     _showCtxMenu(e.clientX, e.clientY, num);
@@ -275,11 +351,10 @@ document.addEventListener('click', e => {
 });
 document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
-        if (!document.getElementById('editor-overlay')?.classList.contains('hidden')) {
-            closeEditor();
-            return;
-        }
-        _hideCtxMenu();
+        const editorOpen = !document.getElementById('editor-overlay')?.classList.contains('hidden');
+        const ctxOpen    = !document.getElementById('team-ctx-menu')?.classList.contains('hidden');
+        if (ctxOpen) { _hideCtxMenu(); return; }
+        if (editorOpen) { closeEditor(); return; }
     }
 });
 
@@ -291,21 +366,6 @@ function launchEditorFromSelection() {
     if (!num) return;
     openEditor(num, 'identity');
 }
-
-// ── Keyboard shortcut: E key ───────────────────────────────
-document.addEventListener('keydown', e => {
-    if (e.target.matches('input, textarea, select')) return;
-    if (e.key !== 'e' && e.key !== 'E') return;
-    if (e.ctrlKey || e.metaKey || e.altKey) return;
-
-    // Only when Rankings tab active and exactly 1 team selected
-    const rankingsTab = document.getElementById('tab-rankings');
-    if (!rankingsTab?.classList.contains('active')) return;
-    if (compareSelection.size !== 1) return;
-
-    e.preventDefault();
-    launchEditorFromSelection();
-});
 
 // ── Wire tag inputs ────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
