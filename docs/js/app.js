@@ -2448,6 +2448,16 @@ async function loadEvent(eventKey) {
         $('summary-empty')?.classList.remove('hidden');
         $('summary-container')?.classList.add('hidden');
         hideSkeleton('summary-loading');
+        // Clear summary sub-elements so stale content can't survive an event switch
+        ['summary-demographics', 'summary-advancement-content', 'summary-past-champs-list',
+         'summary-past-awards-list', 'summary-history-list', 'summary-hof-list',
+         'summary-impact-list', 'summary-top-list', 'summary-high-list',
+         'summary-prequalified-content'
+        ].forEach(id => { const el = $(id); if (el) el.innerHTML = ''; });
+        ['summary-advancement', 'summary-prestige-row', 'summary-hof', 'summary-impact',
+         'summary-past-champs', 'summary-past-awards', 'summary-history',
+         'summary-top-scorers', 'summary-high-scores', 'summary-prequalified'
+        ].forEach(id => { const el = $(id); if (el) el.classList.add('hidden'); });
         $('playoff-empty')?.classList.remove('hidden');
         $('playoff-bracket').innerHTML = '';
         hideSkeleton('playoff-loading');
