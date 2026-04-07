@@ -7994,11 +7994,28 @@
         flex: 1;
     }
 
-    /* Auth-active lock button glow */
+    /* Auth-active button glow */
     .auth-active {
         color: var(--primary) !important;
         box-shadow: 0 0 8px rgba(99, 102, 241, .3);
     }
+
+    /* Initials badge inside auth button */
+    .auth-initials {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, var(--primary), #818cf8);
+        color: #fff;
+        font-size: .65rem;
+        font-weight: 700;
+        letter-spacing: .02em;
+        line-height: 1;
+    }
+    .auth-initials.hidden { display: none; }
 
     /* ═══════════════════════════════════════════════════════════
        UX ENHANCEMENTS — Toast / Back-to-top / Presentation /

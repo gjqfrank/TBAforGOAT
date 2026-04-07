@@ -280,14 +280,46 @@ const Auth = (() => {
 // Global guest flag — starts true, set false on successful auth
 window.isGuest = true;
 
+function _getInitials(user) {
+    if (!user) return '';
+    // Try user_metadata.name first, then fall back to email
+    const name = user.user_metadata?.name || user.email || '';
+    if (name.includes('@')) {
+        // Email — take first letter of local part
+        return name.charAt(0).toUpperCase();
+    }
+    const parts = name.trim().split(/\s+/);
+    if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    return (parts[0]?.[0] || '').toUpperCase();
+}
+
 function updateAuthUI() {
     const authed = Auth.isAuthenticated();
     window.isGuest = !authed;
 
     const btn = document.getElementById('auth-trigger-btn');
+    const icon = document.getElementById('auth-trigger-icon');
     if (btn) {
-        btn.title = authed ? 'Logged in' : "Caster's Login";
+        const user = Auth.getUser();
+        btn.title = authed ? (user?.email || 'Logged in') : "Caster's Login";
         btn.classList.toggle('auth-active', authed);
+
+        if (authed && user) {
+            const initials = _getInitials(user);
+            if (icon) icon.classList.add('hidden');
+            let badge = btn.querySelector('.auth-initials');
+            if (!badge) {
+                badge = document.createElement('span');
+                badge.className = 'auth-initials';
+                btn.appendChild(badge);
+            }
+            badge.textContent = initials;
+            badge.classList.remove('hidden');
+        } else {
+            if (icon) icon.classList.remove('hidden');
+            const badge = btn.querySelector('.auth-initials');
+            if (badge) badge.classList.add('hidden');
+        }
     }
 
     // Toggle visibility of auth-only elements
