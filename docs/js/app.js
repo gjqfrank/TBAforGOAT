@@ -3664,7 +3664,24 @@ function togglePickDetail(event, el) {
     event.stopPropagation();
     const wasOpen = el.classList.contains('open');
     document.querySelectorAll('.has-pick-detail.open').forEach(e => e.classList.remove('open'));
-    if (!wasOpen) el.classList.add('open');
+    if (!wasOpen) {
+        el.classList.add('open');
+        const pop = el.querySelector('.pick-detail-popover');
+        if (pop) {
+            const r = el.getBoundingClientRect();
+            pop.style.top = (r.bottom + 6) + 'px';
+            pop.style.right = (window.innerWidth - r.right) + 'px';
+            pop.style.left = '';
+            // If it overflows the right edge, flip to left-aligned
+            requestAnimationFrame(() => {
+                const pr = pop.getBoundingClientRect();
+                if (pr.left < 8) {
+                    pop.style.right = '';
+                    pop.style.left = r.left + 'px';
+                }
+            });
+        }
+    }
 }
 document.addEventListener('click', () => {
     document.querySelectorAll('.has-pick-detail.open').forEach(e => e.classList.remove('open'));

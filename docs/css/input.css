@@ -7627,15 +7627,13 @@
     }
     .pick-detail-popover {
         display: none;
-        position: absolute;
-        top: calc(100% + 6px);
-        right: 0;
+        position: fixed;
         background: var(--card);
         border: 1px solid var(--border);
         border-radius: var(--radius);
         padding: .45rem .7rem;
         box-shadow: var(--shadow-lg);
-        z-index: 50;
+        z-index: 9999;
         white-space: nowrap;
         font-size: .74rem;
         min-width: max-content;
