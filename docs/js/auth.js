@@ -370,14 +370,48 @@ function updateAuthUI() {
 // ── Modal state management ─────────────────────────────────
 function showLoginModal() {
     if (Auth.isAuthenticated()) {
-        if (confirm('You are logged in. Log out?')) {
-            Auth.logout().then(() => { updateAuthUI(); });
-        }
+        toggleAuthPopover();
         return;
     }
     showLoginState();
     document.getElementById('login-overlay').classList.remove('hidden');
     document.getElementById('login-email')?.focus();
+}
+
+function toggleAuthPopover() {
+    const pop = document.getElementById('auth-popover');
+    if (!pop) return;
+    const showing = !pop.classList.contains('hidden');
+    if (showing) {
+        pop.classList.add('hidden');
+        return;
+    }
+    // Populate user info
+    const user = Auth.getUser();
+    const name = user?.user_metadata?.name || '';
+    const email = user?.email || '';
+    const initials = _getInitials(user);
+    const nameEl = document.getElementById('auth-popover-name');
+    const emailEl = document.getElementById('auth-popover-email');
+    const avatarEl = document.getElementById('auth-popover-initials');
+    if (nameEl) nameEl.textContent = name || email.split('@')[0];
+    if (emailEl) emailEl.textContent = email;
+    if (avatarEl) avatarEl.textContent = initials;
+    pop.classList.remove('hidden');
+
+    // Close on outside click
+    function closeOnOutside(e) {
+        if (!pop.contains(e.target) && !e.target.closest('#auth-trigger-btn')) {
+            pop.classList.add('hidden');
+            document.removeEventListener('click', closeOnOutside, true);
+        }
+    }
+    setTimeout(() => document.addEventListener('click', closeOnOutside, true), 0);
+}
+
+function handleLogout() {
+    document.getElementById('auth-popover')?.classList.add('hidden');
+    Auth.logout().then(() => { updateAuthUI(); });
 }
 
 function hideLoginModal() {
