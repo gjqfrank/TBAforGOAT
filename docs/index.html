@@ -781,12 +781,13 @@
                 <div class="login-header">
                     <svg class="login-brand-icon" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5 12 2"/><line x1="12" y1="22" x2="12" y2="15.5"/><polyline points="22 8.5 12 15.5 2 8.5"/><polyline points="2 15.5 12 8.5 22 15.5"/><line x1="12" y1="2" x2="12" y2="8.5"/></svg>
                     <h2 class="login-title">Caster's Login</h2>
-                    <p class="login-subtitle">Enter your email to receive a one-time code</p>
+                    <p class="login-subtitle">Enter your email to receive a sign-in code</p>
                 </div>
                 <form id="login-form" onsubmit="return handleLogin(event)" autocomplete="off">
                     <label class="login-label" for="login-email">Email</label>
                     <input class="login-input" id="login-email" type="email" placeholder="you@example.com" required autocomplete="email">
                     <div id="otp-group" class="hidden">
+                        <p id="otp-help" class="login-help">Enter the 6-digit code from your email. You can also click the link in the email on another device.</p>
                         <label class="login-label" for="login-otp">Verification Code</label>
                         <input class="login-input" id="login-otp" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="6-digit code" autocomplete="one-time-code">
                     </div>

@@ -92,6 +92,41 @@ const Auth = (() => {
         };
     }
 
+    async function _fetchUser(accessToken) {
+        try {
+            const resp = await fetch(AUTH_BASE + '/user', {
+                headers: { ..._headers(), 'Authorization': 'Bearer ' + accessToken },
+            });
+            if (resp.ok) return await resp.json();
+        } catch { /* offline */ }
+        return null;
+    }
+
+    // ── Handle magic-link redirect (tokens in URL hash) ──
+    async function handleMagicLinkRedirect() {
+        const hash = window.location.hash;
+        if (!hash || !hash.includes('access_token=')) return false;
+
+        const params = new URLSearchParams(hash.substring(1));
+        const accessToken  = params.get('access_token');
+        const refreshToken = params.get('refresh_token');
+        const expiresIn    = parseInt(params.get('expires_in') || '3600', 10);
+
+        if (!accessToken) return false;
+
+        // Clear tokens from URL
+        history.replaceState(null, '', window.location.pathname + window.location.search);
+
+        const user = await _fetchUser(accessToken);
+        _saveSession({
+            access_token:  accessToken,
+            refresh_token: refreshToken,
+            expires_at:    Date.now() / 1000 + expiresIn,
+            user,
+        });
+        return true;
+    }
+
     // ── Send OTP ───────────────────────────────────────────
     async function sendOtp(email) {
         try {
@@ -258,6 +293,7 @@ const Auth = (() => {
     return {
         sendOtp,
         verifyOtp,
+        handleMagicLinkRedirect,
         getSession,
         getAccessToken,
         getAuthHeader,
@@ -503,12 +539,19 @@ function handleRoleChange() {
     }
 }
 
-// ── Silent restore on load ─────────────────────────────────
-Auth.silentRestore().then(restored => {
-    if (restored) {
-        console.info('[Auth] Session restored silently');
+// ── Boot: magic-link redirect → silent restore ────────────
+Auth.handleMagicLinkRedirect().then(handled => {
+    if (handled) {
+        console.info('[Auth] Magic-link sign-in completed');
+        updateAuthUI();
+        return;
     }
-    updateAuthUI();
+    Auth.silentRestore().then(restored => {
+        if (restored) {
+            console.info('[Auth] Session restored silently');
+        }
+        updateAuthUI();
+    });
 });
 
 Auth.onAuthChange(() => updateAuthUI());

@@ -7763,6 +7763,13 @@
         line-height: 1.5;
     }
 
+    .login-help {
+        font-size: .8rem;
+        color: var(--text-muted);
+        line-height: 1.45;
+        margin-bottom: .75rem;
+    }
+
     .login-label {
         display: block;
         font-size: .75rem;
