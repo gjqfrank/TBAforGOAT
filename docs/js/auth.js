@@ -118,12 +118,17 @@ const Auth = (() => {
         history.replaceState(null, '', window.location.pathname + window.location.search);
 
         const user = await _fetchUser(accessToken);
-        _saveSession({
+        const session = {
             access_token:  accessToken,
             refresh_token: refreshToken,
             expires_at:    Date.now() / 1000 + expiresIn,
             user,
-        });
+        };
+        _saveSession(session);
+
+        // Backfill display name from account_requests if missing
+        _backfillName(session).catch(() => {});
+
         return true;
     }
 
@@ -170,10 +175,42 @@ const Auth = (() => {
             const data = await resp.json();
             const session = _sessionFromResponse(data);
             _saveSession(session);
+
+            // Backfill display name from account_requests if missing
+            _backfillName(session).catch(() => {});
+
             return { user: session.user, error: null };
         } catch (e) {
             return { user: null, error: e.message || 'Network error' };
         }
+    }
+
+    // ── Backfill user_metadata.name from account_requests ──
+    async function _backfillName(session) {
+        const user = session?.user;
+        if (!user || user.user_metadata?.name) return;
+
+        // Fetch name from account_requests
+        const email = encodeURIComponent(user.email);
+        const resp = await fetch(
+            REST_BASE + '/account_requests?select=name&email=eq.' + email + '&limit=1',
+            { headers: { ..._headers(), 'Authorization': 'Bearer ' + session.access_token } }
+        );
+        if (!resp.ok) return;
+        const rows = await resp.json();
+        const name = rows?.[0]?.name;
+        if (!name) return;
+
+        // Patch user_metadata via GoTrue
+        const patchResp = await fetch(AUTH_BASE + '/user', {
+            method: 'PUT',
+            headers: { ..._headers(), 'Authorization': 'Bearer ' + session.access_token },
+            body: JSON.stringify({ data: { name } }),
+        });
+        if (!patchResp.ok) return;
+        const updated = await patchResp.json();
+        session.user = updated;
+        _saveSession(session);
     }
 
     // ── Refresh session ────────────────────────────────────
