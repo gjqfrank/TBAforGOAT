@@ -1,0 +1,274 @@
+[
+  {
+    "label": "v2-warm:info",
+    "path": "/api/events/2026nyn2/info",
+    "status": 200,
+    "time_s": 0.0700129709985049,
+    "size_kb": 0.236328125,
+    "ok": true
+  },
+  {
+    "label": "v2-warm:teams",
+    "path": "/api/events/2026nyn2/teams",
+    "status": 200,
+    "time_s": 0.18740892300047562,
+    "size_kb": 121.61328125,
+    "ok": true
+  },
+  {
+    "label": "v2-warm:fast-rankings",
+    "path": "/api/events/2026nyn2/fast-rankings",
+    "status": 200,
+    "time_s": 0.06348685799821396,
+    "size_kb": 3.994140625,
+    "ok": true
+  },
+  {
+    "label": "v2-warm:all-matches",
+    "path": "/api/matches/2026nyn2/all",
+    "status": 200,
+    "time_s": 0.41335391699976753,
+    "size_kb": 157.001953125,
+    "ok": true
+  },
+  {
+    "label": "v2-warm:fast-scores",
+    "path": "/api/matches/2026nyn2/scores",
+    "status": 200,
+    "time_s": 1.441731439997966,
+    "size_kb": 5.0478515625,
+    "ok": true
+  },
+  {
+    "label": "v2-warm:alliances",
+    "path": "/api/alliances/2026nyn2",
+    "status": 200,
+    "time_s": 0.3668486840033438,
+    "size_kb": 0.033203125,
+    "ok": true
+  },
+  {
+    "label": "v2-warm:summary",
+    "path": "/api/events/2026nyn2/summary",
+    "status": 200,
+    "time_s": 0.05018875500172726,
+    "size_kb": 1.71875,
+    "ok": true
+  },
+  {
+    "label": "v2-warm:compare",
+    "path": "/api/events/2026nyn2/compare?teams=frc335,frc4130",
+    "status": 200,
+    "time_s": 0.14860411599875079,
+    "size_kb": 0.6328125,
+    "ok": true
+  },
+  {
+    "label": "v2-parallel:info",
+    "path": "/api/events/2026nyn2/info",
+    "status": 200,
+    "time_s": 0.04427726900030393,
+    "size_kb": 0.236328125,
+    "ok": true
+  },
+  {
+    "label": "v2-parallel:teams",
+    "path": "/api/events/2026nyn2/teams",
+    "status": 200,
+    "time_s": 0.197232784001244,
+    "size_kb": 121.61328125,
+    "ok": true
+  },
+  {
+    "label": "v2-parallel:fast-rankings",
+    "path": "/api/events/2026nyn2/fast-rankings",
+    "status": 200,
+    "time_s": 0.09099870100180851,
+    "size_kb": 3.994140625,
+    "ok": true
+  },
+  {
+    "label": "v2-parallel:all-matches",
+    "path": "/api/matches/2026nyn2/all",
+    "status": 200,
+    "time_s": 0.040680476999114035,
+    "size_kb": 157.001953125,
+    "ok": true
+  },
+  {
+    "label": "v2-parallel:fast-scores",
+    "path": "/api/matches/2026nyn2/scores",
+    "status": 200,
+    "time_s": 0.3153075039990654,
+    "size_kb": 5.0478515625,
+    "ok": true
+  },
+  {
+    "label": "v2-parallel:alliances",
+    "path": "/api/alliances/2026nyn2",
+    "status": 200,
+    "time_s": 0.09070248799980618,
+    "size_kb": 0.033203125,
+    "ok": true
+  },
+  {
+    "label": "v2-parallel:summary",
+    "path": "/api/events/2026nyn2/summary",
+    "status": 200,
+    "time_s": 0.039600709002115764,
+    "size_kb": 1.71875,
+    "ok": true
+  },
+  {
+    "label": "v2-parallel:compare",
+    "path": "/api/events/2026nyn2/compare?teams=frc335,frc4130",
+    "status": 200,
+    "time_s": 0.14337515599981998,
+    "size_kb": 0.6328125,
+    "ok": true
+  },
+  {
+    "label": "v2-parallel:TOTAL",
+    "path": "gather",
+    "status": 200,
+    "time_s": 0.3162515229996643,
+    "size_kb": 290.2783203125,
+    "ok": true
+  },
+  {
+    "label": "cold:info",
+    "path": "/api/events/2026nyn2/info",
+    "status": 200,
+    "time_s": 0.04184389899819507,
+    "size_kb": 0.236328125,
+    "ok": true
+  },
+  {
+    "label": "cold:teams",
+    "path": "/api/events/2026nyn2/teams",
+    "status": 200,
+    "time_s": 0.16858948399749352,
+    "size_kb": 121.61328125,
+    "ok": true
+  },
+  {
+    "label": "cold:fast-rankings",
+    "path": "/api/events/2026nyn2/fast-rankings",
+    "status": 200,
+    "time_s": 0.041028743999049766,
+    "size_kb": 3.994140625,
+    "ok": true
+  },
+  {
+    "label": "cold:all-matches",
+    "path": "/api/matches/2026nyn2/all",
+    "status": 200,
+    "time_s": 0.24631427799977246,
+    "size_kb": 157.001953125,
+    "ok": true
+  },
+  {
+    "label": "cold:fast-scores",
+    "path": "/api/matches/2026nyn2/scores",
+    "status": 200,
+    "time_s": 0.32617882499835105,
+    "size_kb": 5.0478515625,
+    "ok": true
+  },
+  {
+    "label": "cold:alliances",
+    "path": "/api/alliances/2026nyn2",
+    "status": 200,
+    "time_s": 0.05878348999976879,
+    "size_kb": 0.033203125,
+    "ok": true
+  },
+  {
+    "label": "cold:summary",
+    "path": "/api/events/2026nyn2/summary",
+    "status": 200,
+    "time_s": 0.04890359199998784,
+    "size_kb": 1.71875,
+    "ok": true
+  },
+  {
+    "label": "cold:compare",
+    "path": "/api/events/2026nyn2/compare?teams=frc335,frc4130",
+    "status": 200,
+    "time_s": 0.14388992300155223,
+    "size_kb": 0.6328125,
+    "ok": true
+  },
+  {
+    "label": "cold-parallel:info",
+    "path": "/api/events/2026nyn2/info",
+    "status": 200,
+    "time_s": 0.08319467899855226,
+    "size_kb": 0.236328125,
+    "ok": true
+  },
+  {
+    "label": "cold-parallel:teams",
+    "path": "/api/events/2026nyn2/teams",
+    "status": 200,
+    "time_s": 0.3078230849969259,
+    "size_kb": 121.61328125,
+    "ok": true
+  },
+  {
+    "label": "cold-parallel:fast-rankings",
+    "path": "/api/events/2026nyn2/fast-rankings",
+    "status": 200,
+    "time_s": 0.1544650370015006,
+    "size_kb": 3.994140625,
+    "ok": true
+  },
+  {
+    "label": "cold-parallel:all-matches",
+    "path": "/api/matches/2026nyn2/all",
+    "status": 200,
+    "time_s": 0.14516378400003305,
+    "size_kb": 157.001953125,
+    "ok": true
+  },
+  {
+    "label": "cold-parallel:fast-scores",
+    "path": "/api/matches/2026nyn2/scores",
+    "status": 200,
+    "time_s": 0.3377441489974444,
+    "size_kb": 5.0478515625,
+    "ok": true
+  },
+  {
+    "label": "cold-parallel:alliances",
+    "path": "/api/alliances/2026nyn2",
+    "status": 200,
+    "time_s": 0.2343930700008059,
+    "size_kb": 0.033203125,
+    "ok": true
+  },
+  {
+    "label": "cold-parallel:summary",
+    "path": "/api/events/2026nyn2/summary",
+    "status": 200,
+    "time_s": 0.22173196600124356,
+    "size_kb": 1.71875,
+    "ok": true
+  },
+  {
+    "label": "cold-parallel:compare",
+    "path": "/api/events/2026nyn2/compare?teams=frc335,frc4130",
+    "status": 200,
+    "time_s": 0.222627470997395,
+    "size_kb": 0.6328125,
+    "ok": true
+  },
+  {
+    "label": "cold-parallel:TOTAL",
+    "path": "gather",
+    "status": 200,
+    "time_s": 0.3395728429968585,
+    "size_kb": 290.2783203125,
+    "ok": true
+  }
+]

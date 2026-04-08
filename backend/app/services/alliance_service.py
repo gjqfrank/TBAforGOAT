@@ -2,12 +2,31 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from .tba_client import get_tba_client
 from .frc_client import get_frc_client
 from .statbotics_client import get_epa_map
+from .supabase_client import (
+    read_event,
+    read_event_teams_full,
+    read_matches,
+    read_team_avatars,
+    read_frc_playoff_matches,
+)
 
 # Concurrency limit for outbound API calls within this module
 _API_SEMAPHORE = asyncio.Semaphore(10)
+
+
+def _sb_teams_valid(sb_rows: list[dict]) -> bool:
+    """Return True if Supabase data has rank or OPR (not just EPA)."""
+    for r in sb_rows:
+        rd = r.get("raw_data") or {}
+        if isinstance(rd, str):
+            rd = json.loads(rd)
+        if rd.get("rank") is not None or rd.get("opr") is not None:
+            return True
+    return False
 
 
 async def _safe(coro):
@@ -68,7 +87,116 @@ def _resolve_double_elim_label_frc(playoff_matches: list[dict], alliance_picks: 
 
 
 async def get_alliances_with_stats(event_key: str) -> dict:
-    """Alliances + per-team qual stats + first-time-partner flags."""
+    """Alliances + per-team qual stats + first-time-partner flags.
+
+    Reads from Supabase first (events.raw_data.alliances + event_teams);
+    falls back to TBA + FRC API + Statbotics when Supabase has no data.
+    """
+    year = int(event_key[:4]) if event_key[:4].isdigit() else 2026
+    event_code = event_key[4:]
+
+    # ── Try Supabase first ──────────────────────────────────
+    sb_event = None
+    sb_teams = []
+    try:
+        sb_event, sb_teams = await asyncio.gather(
+            read_event(event_key),
+            read_event_teams_full(event_key),
+        )
+    except Exception:
+        pass
+
+    sb_alliances_raw = None
+    if sb_event:
+        raw = sb_event.get("raw_data") or {}
+        if isinstance(raw, str):
+            raw = json.loads(raw)
+        sb_alliances_raw = raw.get("alliances")
+
+    if sb_alliances_raw and sb_teams and _sb_teams_valid(sb_teams):
+        # Build lookups from Supabase data (TBA + FRC + Statbotics merged)
+        name_map: dict[str, str] = {}
+        country_map: dict[str, str] = {}
+        school_map: dict[str, str] = {}
+        rookie_year_map: dict[str, int | None] = {}
+        rank_map: dict[str, dict] = {}
+        opr_map: dict[str, dict] = {}
+        frc_org_map: dict[int, str] = {}
+
+        for r in sb_teams:
+            tk = r["team_key"]
+            rd = r.get("raw_data") or {}
+            if isinstance(rd, str):
+                rd = json.loads(rd)
+            tims = r.get("tims_data") or {}
+            if isinstance(tims, str):
+                tims = json.loads(tims)
+            frc_d = r.get("frc_data") or {}
+            if isinstance(frc_d, str):
+                frc_d = json.loads(frc_d)
+
+            name_map[tk] = r.get("nickname", "")
+            country_map[tk] = tims.get("country", "")
+            # Prefer FRC API schoolName over TBA school_name
+            school_map[tk] = frc_d.get("schoolName") or tims.get("school_name", "")
+            rookie_year_map[tk] = tims.get("rookie_year") or frc_d.get("rookieYear")
+
+            # FRC org map for _build_alliances_response (keyed by team number)
+            frc_org = frc_d.get("schoolName") or frc_d.get("nameShort") or ""
+            if frc_org and r.get("team_number"):
+                frc_org_map[r["team_number"]] = frc_org
+
+            if rd.get("rank") is not None:
+                rank_map[tk] = {
+                    "rank": rd.get("rank"),
+                    "record": {
+                        "wins": rd.get("wins", 0),
+                        "losses": rd.get("losses", 0),
+                        "ties": rd.get("ties", 0),
+                    },
+                }
+
+            epa_block = rd.get("epa") or {}
+            opr_map[tk] = {
+                "opr": round(rd.get("opr", 0), 2) if rd.get("opr") else 0,
+                "epa": epa_block.get("epa"),
+                "epa_auto": epa_block.get("epa_auto"),
+                "epa_teleop": epa_block.get("epa_teleop"),
+                "epa_endgame": epa_block.get("epa_endgame"),
+            }
+
+        # Read avatars from Supabase
+        all_alliance_keys: list[str] = []
+        for a in sb_alliances_raw:
+            all_alliance_keys.extend(a.get("picks", []))
+        try:
+            avatar_map = await read_team_avatars(all_alliance_keys, year)
+        except Exception:
+            avatar_map = {}
+
+        # Playoff matches: Supabase first (stored by match_poller in FRC format),
+        # then fall back to FRC API direct call
+        frc_playoff_matches = None
+        if year >= 2023:
+            try:
+                frc_playoff_matches = await read_frc_playoff_matches(event_key)
+            except Exception:
+                pass
+            if not frc_playoff_matches:
+                frc = get_frc_client()
+                frc_playoff_matches = await _safe(
+                    frc.get_matches(year, event_code.upper(), level="Playoff")
+                )
+            if not isinstance(frc_playoff_matches, list):
+                frc_playoff_matches = None
+
+        return await _build_alliances_response(
+            sb_alliances_raw, name_map, country_map, school_map,
+            rookie_year_map, frc_org_map, rank_map, opr_map, avatar_map,
+            frc_playoff_matches, year, event_key,
+        )
+
+    # ── Fallback: TBA + FRC API + Statbotics ────────────────
     client = get_tba_client()
     frc = get_frc_client()
 
@@ -139,10 +267,21 @@ async def get_alliances_with_stats(event_key: str) -> dict:
 
     avatar_map = await get_avatars(all_alliance_keys, year)
 
-    # ── Pick labels ───────────────────────────────────────
+    return await _build_alliances_response(
+        alliances_raw, name_map, country_map, school_map,
+        rookie_year_map, frc_org_map, rank_map, opr_map, avatar_map,
+        frc_playoff_matches, year, event_key,
+    )
+
+
+async def _build_alliances_response(
+    alliances_raw, name_map, country_map, school_map,
+    rookie_year_map, frc_org_map, rank_map, opr_map, avatar_map,
+    frc_playoff_matches, year, event_key,
+) -> dict:
+    """Build the final alliances response dict from lookup maps."""
     _pick_labels = ['Captain', '1st Pick', '2nd Pick', '3rd Pick', 'Backup']
 
-    # ── Build alliance cards ────────────────────────────────
     alliances = []
     for idx, alliance in enumerate(alliances_raw):
         picks = alliance.get("picks", [])

@@ -395,6 +395,32 @@ function updateAuthUI() {
         }
     }
 
+    // Update mobile settings auth button
+    const settingsAuthLabel = document.getElementById('settings-auth-label');
+    const settingsAuthSub = document.getElementById('settings-auth-sub');
+    const settingsAuthBtn = document.getElementById('settings-auth-btn');
+    if (settingsAuthLabel) {
+        const user = Auth.getUser();
+        if (authed && user) {
+            const displayName = user.user_metadata?.name || user.email?.split('@')[0] || 'Caster';
+            settingsAuthLabel.textContent = 'Hey, ' + displayName + '!';
+            if (settingsAuthSub) settingsAuthSub.textContent = user.email || '';
+            if (settingsAuthBtn) {
+                settingsAuthBtn.onclick = function() { toggleSettings(); showLoginModal(); };
+            }
+        } else {
+            settingsAuthLabel.textContent = 'Sign In';
+            if (settingsAuthSub) settingsAuthSub.textContent = '';
+            if (settingsAuthBtn) {
+                settingsAuthBtn.onclick = function() { showLoginModal(); toggleSettings(); };
+            }
+        }
+    }
+
+    // Show/hide mobile sign-out button
+    const mobileLogout = document.getElementById('settings-logout-btn');
+    if (mobileLogout) mobileLogout.classList.toggle('hidden', !authed);
+
     // Toggle visibility of auth-only elements
     document.querySelectorAll('[data-auth-only]').forEach(el => {
         el.classList.toggle('hidden', !authed);
@@ -431,7 +457,7 @@ function toggleAuthPopover() {
     const nameEl = document.getElementById('auth-popover-name');
     const emailEl = document.getElementById('auth-popover-email');
     const avatarEl = document.getElementById('auth-popover-initials');
-    if (nameEl) nameEl.textContent = name || email.split('@')[0];
+    if (nameEl) nameEl.textContent = 'Hey, ' + (name || email.split('@')[0]) + '!';
     if (emailEl) emailEl.textContent = email;
     if (avatarEl) avatarEl.textContent = initials;
     pop.classList.remove('hidden');

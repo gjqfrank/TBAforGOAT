@@ -769,7 +769,8 @@ async def get_ftc_past_season_awards(event_key: str) -> dict:
 
     result = {"past_season_awards": past_awards, "prev_season": prev_season}
     write_payload("ftc_past_awards", event_key, dict(result))
-    await set_cached_summary(sb_key, awards=result)
+    if past_awards:
+        await set_cached_summary(sb_key, awards=result)
     return result
 
 
@@ -885,7 +886,8 @@ async def get_ftc_current_season_awards(event_key: str) -> dict:
 
     result = {"season_awards": season_awards, "season": year}
     write_payload("ftc_season_awards", event_key, dict(result))
-    await set_cached_summary(sb_key, summary=result)
+    if season_awards:
+        await set_cached_summary(sb_key, summary=result)
     return result
 
 

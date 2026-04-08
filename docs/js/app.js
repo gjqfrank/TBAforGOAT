@@ -18,6 +18,15 @@ function showToast(message, type = 'info', duration = 3500) {
     }, duration);
 }
 
+/** Render a team number: use number_display (e.g. "11-370") when available,
+ *  with dashes rendered as a styled separator. Falls back to raw number. */
+function _renderTeamNum(team) {
+    const nd = team.number_display;
+    if (!nd) return String(team.team_number);
+    // Render dashes/hyphens as styled separators
+    return nd.replace(/-/g, '<span class="num-sep">-</span>');
+}
+
 // ── Back to top button ─────────────────────────────────────
 (function initBackToTop() {
     let ticking = false;
@@ -164,6 +173,8 @@ const _NO_TEAM_FALLBACK_ZONES = [
     '.pbp-alliance-opr',    // PBP alliance OPR sum
 ];
 document.addEventListener('dblclick', e => {
+    // Disable on touch devices — use long-press context menu instead
+    if ('ontouchstart' in window && window.innerWidth <= 768) return;
     // Skip if inside an input/textarea/select
     const tag = e.target.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
@@ -214,6 +225,8 @@ let eventInfoData = null;  // cached event info for saving
 let playoffData  = null;   // cached playoff matches
 let allianceData = null;   // cached alliance data
 let summaryData  = null;   // cached event summary
+let _summaryRevalidatedAt = 0; // timestamp of last background revalidation
+const _SUMMARY_REVALIDATE_COOLDOWN = 5 * 60_000; // 5 minutes
 let pbpData      = null;   // cached play-by-play data
 let pbpIndex     = 0;      // current match index
 let highlightForeign = false; // settings: highlight international teams
@@ -222,7 +235,7 @@ let showOffseason = false;     // settings: show offseason events
 let rankingsCompact = window.innerWidth <= 768;  // default compact on mobile
 let rankingsShowSchool = false;   // toggle: show school/org column
 let rankingsShowAutoTele = false; // toggle: show Auto/TeleOp columns (FTC)
-let rankingsCardView = false;     // toggle: card view on mobile
+let rankingsCardView = window.innerWidth <= 768;  // card view default on mobile
 let allianceShowEpa = false;      // toggle: show EPA breakdown in alliance cards
 let allianceShowPlayoff = false;  // toggle: show playoff ribbons/status
 let allianceShowAvatars = true;  // toggle: show team avatars
@@ -274,6 +287,7 @@ function resetEventData() {
     playoffData = null;
     allianceData = null;
     summaryData = null;
+    _summaryRevalidatedAt = 0;
     pbpData = null;
     pbpIndex = 0;
     bdData = null;
@@ -302,6 +316,10 @@ function resetEventData() {
 
 // ── Settings ───────────────────────────────────────────────
 function toggleSettings() {
+    if (window.innerWidth <= 768) {
+        openMobUtilPanel('settings');
+        return;
+    }
     document.getElementById('settings-menu').classList.toggle('hidden');
 }
 // Close settings when clicking outside
@@ -611,7 +629,7 @@ function toggleHighlightForeign(on) {
     highlightForeign = on;
     applyForeignHighlight();
     // Re-render tabs that embed highlight logic at render time
-    if (teamsData) $('event-teams').innerHTML = renderTeamTable(teamsData, teamsSortCol, teamsSortAsc);
+    if (teamsData) $('event-teams').innerHTML = rankingsCardView ? renderTeamCards(teamsData) : renderTeamTable(teamsData, teamsSortCol, teamsSortAsc);
     if (allianceData) renderAlliances(allianceData);
     if (pbpData) renderPbpMatch();
 }
@@ -619,7 +637,7 @@ function toggleHighlightForeign(on) {
 function toggleHighlightRookie(on) {
     highlightRookie = on;
     applyRookieHighlight();
-    if (teamsData) $('event-teams').innerHTML = renderTeamTable(teamsData, teamsSortCol, teamsSortAsc);
+    if (teamsData) $('event-teams').innerHTML = rankingsCardView ? renderTeamCards(teamsData) : renderTeamTable(teamsData, teamsSortCol, teamsSortAsc);
     if (allianceData) renderAlliances(allianceData);
     if (pbpData) renderPbpMatch();
 }
@@ -778,6 +796,10 @@ async function _injectGatoolSponsors(teams, matchIdx) {
     }
 
     for (const t of teams) {
+        // Skip if TIMS sponsors already injected
+        const ov = _timsCache[t.team_number];
+        if (ov && ov.top_sponsors) continue;
+
         // Skip if already shown in an earlier match
         if (sponsorFirstOnly && _sponsorsShownTeams.has(t.team_number)) continue;
 
@@ -870,8 +892,9 @@ document.querySelectorAll('.tab').forEach(btn => {
                     renderSummary(summaryData);
                 }
                 sc && sc.classList.remove('hidden');
-                // Stale-while-revalidate: for ongoing events, silently refresh in background
-                if (currentEventStatus === 'ongoing' && !isFTCMode()) {
+                // Stale-while-revalidate: for ongoing events, silently refresh in background (5-min cooldown)
+                if (currentEventStatus === 'ongoing' && !isFTCMode() && Date.now() - _summaryRevalidatedAt > _SUMMARY_REVALIDATE_COOLDOWN) {
+                    _summaryRevalidatedAt = Date.now();
                     const _code = currentEvent;
                     API.eventSummary(_code).then(freshData => {
                         if (currentEvent !== _code) return;
@@ -1363,7 +1386,7 @@ async function loadFtcAvatarMap() {
         if (teamsData && teamsData.length && isFTCMode()) {
             patchFtcAvatars(teamsData);
             const el = $('event-teams');
-            if (el && el.innerHTML) el.innerHTML = renderTeamTable(teamsData, teamsSortCol, teamsSortAsc);
+            if (el && el.innerHTML) el.innerHTML = rankingsCardView ? renderTeamCards(teamsData) : renderTeamTable(teamsData, teamsSortCol, teamsSortAsc);
         }
         return map;
     } catch (err) {
@@ -2042,10 +2065,10 @@ function renderRegionalPool() {
     let html = '<div class="adv-table-wrap rp-table-wrap"><table class="adv-table rp-table">';
     html += '<thead><tr>';
     html += '<th>Rank</th><th>Team</th>';
-    html += '<th title="Best event points">Event 1</th>';
-    html += '<th title="Second event / projection">Event 2</th>';
+    html += '<th title="Best event points"><span class="rp-hdr-full">Event 1</span><span class="rp-hdr-short">E1</span></th>';
+    html += '<th title="Second event / projection"><span class="rp-hdr-full">Event 2</span><span class="rp-hdr-short">E2</span></th>';
     html += '<th class="adv-col-total">Total</th>';
-    html += '<th>Method</th>';
+    html += '<th><span class="rp-hdr-full">Method</span><span class="rp-hdr-short">Meth</span></th>';
     html += '</tr></thead><tbody>';
 
     teams.forEach(t => {
@@ -2065,10 +2088,12 @@ function renderRegionalPool() {
 
         // Method
         const method = _rpQualMethod(t);
+        const methodShort = _rpQualMethodShort(t);
         let statusCls = isPool ? 'rp-status-pool' : 'rp-status-qualified';
         if (t.declinedFirstCmp) statusCls = 'rp-status-declined';
-        const statusText = t.declinedFirstCmp ? `${method} (Declined)` : method;
-        const statusHtml = `<span class="rp-status ${statusCls}">${statusText}</span>`;
+        const decSuffix = t.declinedFirstCmp ? ' (Declined)' : '';
+        const decSuffixShort = t.declinedFirstCmp ? ' (DCL)' : '';
+        const statusHtml = `<span class="rp-status ${statusCls}"><span class="rp-hdr-full">${method}${decSuffix}</span><span class="rp-hdr-short">${methodShort}${decSuffixShort}</span></span>`;
 
         html += `<tr class="${rowCls}">`;
         html += `<td>${t.rank}</td>`;
@@ -2104,6 +2129,21 @@ function _rpQualMethod(t) {
         return `Pool W${t.qualifiedFirstCmpEventWeek}`;
     }
     return 'Qualified';
+}
+
+function _rpQualMethodShort(t) {
+    if (t.qualifiedFirstCmpAwardName) return t.qualifiedFirstCmpAwardName;
+    const status = (t.championshipStatus || '').toLowerCase();
+    if (status.includes('ranking')) return 'DQ';
+    if (status.includes('award')) return 'Awd';
+    if (status.includes('waitlist')) return 'WL';
+    if (status.includes('pool') && t.qualifiedFirstCmpEventWeek != null) {
+        return `PW${t.qualifiedFirstCmpEventWeek}`;
+    }
+    if (t.qualifiedFirstCmpEventWeek != null) {
+        return `PW${t.qualifiedFirstCmpEventWeek}`;
+    }
+    return 'Qual';
 }
 
 function clearActiveEvent() {
@@ -2661,6 +2701,52 @@ let teamsData = null;      // cached teams list for sorting
 let teamsSortCol = 'rank';  // current sort column
 let teamsSortAsc = true;    // sort direction
 
+// ── TIMS overrides in-memory cache ──────────────────────
+let _timsCache = {};  // { teamNumber: { nickname, organization, location, top_sponsors, ... } }
+
+async function _loadTimsOverrides() {
+    if (!teamsData) return;
+    _timsCache = {};
+    // Load local overrides from IndexedDB (for instant display after editing)
+    for (const t of teamsData) {
+        try {
+            const rows = await DB.getOverridesByTeam(t.team_key);
+            if (rows.length) _timsCache[t.team_number] = rows[0];
+        } catch { /* ignore */ }
+    }
+    // Also seed cache from server-applied overrides already in teamsData
+    for (const t of teamsData) {
+        if (t.has_tims_overrides && !_timsCache[t.team_number]) {
+            _timsCache[t.team_number] = {
+                nickname: t.nickname,
+                organization: t.school_name,
+                top_sponsors: t.top_sponsors || '',
+                robot_name: t.robot_name || '',
+                number_display: t.number_display || '',
+            };
+        }
+    }
+}
+
+function _applyTimsOverrides(t) {
+    const ov = _timsCache[t.team_number];
+    if (!ov) return t;
+    const copy = Object.assign({}, t);
+    if (ov.nickname) copy.nickname = ov.nickname;
+    if (ov.organization) copy.school_name = ov.organization;
+    if (ov.location) {
+        const parts = ov.location.split(',').map(s => s.trim());
+        if (parts.length >= 2) { copy.city = parts[0]; copy.state_prov = parts.slice(1).join(', '); }
+        else { copy.city = ov.location; }
+    }
+    if (ov.top_sponsors) copy._tims_sponsors = ov.top_sponsors;
+    if (ov.robot_name) copy.robot_name = ov.robot_name;
+    if (ov.number_display) copy.number_display = ov.number_display;
+    if (ov.pronunciation) copy.name_pronounce = ov.pronunciation;
+    if (ov.motto) copy.motto = ov.motto;
+    return copy;
+}
+
 function snapshotRankings() {
     if (!teamsData) return null;
     const map = new Map();
@@ -2720,9 +2806,12 @@ function applyRankChangeIndicators(oldMap) {
 function buildTeamTable(teams) {
     teamsData = teams;
     patchFtcAvatars(teamsData);
+    _loadTimsOverrides();
     // Apply the current sort so upcoming events (sorted by team_number) render correctly
     sortTeamsData();
-    return renderTeamTable(teamsData, teamsSortCol, teamsSortAsc);
+    return rankingsCardView
+        ? renderTeamCards(teamsData)
+        : renderTeamTable(teamsData, teamsSortCol, teamsSortAsc);
 }
 
 function sortTeamsData() {
@@ -2806,10 +2895,15 @@ function renderTeamTable(teams, sortCol, asc) {
     const school = rankingsShowSchool;
     const ftcMode = isFTCMode();
     const autoTele = ftcMode && rankingsShowAutoTele;
+    const viewToggle = `<button class="rankings-view-toggle" onclick="toggleRankingsView()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        ${rankingsCardView ? 'Table View' : 'Card View'}
+    </button>`;
     const toolbar = `<div class="rankings-toolbar">
         <label class="toggle-label"><input type="checkbox" ${compact ? 'checked' : ''} onchange="toggleRankingsCompact(this.checked)"> Compact</label>
         <label class="toggle-label school-toggle"><input type="checkbox" ${school ? 'checked' : ''} onchange="toggleRankingsSchool(this.checked)"> School / Org</label>
         ${ftcMode ? `<label class="toggle-label"><input type="checkbox" ${autoTele ? 'checked' : ''} onchange="toggleRankingsAutoTele(this.checked)"> Auto / TeleOp</label>` : ''}
+        ${viewToggle}
     </div>`;
 
     return toolbar + `
@@ -2900,7 +2994,9 @@ function sortTeams(col) {
     }
 
     sortTeamsData();
-    $('event-teams').innerHTML = renderTeamTable(teamsData, teamsSortCol, teamsSortAsc);
+    $('event-teams').innerHTML = rankingsCardView
+        ? renderTeamCards(teamsData)
+        : renderTeamTable(teamsData, teamsSortCol, teamsSortAsc);
     _syncUrl({ sort: col });
 }
 
@@ -4293,7 +4389,10 @@ function renderHighScores(scores) {
     const medals = ['1st', '2nd', '3rd'];
     $('summary-high-list').innerHTML = scores.map((s, i) => {
         const colorCls = s.color === 'red' ? 'high-score-red' : 'high-score-blue';
-        const teamNums = s.teams.map(t => `<span class="high-score-team has-tooltip">${t.team_number}${t.nickname ? `<span class="custom-tooltip">${t.nickname}</span>` : ''}</span>`).join(', ');
+        const teamNums = s.teams.map(t => {
+            const nick = (_timsCache[t.team_number]?.nickname) || t.nickname;
+            return `<span class="high-score-team has-tooltip">${t.team_number}${nick ? `<span class="custom-tooltip">${nick}</span>` : ''}</span>`;
+        }).join(', ');
         return `
             <div class="summary-high-row">
                 <span class="top-medal">${medals[i] || ''}</span>
@@ -4851,7 +4950,7 @@ function _setupBracketScrollArrow() {
 const _BKT_PARENTS = {
     7: [1, 2],   8: [3, 4],          // Upper R2 from Upper R1
     5: [1, 2],   6: [3, 4],          // Lower R2 from losers of Upper R1
-    9: [5, 7],   10: [6, 8],         // Lower R3
+    9: [5, 8],   10: [6, 7],         // Lower R3: W5 vs L8, W6 vs L7
     11: [7, 8],                       // Upper R4
     12: [9, 10],                      // Lower R4
     13: [11, 12],                     // Lower R5
@@ -5207,8 +5306,8 @@ function renderAlliances(data) {
                     <div class="alliance-team-row${isIntl ? ' foreign-team-row' : ''}${isRookie ? ' rookie-team-row' : ''}" data-country="${t.country || ''}" data-rookie-year="${t.rookie_year || ''}">
                         <span class="team-role">${getRoleLabel(idx, a.teams.length)}</span>
                         ${avatarHtml}
-                        <span class="team-num has-tooltip">${t.team_number}${t.nickname ? `<span class="custom-tooltip">${t.nickname}</span>` : ''}</span>
-                        ${allianceShowNames ? `<span class="team-nick">${t.nickname || ''}</span>` : ''}
+                        <span class="team-num has-tooltip">${_renderTeamNum(t)}${(_timsCache[t.team_number]?.nickname || t.nickname) ? `<span class="custom-tooltip">${_timsCache[t.team_number]?.nickname || t.nickname}</span>` : ''}</span>
+                        ${allianceShowNames ? `<span class="team-nick">${_timsCache[t.team_number]?.nickname || t.nickname || ''}</span>` : ''}
                         <div class="team-stats-mini">
                             <span${Number(t.rank) >= 1 && Number(t.rank) <= 8 ? ' class="rank-top8"' : ''}>Rank ${t.rank}</span>
                             <span>${t.wins}-${t.losses}-${t.ties}</span>
@@ -5559,6 +5658,10 @@ function toggleH2HRange(allTime) {
 function renderH2H(d) {
     const s = d.h2h_summary;
     const nicks = d.team_nicknames || {};
+    // Apply TIMS nickname overrides
+    for (const [num, ov] of Object.entries(_timsCache)) {
+        if (ov.nickname) nicks[String(num)] = ov.nickname;
+    }
 
     // Helper: render a team number with hover tooltip showing nickname
     const tn = (num) => {
@@ -6221,6 +6324,7 @@ function renderPbpMatch() {
 
     $('pbp-match-label').textContent = m._pbpLabel || (m.label || '').replace(/^Qualification\s*/i, 'Qual ');
     $('pbp-match-select').value = pbpIndex;
+    _syncMobPbpLabel();
 
     const redWon = m.winning_alliance === 'red';
     const blueWon = m.winning_alliance === 'blue';
@@ -6508,6 +6612,7 @@ async function togglePbpConnRange(allTime) {
 }
 
 function renderPbpTeam(t, sideCls) {
+    t = _applyTimsOverrides(t);
     const loc = [t.city, t.state_prov, t.country].filter(Boolean).join(', ');
     const shortLoc = [t.state_prov, t.country].filter(Boolean).join(', ');
     const foreignCls = highlightForeign && t.country && eventCountry && t.country !== eventCountry ? 'foreign-team' : '';
@@ -6549,7 +6654,7 @@ function renderPbpTeam(t, sideCls) {
     return `
     <div class="pbp-team ${foreignCls} ${rookieCls}" data-country="${t.country || ''}" data-rookie-year="${t.rookie_year || ''}">
         <div class="pbp-team-top">
-            <div class="pbp-team-number">${t.team_number}${pickHtml}</div>
+            <div class="pbp-team-number">${_renderTeamNum(t)}${pickHtml}</div>
             <div class="pbp-team-identity">
                 <div class="pbp-team-name-row">
                     <div class="pbp-team-nickname">${t.nickname || 'Team ' + t.team_number}</div>
@@ -6584,7 +6689,10 @@ function renderPbpTeam(t, sideCls) {
             </div>
         </div>
         <div class="pbp-awards-slot" data-team="${t.team_number}"></div>
-        <div class="pbp-sponsors-slot" data-sponsors-team="${t.team_number}"></div>
+        <div class="pbp-bottom-row">
+            ${t.robot_name ? `<div class="pbp-robot-name" title="Robot Name"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/><line x1="8" y1="16" x2="8" y2="16"/><line x1="16" y1="16" x2="16" y2="16"/></svg><span class="pbp-robot-name-text">${_esc(t.robot_name)}</span></div>` : ''}
+            <div class="pbp-sponsors-slot" data-sponsors-team="${t.team_number}">${t._tims_sponsors ? `<div class="pbp-sponsors" title="Sponsors (TIMS)"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg><span class="pbp-sponsors-text">${t._tims_sponsors}</span></div>` : ''}</div>
+        </div>
     </div>`;
 }
 
@@ -6853,14 +6961,15 @@ async function pbpAutoRefresh() {
         if (renderedTabs.breakdown) buildBdSelector();
 
         // Scores changed — refresh rankings immediately
-        if (scoresChanged) refreshRankings();
-
-        // Flash the arena container to indicate an update
-        const arena = $('pbp-arena');
-        if (arena) {
-            arena.classList.remove('pbp-updated-flash');
-            void arena.offsetWidth; // force reflow
-            arena.classList.add('pbp-updated-flash');
+        if (scoresChanged) {
+            refreshRankings();
+            // Flash the arena container to indicate a score update
+            const arena = $('pbp-arena');
+            if (arena) {
+                arena.classList.remove('pbp-updated-flash');
+                void arena.offsetWidth; // force reflow
+                arena.classList.add('pbp-updated-flash');
+            }
         }
 
         // Cache the updated data
@@ -7275,13 +7384,15 @@ function renderBdRobot(robot, nickMap, statsMap, color) {
     const num = robot.team_number || '?';
     const nick = (nickMap && nickMap[num]) || '';
     const tooltipHtml = nick ? `<span class="custom-tooltip">${nick}</span>` : '';
+    const ndTeam = teamsData?.find(td => td.team_number == num);
+    const numHtml = ndTeam ? _renderTeamNum(ndTeam) : num;
     const st = (statsMap && statsMap[num]) || {};
     const oprStr = st.opr != null ? st.opr : '–';
     const epaStr = st.epa != null ? st.epa : '–';
 
     return `
     <div class="bd-robot-card bd-robot-card-clickable" data-team="${num}" data-color="${color}" onclick="toggleSpotlight(${num}, '${color}')">
-        <div class="bd-robot-num has-tooltip">${num}${tooltipHtml}</div>
+        <div class="bd-robot-num has-tooltip">${numHtml}${tooltipHtml}</div>
         <div class="bd-robot-field">
             <span class="bd-robot-label">Leave</span>
             <span class="bd-robot-value ${leaveCls}">${leaveVal}</span>
@@ -8228,11 +8339,16 @@ async function compareCurrentMatch() {
     const blueKeys = m.blue.teams.map(t => t.team_key);
     const allKeys = [...redKeys, ...blueKeys];
 
-    // Try API first; if it fails (e.g. upcoming event with no matches),
-    // build comparison from the local PBP data we already have
-    openCompare();
-    $('compare-body').innerHTML = '<p class="loading-msg">Fetching comparison data\u2026</p>';
-    $('compare-title').textContent = `Match Comparison: ${m.label}`;
+    const isMob = window.innerWidth <= 768;
+    if (isMob) {
+        openMobUtilPanel('compare');
+        const body = document.getElementById('mob-util-body');
+        if (body) body.innerHTML = '<div id="compare-body" class="mob-compare-body"><p class="loading-msg">Loading\u2026</p></div>';
+    } else {
+        openCompare();
+        $('compare-body').innerHTML = '<p class="loading-msg">Fetching comparison data\u2026</p>';
+        $('compare-title').textContent = `Match Comparison: ${m.label}`;
+    }
 
     try {
         if (isFTCMode()) throw new Error('use-fallback');
@@ -8306,6 +8422,9 @@ function updateCompareBar() {
         // Edit Details: show when exactly 1 team selected and user is authenticated
         const edBtn = $('compare-bar-edit');
         if (edBtn) { (n === 1 && !window.isGuest) ? show('compare-bar-edit') : hide('compare-bar-edit'); }
+        // Compare: show when 2+ teams selected
+        const cmpBtn = $('compare-bar-compare');
+        if (cmpBtn) { n >= 2 ? show('compare-bar-compare') : hide('compare-bar-compare'); }
     } else {
         hide('compare-bar');
     }
@@ -8421,6 +8540,7 @@ document.addEventListener('keydown', e => {
 // ═══════════════════════════════════════════════════════════
 
 function openMatchHistory() {
+    if (window.innerWidth <= 768) return; // mobile uses mob-util-panel
     show('match-history-overlay');
     document.body.style.overflow = 'hidden';
 }
@@ -8436,9 +8556,32 @@ async function launchMatchHistoryFromSelection() {
     const num = parseInt(teamKey.replace(/^(frc|ftc)/, ''), 10);
     if (!num) return;
 
-    // Find team nickname from teamsData
     const teamInfo = teamsData?.find(t => t.team_key === teamKey);
     const nick = teamInfo ? formatTeamName(teamInfo.nickname) : '';
+    _launchMatchHistoryShared(num, nick);
+}
+
+async function _launchMatchHistoryShared(num, nick) {
+    if (window.innerWidth <= 768) {
+        openMobUtilPanel('matchhistory');
+        const body = document.getElementById('mob-util-body');
+        if (body) body.innerHTML = '<div class="mob-util-lookup-empty">Loading\u2026</div>';
+        try {
+            let perf;
+            if (typeof isFTCMode === 'function' && isFTCMode()) {
+                perf = typeof _buildFtcTeamPerf === 'function' ? _buildFtcTeamPerf(num) : null;
+            } else {
+                perf = await API.teamPerf(currentEvent, num);
+            }
+            if (body) {
+                body.innerHTML = '';
+                _renderMobMatchHistory(body, perf, num, nick);
+            }
+        } catch (err) {
+            if (body) body.innerHTML = '<div class="mob-util-lookup-empty">' + err.message + '</div>';
+        }
+        return;
+    }
 
     openMatchHistory();
     $('match-history-title').textContent = `Match History · ${num}${nick ? ` — ${nick}` : ''}`;
@@ -8446,7 +8589,6 @@ async function launchMatchHistoryFromSelection() {
 
     try {
         if (isFTCMode()) {
-            // FTC: build match history from PbP data
             const perf = _buildFtcTeamPerf(num);
             renderMatchHistoryPanel(perf, num, nick);
         } else {
@@ -8575,11 +8717,12 @@ function renderMatchHistoryPanel(perf, teamNum, nick) {
             const score = pm.allianceScore != null ? `<span class="mh-score-bold">${pm.allianceScore}</span>-${pm.opponentScore}` : '–';
             const colorCls = pm.allianceColor === 'Red' ? 'mh-color-red' : 'mh-color-blue';
             const allyCls = pm.allianceColor === 'Red' ? 'mh-ally-red' : 'mh-ally-blue';
+            const oppCls = pm.allianceColor === 'Red' ? 'mh-ally-blue' : 'mh-ally-red';
             const allies = (pm.allianceTeams || []).map(n =>
                 `<span class="mh-team-link ${allyCls}" title="${nickLookup[n] || ''}" onclick="lookupTeamFromMatchHistory(${n})">${n}</span>`
             ).join(', ');
             const opps = (pm.opponentTeams || []).map(n =>
-                `<span class="mh-team-link" title="${nickLookup[n] || ''}" onclick="lookupTeamFromMatchHistory(${n})">${n}</span>`
+                `<span class="mh-team-link ${oppCls}" title="${nickLookup[n] || ''}" onclick="lookupTeamFromMatchHistory(${n})">${n}</span>`
             ).join(', ');
             rows += `<tr>
                 <td>${desc}</td>
@@ -8604,6 +8747,15 @@ function renderMatchHistoryPanel(perf, teamNum, nick) {
 }
 
 function lookupTeamFromMatchHistory(teamNum) {
+    if (window.innerWidth <= 768) {
+        closeMatchHistory();
+        openMobUtilPanel('lookup');
+        setTimeout(() => {
+            const inp = document.getElementById('mob-util-team-num');
+            if (inp) { inp.value = teamNum; _mobUtilLookupTeam(); }
+        }, 60);
+        return;
+    }
     closeMatchHistory();
     openLookup();
     $('lookup-title').textContent = `Team Lookup · ${teamNum}`;
@@ -8630,6 +8782,10 @@ function lookupTeamFromMatchHistory(teamNum) {
 let _floatMinimized = false;
 
 function toggleFloatingLookup() {
+    if (window.innerWidth <= 768) {
+        openMobUtilPanel('lookup');
+        return;
+    }
     const panel = $('float-lookup');
     if (panel.classList.contains('hidden')) {
         openFloatingLookup();
@@ -8708,6 +8864,15 @@ async function floatLookupTeam() {
 
 /** Open floating lookup pre-filled with a team number (e.g. from PBP click) */
 function floatLookupQuick(teamNumber) {
+    if (window.innerWidth <= 768) {
+        openMobUtilPanel('lookup');
+        // Pre-fill and search after panel builds
+        setTimeout(() => {
+            const inp = document.getElementById('mob-util-team-num');
+            if (inp) { inp.value = teamNumber; _mobUtilLookupTeam(); }
+        }, 60);
+        return;
+    }
     openFloatingLookup();
     $('float-team-number').value = teamNumber;
     floatLookupTeam();
@@ -8783,13 +8948,24 @@ document.addEventListener('keydown', e => {
 
 // ── Core comparison renderer ───────────────────────────────
 async function showComparison(teamKeys, opts = {}) {
-    openCompare();
+    const isMob = window.innerWidth <= 768;
+    if (isMob) {
+        openMobUtilPanel('compare');
+        const body = document.getElementById('mob-util-body');
+        if (body) {
+            body.innerHTML = '<div id="compare-body" class="mob-compare-body"><p class="loading-msg">Loading\u2026</p></div>';
+        }
+    } else {
+        openCompare();
+    }
     const prefix = isFTCMode() ? 'ftc' : 'frc';
     _syncUrl({ compare: teamKeys.map(k => k.replace(prefix,'')).join(',') });
     $('compare-body').innerHTML = '<p class="loading-msg">Fetching comparison data\u2026</p>';
-    $('compare-title').textContent = opts.matchLabel
-        ? `Match Comparison: ${opts.matchLabel}`
-        : 'Team Comparison';
+    if (!isMob) {
+        $('compare-title').textContent = opts.matchLabel
+            ? `Match Comparison: ${opts.matchLabel}`
+            : 'Team Comparison';
+    }
 
     try {
         if (isFTCMode()) {
@@ -8893,12 +9069,14 @@ function renderComparison(data, opts) {
         let sideCls = '';
         if (redKeys.has(t.team_key)) sideCls = 'comp-red';
         else if (blueKeys.has(t.team_key)) sideCls = 'comp-blue';
+        const ov = _timsCache[t.team_number];
+        const nick = ov?.nickname || t.nickname;
         const loc = [t.state_prov, t.country].filter(Boolean).join(', ');
 
         html += `
         <div class="comp-header ${sideCls}">
             <div class="comp-team-num">${t.team_number}</div>
-            <div class="comp-team-name">${formatTeamName(t.nickname)}</div>
+            <div class="comp-team-name">${formatTeamName(nick)}</div>
             <div class="comp-team-record">${t.wins}-${t.losses}-${t.ties}</div>
             ${loc ? `<div class="comp-team-loc">${loc}</div>` : ''}
         </div>`;
@@ -9308,7 +9486,8 @@ function renderEventHistory(data) {
         html += `<h4>${b.icon} ${b.title}</h4>`;
         html += '<ol class="leaderboard-list">';
         for (const t of b.data) {
-            html += `<li><span class="lb-team has-tooltip">${t.team_number}<span class="custom-tooltip">${_esc(t.nickname)}</span></span> <span class="lb-count">${t.count}</span></li>`;
+            const nick = _timsCache[t.team_number]?.nickname || t.nickname;
+            html += `<li><span class="lb-team has-tooltip">${t.team_number}<span class="custom-tooltip">${_esc(nick)}</span></span> <span class="lb-count">${t.count}</span></li>`;
         }
         html += '</ol></div>';
     }
@@ -9320,9 +9499,9 @@ function renderEventHistory(data) {
         html += '<h4>Year-by-Year Results</h4>';
         html += '<table class="data-table history-table"><thead><tr><th>Year</th><th>Winners</th><th>Finalists</th><th>Event Impact</th></tr></thead><tbody>';
         for (const yr of data.timeline) {
-            const winners = (yr.winners || []).map(t => `<span class="has-tooltip">${t.team_number}<span class="custom-tooltip">${_esc(t.nickname)}</span></span>`).join(', ') || '–';
-            const finalists = (yr.finalists || []).map(t => `<span class="has-tooltip">${t.team_number}<span class="custom-tooltip">${_esc(t.nickname)}</span></span>`).join(', ') || '–';
-            const impact = yr.impact ? `<span class="has-tooltip">${yr.impact.team_number}<span class="custom-tooltip">${_esc(yr.impact.nickname)}</span></span>` : '–';
+            const winners = (yr.winners || []).map(t => `<span class="has-tooltip">${t.team_number}<span class="custom-tooltip">${_esc(_timsCache[t.team_number]?.nickname || t.nickname)}</span></span>`).join(', ') || '–';
+            const finalists = (yr.finalists || []).map(t => `<span class="has-tooltip">${t.team_number}<span class="custom-tooltip">${_esc(_timsCache[t.team_number]?.nickname || t.nickname)}</span></span>`).join(', ') || '–';
+            const impact = yr.impact ? `<span class="has-tooltip">${yr.impact.team_number}<span class="custom-tooltip">${_esc(_timsCache[yr.impact.team_number]?.nickname || yr.impact.nickname)}</span></span>` : '–';
             html += `<tr><td class="year-cell">${yr.year}</td><td>${winners}</td><td>${finalists}</td><td>${impact}</td></tr>`;
         }
         html += '</tbody></table></div>';
@@ -9368,6 +9547,31 @@ function mobileNavTo(tabName) {
     syncMobileNav(tabName);
 }
 
+/**
+ * Toggle between PBP custom nav and standard nav (Apple Liquid Glass style).
+ * Called by the play-icon back button inside the PBP nav bar.
+ * Does NOT change the active tab — just swaps which nav bar is visible.
+ */
+function toggleMobilePbpNav() {
+    const stdNav = document.querySelector('.mobile-bottom-nav-inner');
+    const pbpNav = document.getElementById('mob-pbp-nav');
+    if (!stdNav || !pbpNav) return;
+    const pbpVisible = !pbpNav.classList.contains('hidden');
+    if (pbpVisible) {
+        // Show standard nav, hide PBP nav, keep PBP highlighted
+        stdNav.style.display = '';
+        pbpNav.classList.add('hidden');
+        document.querySelectorAll('.mob-nav-btn').forEach(b => {
+            b.classList.toggle('active', b.dataset.tab === 'playbyplay');
+        });
+    } else {
+        // Show PBP nav, hide standard nav
+        stdNav.style.display = 'none';
+        pbpNav.classList.remove('hidden');
+        _syncMobPbpLabel();
+    }
+}
+
 function syncMobileNav(tabName) {
     document.querySelectorAll('.mob-nav-btn').forEach(b => {
         const t = b.dataset.tab;
@@ -9383,7 +9587,499 @@ function syncMobileNav(tabName) {
     if (moreBtn) {
         moreBtn.classList.toggle('active', moreTabs.includes(tabName));
     }
+
+    // Dynamic PbP navbar: swap standard nav ↔ PbP controls on mobile
+    const stdNav = document.querySelector('.mobile-bottom-nav-inner');
+    const pbpNav = document.getElementById('mob-pbp-nav');
+    if (stdNav && pbpNav) {
+        const isPbp = tabName === 'playbyplay';
+        stdNav.style.display = isPbp ? 'none' : '';
+        pbpNav.classList.toggle('hidden', !isPbp);
+        if (isPbp) _syncMobPbpLabel();
+    }
 }
+
+/** Update the mobile PbP nav bar match label */
+function _syncMobPbpLabel() {
+    const lbl = document.getElementById('mob-pbp-label');
+    if (!lbl) return;
+    if (pbpData && pbpData.matches && pbpData.matches.length) {
+        const m = pbpData.matches[pbpIndex];
+        lbl.textContent = m?._pbpLabel || (m?.label || 'Match').replace(/^Qualification\s*/i, 'Qual ');
+    } else {
+        lbl.textContent = 'Match';
+    }
+}
+
+/** Open the PbP match picker bottom sheet */
+function openMobilePbpMatchList() {
+    const scrim = document.getElementById('mob-pbp-picker-scrim');
+    const sheet = document.getElementById('mob-pbp-picker');
+    const list = document.getElementById('mob-pbp-picker-list');
+    if (!scrim || !sheet || !list) return;
+    // Build match list from pbpData
+    list.innerHTML = '';
+    if (pbpData && pbpData.matches) {
+        pbpData.matches.forEach((m, i) => {
+            const btn = document.createElement('button');
+            btn.className = 'mob-pbp-picker-item' + (i === pbpIndex ? ' active' : '');
+            btn.textContent = m?._pbpLabel || (m?.label || 'Match ' + (i+1)).replace(/^Qualification\s*/i, 'Qual ');
+            btn.onclick = () => { pbpGoTo(i); closeMobilePbpPicker(); };
+            list.appendChild(btn);
+        });
+    }
+    scrim.classList.add('open');
+    sheet.classList.add('open');
+    // Scroll active item into view
+    requestAnimationFrame(() => {
+        const active = list.querySelector('.active');
+        if (active) active.scrollIntoView({ block: 'center', behavior: 'instant' });
+    });
+}
+
+function closeMobilePbpPicker() {
+    const scrim = document.getElementById('mob-pbp-picker-scrim');
+    const sheet = document.getElementById('mob-pbp-picker');
+    if (scrim) scrim.classList.remove('open');
+    if (sheet) sheet.classList.remove('open');
+}
+
+/* ── Mobile unified panel (Lookup / Settings / Editor / Match Picker) ──── */
+let _mobUtilMode = null; // 'lookup' | 'settings' | 'editor' | 'matches'
+
+function openMobUtilPanel(mode) {
+    const scrim = document.getElementById('mob-util-scrim');
+    const panel = document.getElementById('mob-util-panel');
+    const header = document.getElementById('mob-util-header');
+    const body  = document.getElementById('mob-util-body');
+    if (!scrim || !panel || !body) return;
+
+    _mobUtilMode = mode;
+
+    // Set title (header may include tabs for lookup)
+    header.innerHTML = '';
+    body.innerHTML = '';
+
+    if (mode === 'lookup') {
+        // Tab header: Lookup | H2H
+        header.innerHTML = `<div class="mob-util-tabs"><button class="mob-util-tab active" data-pane="lookup" onclick="_switchMobUtilTab('lookup')">Lookup</button><button class="mob-util-tab" data-pane="h2h" onclick="_switchMobUtilTab('h2h')">H2H</button></div>`;
+        _buildMobLookup(body);
+    } else if (mode === 'settings') {
+        header.innerHTML = '<span class="mob-util-title">Settings</span>';
+        _buildMobSettings(body);
+    } else if (mode === 'editor') {
+        header.innerHTML = '<span class="mob-util-title">TIMS Editor</span>';
+        _buildMobEditor(body);
+    } else if (mode === 'matches') {
+        header.innerHTML = '<span class="mob-util-title">Select Match</span>';
+        _buildMobMatchPicker(body);
+    } else if (mode === 'matchhistory') {
+        header.innerHTML = '<span class="mob-util-title">Match History</span>';
+        // body filled by caller after async load
+    } else if (mode === 'history') {
+        header.innerHTML = `<div class="mob-util-tabs"><button class="mob-util-tab active" data-pane="region" onclick="_switchMobHistoryTab('region')">Region</button><button class="mob-util-tab" data-pane="event" onclick="_switchMobHistoryTab('event')">Event</button></div>`;
+        _buildMobHistoryRegion(body);
+    } else if (mode === 'compare') {
+        header.innerHTML = '<span class="mob-util-title">Compare</span>';
+        // body filled by caller
+    }
+
+    scrim.classList.add('open');
+    panel.style.display = 'flex';
+    void panel.offsetWidth;
+    panel.classList.add('open');
+}
+
+function _switchMobUtilTab(pane) {
+    const header = document.getElementById('mob-util-header');
+    const body = document.getElementById('mob-util-body');
+    if (!header || !body) return;
+    // Capture current lookup team before clearing
+    if (pane === 'h2h') {
+        const inp = document.getElementById('mob-util-team-num');
+        if (inp && inp.value.trim()) _mobLastLookupTeam = inp.value.trim();
+    }
+    header.querySelectorAll('.mob-util-tab').forEach(b => b.classList.toggle('active', b.dataset.pane === pane));
+    body.innerHTML = '';
+    if (pane === 'lookup') _buildMobLookup(body);
+    else if (pane === 'h2h') _buildMobH2H(body);
+}
+
+function _switchMobHistoryTab(pane) {
+    const header = document.getElementById('mob-util-header');
+    const body = document.getElementById('mob-util-body');
+    if (!header || !body) return;
+    header.querySelectorAll('.mob-util-tab').forEach(b => b.classList.toggle('active', b.dataset.pane === pane));
+    body.innerHTML = '';
+    if (pane === 'region') _buildMobHistoryRegion(body);
+    else if (pane === 'event') _buildMobHistoryEvent(body);
+}
+
+async function _buildMobHistoryRegion(container) {
+    if (!regionData && !historyData) {
+        container.innerHTML = '<div class="mob-util-lookup-empty">Loading\u2026</div>';
+        try {
+            const [r, h] = await Promise.all([
+                eventRegion ? API.regionFacts(eventRegion).catch(() => null) : Promise.resolve(null),
+                currentEvent ? API.eventHistory(currentEvent).catch(() => null) : Promise.resolve(null),
+            ]);
+            regionData = r; historyData = h;
+        } catch (e) {}
+    }
+    const data = regionData;
+    if (!data) { container.innerHTML = '<div class="mob-util-lookup-empty">No region data available.</div>'; return; }
+
+    let html = `<div class="mob-hist-title">${_esc(eventRegion || 'Region')}</div>`;
+    html += '<div class="mob-hist-stats">';
+    html += `<div class="mob-hist-stat"><span class="mob-hist-val">${data.first_event_year || '\u2013'}</span><span class="mob-hist-lbl">First Event</span></div>`;
+    html += `<div class="mob-hist-stat"><span class="mob-hist-val">${data.total_events}</span><span class="mob-hist-lbl">Total Events</span></div>`;
+    const tc = data.official_team_count || data.current_season_teams || data.team_count;
+    html += `<div class="mob-hist-stat"><span class="mob-hist-val">${tc}</span><span class="mob-hist-lbl">Active Teams</span></div>`;
+    html += `<div class="mob-hist-stat"><span class="mob-hist-val">${data.hof_count}</span><span class="mob-hist-lbl">Hall of Fame</span></div>`;
+    html += `<div class="mob-hist-stat"><span class="mob-hist-val">${data.einstein_count}</span><span class="mob-hist-lbl">Einstein</span></div>`;
+    html += '</div>';
+
+    if (data.hof_teams && data.hof_teams.length) {
+        html += '<div class="mob-hist-section"><span class="mob-hist-sec-title">Hall of Fame</span>';
+        html += data.hof_teams.map(t => `<span class="mob-hist-chip hof-chip">${t.team_number} ${_esc(t.nickname)} <em>${t.years.join(', ')}</em></span>`).join('');
+        html += '</div>';
+    }
+    if (data.impact_finalists && data.impact_finalists.length) {
+        html += '<div class="mob-hist-section"><span class="mob-hist-sec-title">Impact Finalists</span>';
+        html += data.impact_finalists.map(t => `<span class="mob-hist-chip impact-chip">${t.team_number} ${_esc(t.nickname)} <em>${t.years.join(', ')}</em></span>`).join('');
+        html += '</div>';
+    }
+    if (data.einstein_teams && data.einstein_teams.length) {
+        html += '<div class="mob-hist-section"><span class="mob-hist-sec-title">Einstein Appearances</span>';
+        html += '<div class="mob-hist-table"><table><thead><tr><th>#</th><th>Team</th><th>Apps</th></tr></thead><tbody>';
+        data.einstein_teams.slice(0, 10).forEach(t => {
+            html += `<tr><td>${t.team_number}</td><td>${_esc(t.nickname)}</td><td>${t.years.length}</td></tr>`;
+        });
+        html += '</tbody></table></div></div>';
+    }
+    container.innerHTML = html;
+}
+
+async function _buildMobHistoryEvent(container) {
+    if (!historyData && !regionData) {
+        container.innerHTML = '<div class="mob-util-lookup-empty">Loading\u2026</div>';
+        try {
+            const [r, h] = await Promise.all([
+                eventRegion ? API.regionFacts(eventRegion).catch(() => null) : Promise.resolve(null),
+                currentEvent ? API.eventHistory(currentEvent).catch(() => null) : Promise.resolve(null),
+            ]);
+            regionData = r; historyData = h;
+        } catch (e) {}
+    }
+    const data = historyData;
+    if (!data) { container.innerHTML = '<div class="mob-util-lookup-empty">No event history available.</div>'; return; }
+
+    let html = `<div class="mob-hist-title">${_esc(data.event_name || 'Event')}</div>`;
+    html += '<div class="mob-hist-stats">';
+    html += `<div class="mob-hist-stat"><span class="mob-hist-val">${data.first_held}</span><span class="mob-hist-lbl">First Held</span></div>`;
+    html += `<div class="mob-hist-stat"><span class="mob-hist-val">${data.editions}</span><span class="mob-hist-lbl">Editions</span></div>`;
+    html += '</div>';
+
+    const boards = [
+        { title: 'Most Wins', data: data.most_wins },
+        { title: 'Most Finalists', data: data.most_finalists },
+        { title: 'Most Impact', data: data.most_impact },
+    ];
+    for (const b of boards) {
+        if (!b.data || !b.data.length) continue;
+        html += `<div class="mob-hist-section"><span class="mob-hist-sec-title">${b.title}</span>`;
+        html += '<ol class="mob-hist-lb">';
+        b.data.forEach(t => { html += `<li><span>${t.team_number}</span> <span class="mob-hist-lbl">${_esc(t.nickname)}</span> <b>${t.count}</b></li>`; });
+        html += '</ol></div>';
+    }
+
+    if (data.timeline && data.timeline.length) {
+        html += '<div class="mob-hist-section"><span class="mob-hist-sec-title">Year-by-Year</span>';
+        html += '<div class="mob-hist-table"><table><thead><tr><th>Year</th><th>Winners</th><th>Finalists</th></tr></thead><tbody>';
+        data.timeline.forEach(yr => {
+            const w = (yr.winners || []).map(t => t.team_number).join(', ') || '\u2013';
+            const f = (yr.finalists || []).map(t => t.team_number).join(', ') || '\u2013';
+            html += `<tr><td>${yr.year}</td><td>${w}</td><td>${f}</td></tr>`;
+        });
+        html += '</tbody></table></div></div>';
+    }
+    container.innerHTML = html;
+}
+
+function closeMobUtilPanel() {
+    const scrim = document.getElementById('mob-util-scrim');
+    const panel = document.getElementById('mob-util-panel');
+    if (scrim) scrim.classList.remove('open');
+    if (panel) {
+        panel.classList.remove('open');
+        setTimeout(() => { if (!panel.classList.contains('open')) panel.style.display = ''; }, 220);
+    }
+    _mobUtilMode = null;
+}
+
+/* Settings panel content */
+function _buildMobSettings(container) {
+    const toggles = [
+        { id: 'toggle-theme', label: 'Light mode', fn: 'toggleTheme' },
+        { id: 'toggle-highlight-foreign', label: 'Highlight International Teams', fn: 'toggleHighlightForeign' },
+        { id: 'toggle-highlight-rookie', label: 'Highlight Rookie Teams', fn: 'toggleHighlightRookie' },
+        { id: 'toggle-offseason', label: 'Show Offseason Events', fn: 'toggleShowOffseason' },
+        { id: 'toggle-pbp-awards', label: 'Show Awards in Play by Play', fn: 'togglePbpAwards' },
+        { id: 'toggle-predictions', label: 'Show Win Predictions (Statbotics)', fn: 'toggleShowPredictions' },
+        { id: 'toggle-gatool-sponsors', label: 'Show Sponsors (GATool) (Legacy)', fn: 'toggleGatoolSponsors' },
+        { id: 'toggle-world-record', label: 'Show Season High Score', fn: 'toggleWorldRecord' },
+    ];
+    toggles.forEach(t => {
+        const orig = document.getElementById(t.id);
+        const checked = orig ? orig.checked : false;
+        const lbl = document.createElement('label');
+        lbl.className = 'settings-toggle';
+        lbl.innerHTML = `<input type="checkbox" ${checked ? 'checked' : ''} onchange="${t.fn}(this.checked); var o=document.getElementById('${t.id}'); if(o) o.checked=this.checked;"><span class="toggle-slider"></span><span class="toggle-label">${t.label}</span>`;
+        container.appendChild(lbl);
+    });
+}
+
+/* Lookup panel content */
+let _mobLastLookupTeam = '';
+function _buildMobLookup(container) {
+    const search = document.createElement('div');
+    search.className = 'mob-util-lookup-search';
+    search.innerHTML = `<input type="text" id="mob-util-team-num" placeholder="Team #" inputmode="numeric" autocomplete="off"><input type="text" id="mob-util-team-year" placeholder="Year" style="max-width:70px" autocomplete="off"><button onclick="_mobUtilLookupTeam()">Go</button>`;
+    container.appendChild(search);
+
+    const body = document.createElement('div');
+    body.className = 'mob-util-lookup-body';
+    body.id = 'mob-util-lookup-result';
+    body.innerHTML = '<div class="mob-util-lookup-empty">Enter a team number to get started</div>';
+    container.appendChild(body);
+
+    // Enter key handler
+    setTimeout(() => {
+        const inp = document.getElementById('mob-util-team-num');
+        if (inp) {
+            inp.focus();
+            inp.addEventListener('keydown', e => { if (e.key === 'Enter') _mobUtilLookupTeam(); });
+        }
+        const yinp = document.getElementById('mob-util-team-year');
+        if (yinp) yinp.addEventListener('keydown', e => { if (e.key === 'Enter') _mobUtilLookupTeam(); });
+    }, 50);
+}
+
+async function _mobUtilLookupTeam() {
+    const numEl = document.getElementById('mob-util-team-num');
+    const yearEl = document.getElementById('mob-util-team-year');
+    const result = document.getElementById('mob-util-lookup-result');
+    if (!numEl || !result) return;
+    const num = parseInt(numEl.value, 10);
+    const year = yearEl ? yearEl.value.trim() || null : null;
+    if (!num) return;
+    _mobLastLookupTeam = String(num);
+
+    result.innerHTML = '<div class="mob-util-lookup-empty">Loading\u2026</div>';
+    try {
+        if (typeof isFTCMode === 'function' && isFTCMode()) {
+            const data = await _buildFtcTeamLookup(num, year);
+            result.innerHTML = renderFtcTeamStats(data);
+        } else {
+            const data = await API.teamStats(num, year);
+            result.innerHTML = renderTeamStats(data);
+        }
+    } catch (err) {
+        result.innerHTML = '<div class="mob-util-lookup-empty">' + err.message + '</div>';
+    }
+}
+
+/* Editor panel content — opens the full editor overlay from inside the panel */
+function _buildMobEditor(container) {
+    container.innerHTML = '<div class="mob-util-lookup-empty">Select a team from the rankings or match tables first, then tap TIMS Editor.</div>';
+    // If a team is already selected in the compare bar, offer to edit it
+    const sel = document.querySelector('#compare-bar .compare-bar-team');
+    if (sel) {
+        const teamNum = sel.dataset.team;
+        if (teamNum) {
+            container.innerHTML = `<div style="text-align:center;padding:1rem 0"><p style="color:var(--text-muted);margin-bottom:.75rem;font-size:.82rem">Open editor for selected team:</p><button onclick="closeMobUtilPanel(); openEditor(${parseInt(teamNum,10)})" style="background:var(--primary);color:#fff;border:none;border-radius:10px;padding:.5rem 1.2rem;font-weight:600;font-family:var(--font);cursor:pointer">#${parseInt(teamNum,10)} — Edit</button></div>`;
+        }
+    }
+}
+
+/* H2H panel content */
+function _buildMobH2H(container) {
+    const row = document.createElement('div');
+    row.className = 'mob-util-lookup-search';
+    row.innerHTML = `<input type="text" id="mob-util-h2h-a" placeholder="Team A" inputmode="numeric" autocomplete="off"><span style="color:var(--text-muted);font-size:.75rem;align-self:center">vs</span><input type="text" id="mob-util-h2h-b" placeholder="Team B" inputmode="numeric" autocomplete="off"><button onclick="_mobUtilH2H()">Go</button>`;
+    container.appendChild(row);
+
+    const toggle = document.createElement('label');
+    toggle.className = 'pbp-conn-range-toggle';
+    toggle.style.cssText = 'margin:.4rem 0 .5rem;font-size:.72rem';
+    toggle.innerHTML = `<span class="conn-range-side h2h-range-side active">Past 3 Seasons</span><input type="checkbox" id="mob-h2h-all-time"><span class="conn-toggle-slider"></span><span class="conn-range-side h2h-range-side">All time</span>`;
+    container.appendChild(toggle);
+
+    const body = document.createElement('div');
+    body.className = 'mob-util-lookup-body';
+    body.id = 'mob-util-h2h-result';
+    body.innerHTML = '<div class="mob-util-lookup-empty">Enter two team numbers</div>';
+    container.appendChild(body);
+
+    setTimeout(() => {
+        const a = document.getElementById('mob-util-h2h-a');
+        if (a) {
+            if (_mobLastLookupTeam) a.value = _mobLastLookupTeam;
+            const b = document.getElementById('mob-util-h2h-b');
+            if (_mobLastLookupTeam && b) b.focus();
+            else a.focus();
+            a.addEventListener('keydown', e => { if (e.key === 'Enter') _mobUtilH2H(); });
+            if (b) b.addEventListener('keydown', e => { if (e.key === 'Enter') _mobUtilH2H(); });
+        }
+    }, 50);
+}
+
+async function _mobUtilH2H() {
+    const aEl = document.getElementById('mob-util-h2h-a');
+    const bEl = document.getElementById('mob-util-h2h-b');
+    const result = document.getElementById('mob-util-h2h-result');
+    const allTime = document.getElementById('mob-h2h-all-time');
+    if (!aEl || !bEl || !result) return;
+    const a = parseInt(aEl.value, 10);
+    const b = parseInt(bEl.value, 10);
+    if (!a || !b) return;
+
+    result.innerHTML = '<div class="mob-util-lookup-empty">Loading\u2026</div>';
+    try {
+        const data = await getActiveAPI().headToHead(a, b, null, allTime && allTime.checked);
+        result.innerHTML = typeof renderH2H === 'function' ? renderH2H(data) : JSON.stringify(data);
+    } catch (err) {
+        result.innerHTML = '<div class="mob-util-lookup-empty">' + err.message + '</div>';
+    }
+}
+
+/* Match picker panel content */
+function _buildMobMatchPicker(container) {
+    if (!pbpData || !pbpData.matches) {
+        container.innerHTML = '<div class="mob-util-lookup-empty">No matches loaded</div>';
+        return;
+    }
+    const list = document.createElement('div');
+    list.className = 'mob-match-picker-list';
+    pbpData.matches.forEach((m, i) => {
+        const btn = document.createElement('button');
+        btn.className = 'mob-match-picker-item' + (i === pbpIndex ? ' active' : '');
+        btn.textContent = m?._pbpLabel || (m?.label || 'Match ' + (i+1)).replace(/^Qualification\s*/i, 'Qual ');
+        btn.onclick = () => { pbpGoTo(i); closeMobUtilPanel(); };
+        list.appendChild(btn);
+    });
+    container.appendChild(list);
+    // Scroll active into view
+    requestAnimationFrame(() => {
+        const active = list.querySelector('.active');
+        if (active) active.scrollIntoView({ block: 'center', behavior: 'instant' });
+    });
+}
+
+/* Render match history into mob-util panel */
+function _renderMobMatchHistory(container, perf, teamNum, nick) {
+    if (!perf || perf.matches_played === 0) {
+        container.innerHTML = '<div class="mob-util-lookup-empty">No matches played yet.</div>';
+        return;
+    }
+    const rec = perf.record;
+    const winPct = perf.matches_played > 0 ? Math.round((rec.wins / perf.matches_played) * 100) : 0;
+    let html = `<div class="mob-mh-title">${teamNum}${nick ? ' \u2014 ' + nick : ''}</div>`;
+    html += `<div class="mob-mh-stats">
+        <div class="mob-mh-stat"><span class="mob-mh-val">${rec.wins}-${rec.losses}${rec.ties ? '-' + rec.ties : ''}</span><span class="mob-mh-lbl">Record</span></div>
+        <div class="mob-mh-stat"><span class="mob-mh-val">${winPct}%</span><span class="mob-mh-lbl">Win Rate</span></div>
+        <div class="mob-mh-stat"><span class="mob-mh-val">${perf.matches_played}</span><span class="mob-mh-lbl">Matches</span></div>
+        <div class="mob-mh-stat"><span class="mob-mh-val">${perf.avg_alliance_score}</span><span class="mob-mh-lbl">Avg Pts</span></div>
+    </div>`;
+
+    const nickLookup = {};
+    if (teamsData) { for (const t of teamsData) nickLookup[t.team_number] = formatTeamName(t.nickname) || ''; }
+
+    if (perf.matches && perf.matches.length) {
+        html += '<div class="mob-mh-matches">';
+        for (const pm of perf.matches) {
+            const desc = (pm.description || '').replace(/Qualification\s*/gi, 'Qual ');
+            const colorCls = pm.allianceColor === 'Red' ? 'mh-color-red' : 'mh-color-blue';
+            const allyCls = pm.allianceColor === 'Red' ? 'mh-ally-red' : 'mh-ally-blue';
+            const oppCls = pm.allianceColor === 'Red' ? 'mh-ally-blue' : 'mh-ally-red';
+            // Determine winner for bold + underline alliance score
+            const allyWon = pm.result === 'Won';
+            const oppWon = pm.result === 'Lost';
+            const allyScoreClass = 'mob-mh-sc ' + allyCls + (allyWon ? ' mob-mh-sc-win' : '') + ' mob-mh-sc-ally';
+            const oppScoreClass = 'mob-mh-sc ' + oppCls + (oppWon ? ' mob-mh-sc-win' : '');
+            const allyScore = pm.allianceScore != null ? pm.allianceScore : '\u2013';
+            const oppScore = pm.opponentScore != null ? pm.opponentScore : '\u2013';
+            const allies = (pm.allianceTeams || []).map(n =>
+                `<span class="mob-mh-team ${allyCls}" onclick="_mobMhLookup(${n})">${n}</span>`).join(' ');
+            const opps = (pm.opponentTeams || []).map(n =>
+                `<span class="mob-mh-team ${oppCls}" onclick="_mobMhLookup(${n})">${n}</span>`).join(' ');
+            html += `<div class="mob-mh-row">
+                <div class="mob-mh-row-left">
+                    <span class="mob-mh-desc">${desc}</span>
+                    <span class="mh-alliance-dot ${colorCls}"></span>
+                    <span class="result-badge result-${pm.result}">${pm.result}</span>
+                    <span class="${allyScoreClass}">${allyScore}</span><span class="mob-mh-sc-dash">\u2013</span><span class="${oppScoreClass}">${oppScore}</span>
+                </div>
+                <div class="mob-mh-row-teams"><span class="${allyCls}">${allies}</span> <span class="mob-mh-vs">vs</span> <span class="${oppCls}">${opps}</span></div>
+            </div>`;
+        }
+        html += '</div>';
+    }
+    container.innerHTML = html;
+}
+
+/* Lookup from inside mob match history panel */
+function _mobMhLookup(teamNum) {
+    closeMobUtilPanel();
+    setTimeout(() => {
+        openMobUtilPanel('lookup');
+        setTimeout(() => {
+            const inp = document.getElementById('mob-util-team-num');
+            if (inp) { inp.value = teamNum; _mobUtilLookupTeam(); }
+        }, 60);
+    }, 250);
+}
+
+/** Swipe gesture on PbP pill — left/right swipe switches match */
+(function initPbpPillSwipe() {
+    let startX = 0, startY = 0, swiping = false;
+    const THRESHOLD = 40;
+
+    document.addEventListener('touchstart', function(e) {
+        const wrap = e.target.closest('.mob-pbp-label-wrap');
+        if (!wrap) return;
+        startX = e.touches[0].clientX;
+        startY = e.touches[0].clientY;
+        swiping = true;
+    }, { passive: true });
+
+    document.addEventListener('touchend', function(e) {
+        if (!swiping) return;
+        swiping = false;
+        const dx = e.changedTouches[0].clientX - startX;
+        const dy = e.changedTouches[0].clientY - startY;
+        if (Math.abs(dx) < THRESHOLD || Math.abs(dy) > Math.abs(dx)) return;
+
+        // Prevent the tap/click from also firing
+        e.preventDefault();
+
+        const lbl = document.getElementById('mob-pbp-label');
+        const dir = dx < 0 ? 'left' : 'right';
+
+        // Slide out
+        if (lbl) lbl.classList.add('slide-' + dir);
+        setTimeout(() => {
+            if (dir === 'left') pbpNext(); else pbpPrev();
+            if (lbl) {
+                lbl.classList.remove('slide-' + dir);
+                lbl.classList.add('slide-' + (dir === 'left' ? 'right' : 'left'));
+                // Force reflow then slide in
+                void lbl.offsetWidth;
+                lbl.classList.remove('slide-left', 'slide-right');
+            }
+        }, 180);
+    });
+})();
 
 function toggleMobileMore() {
     const panel = document.getElementById('mob-more-menu');
@@ -9586,13 +10282,26 @@ function renderTeamCards(teams) {
     const school = rankingsShowSchool;
     const ftcMode = isFTCMode();
     const autoTele = ftcMode && rankingsShowAutoTele;
+    const viewToggle = `<button class="rankings-view-toggle" onclick="toggleRankingsView()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        ${rankingsCardView ? 'Table View' : 'Card View'}
+    </button>`;
     const toolbar = `<div class="rankings-toolbar">
         <label class="toggle-label"><input type="checkbox" ${compact ? 'checked' : ''} onchange="toggleRankingsCompact(this.checked)"> Compact</label>
         <label class="toggle-label school-toggle"><input type="checkbox" ${school ? 'checked' : ''} onchange="toggleRankingsSchool(this.checked)"> School / Org</label>
         ${ftcMode ? `<label class="toggle-label"><input type="checkbox" ${autoTele ? 'checked' : ''} onchange="toggleRankingsAutoTele(this.checked)"> Auto / TeleOp</label>` : ''}
+        ${viewToggle}
     </div>`;
 
     if (!rankingsCardView) return toolbar;
+
+    // Compute OPR/EPA percentiles for color grading
+    const allOPRs = teams.map(t => parseFloat(t.opr)).filter(v => !isNaN(v)).sort((a, b) => a - b);
+    const avgOPR = allOPRs.length ? allOPRs.reduce((s, v) => s + v, 0) / allOPRs.length : 0;
+    const p75OPR = allOPRs.length ? allOPRs[Math.floor(allOPRs.length * 0.75)] : 0;
+    const allEPAs = teams.map(t => parseFloat(t.epa)).filter(v => !isNaN(v)).sort((a, b) => a - b);
+    const avgEPA = allEPAs.length ? allEPAs.reduce((s, v) => s + v, 0) / allEPAs.length : 0;
+    const p75EPA = allEPAs.length ? allEPAs[Math.floor(allEPAs.length * 0.75)] : 0;
 
     const cards = teams.map(t => {
         const name = formatTeamName(t.nickname);
@@ -9601,6 +10310,10 @@ function renderTeamCards(teams) {
             : `<span class="rank-card-avatar-placeholder">${t.team_number}</span>`;
         const isIntl = highlightForeign && t.country && eventCountry && t.country !== eventCountry;
         const isRookie = highlightRookie && t.rookie_year && currentEventYear && t.rookie_year >= currentEventYear;
+        const oprVal = parseFloat(t.opr);
+        const oprCls = !isNaN(oprVal) && oprVal >= p75OPR ? ' opr-top25' : (!isNaN(oprVal) && oprVal > avgOPR ? ' opr-above-avg' : '');
+        const epaVal = parseFloat(t.epa);
+        const epaCls = !isNaN(epaVal) && epaVal >= p75EPA ? ' epa-top25' : (!isNaN(epaVal) && epaVal > avgEPA ? ' epa-above-avg' : '');
 
         return `<div class="rank-card${isIntl ? ' foreign-team-row' : ''}${isRookie ? ' rookie-team-row' : ''}" data-team-key="${t.team_key}" onclick="floatLookupQuick(${t.team_number})">
             <div class="rank-card-top">
@@ -9613,10 +10326,10 @@ function renderTeamCards(teams) {
             </div>
             <div class="rank-card-stats">
                 <div class="rank-card-stat"><div class="rank-card-stat-val">${t.wins}-${t.losses}-${t.ties}</div><div class="rank-card-stat-label">W-L-T</div></div>
-                <div class="rank-card-stat"><div class="rank-card-stat-val">${t.opr}</div><div class="rank-card-stat-label">OPR</div></div>
+                <div class="rank-card-stat"><div class="rank-card-stat-val stat-opr${oprCls}">${t.opr}</div><div class="rank-card-stat-label">OPR</div></div>
                 ${autoTele ? `<div class="rank-card-stat"><div class="rank-card-stat-val">${t.opr_auto != null ? Number(t.opr_auto).toFixed(1) : '\u2013'}</div><div class="rank-card-stat-label">Auto</div></div>` : ''}
                 ${autoTele ? `<div class="rank-card-stat"><div class="rank-card-stat-val">${t.opr_dc != null ? Number(t.opr_dc).toFixed(1) : '\u2013'}</div><div class="rank-card-stat-label">TeleOp</div></div>` : ''}
-                ${ftcMode ? '' : `<div class="rank-card-stat"><div class="rank-card-stat-val">${t.epa != null ? t.epa : '\u2013'}</div><div class="rank-card-stat-label">EPA</div></div>`}
+                ${ftcMode ? '' : `<div class="rank-card-stat"><div class="rank-card-stat-val stat-epa${epaCls}">${t.epa != null ? t.epa : '\u2013'}</div><div class="rank-card-stat-label">EPA</div></div>`}
                 ${ftcMode ? '' : `<div class="rank-card-stat"><div class="rank-card-stat-val">${t.ranking_points != null ? t.ranking_points : '\u2013'}</div><div class="rank-card-stat-label">RP</div></div>`}
             </div>
         </div>`;

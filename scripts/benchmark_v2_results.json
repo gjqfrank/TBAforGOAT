@@ -3,71 +3,71 @@
     "label": "snapshot:cold-miss",
     "path": "/api/events/2025tuhc/snapshot",
     "status": 200,
-    "time_s": 0.05834851600047841,
-    "size_kb": 488.111328125,
+    "time_s": 10.886080014000981,
+    "size_kb": 488.08203125,
     "ok": true
   },
   {
     "label": "snapshot:warm-cache",
     "path": "/api/events/2025tuhc/snapshot",
     "status": 200,
-    "time_s": 0.051616501001262804,
-    "size_kb": 488.1103515625,
+    "time_s": 0.04545231800148031,
+    "size_kb": 488.0810546875,
     "ok": true
   },
   {
     "label": "snapshot:cache-hit-1",
     "path": "/api/events/2025tuhc/snapshot",
     "status": 200,
-    "time_s": 0.044795150999561884,
-    "size_kb": 488.1103515625,
+    "time_s": 0.041291366000223206,
+    "size_kb": 488.0810546875,
     "ok": true
   },
   {
     "label": "snapshot:cache-hit-2",
     "path": "/api/events/2025tuhc/snapshot",
     "status": 200,
-    "time_s": 0.041266095999162644,
-    "size_kb": 488.1103515625,
+    "time_s": 0.06674857500001963,
+    "size_kb": 488.0810546875,
     "ok": true
   },
   {
     "label": "snapshot:cache-hit-3",
     "path": "/api/events/2025tuhc/snapshot",
     "status": 200,
-    "time_s": 0.039168836001408636,
-    "size_kb": 488.1103515625,
+    "time_s": 0.0880413069990027,
+    "size_kb": 488.0810546875,
     "ok": true
   },
   {
     "label": "snapshot:cache-hit-4",
     "path": "/api/events/2025tuhc/snapshot",
     "status": 200,
-    "time_s": 0.04171558500092942,
-    "size_kb": 488.1103515625,
+    "time_s": 0.05245686300077068,
+    "size_kb": 488.0810546875,
     "ok": true
   },
   {
     "label": "snapshot:cache-hit-5",
     "path": "/api/events/2025tuhc/snapshot",
     "status": 200,
-    "time_s": 0.04044539400092617,
-    "size_kb": 488.1103515625,
+    "time_s": 0.04417976800141332,
+    "size_kb": 488.0810546875,
     "ok": true
   },
   {
     "label": "individual:event-info",
     "path": "/api/events/2025tuhc/info",
     "status": 200,
-    "time_s": 0.003326390999063733,
-    "size_kb": 0.2451171875,
+    "time_s": 0.05065332999947714,
+    "size_kb": 0.2158203125,
     "ok": true
   },
   {
     "label": "individual:event-teams",
     "path": "/api/events/2025tuhc/teams",
     "status": 200,
-    "time_s": 0.00806724399990344,
+    "time_s": 0.09025104600004852,
     "size_kb": 130.0390625,
     "ok": true
   },
@@ -75,7 +75,7 @@
     "label": "individual:all-matches",
     "path": "/api/matches/2025tuhc/all",
     "status": 200,
-    "time_s": 0.029121251998731168,
+    "time_s": 0.03173387100105174,
     "size_kb": 216.353515625,
     "ok": true
   },
@@ -83,7 +83,7 @@
     "label": "individual:playoff-matches",
     "path": "/api/matches/2025tuhc/playoffs",
     "status": 200,
-    "time_s": 0.009653171999161714,
+    "time_s": 0.013183019000280183,
     "size_kb": 64.7431640625,
     "ok": true
   },
@@ -91,7 +91,7 @@
     "label": "individual:alliances",
     "path": "/api/alliances/2025tuhc",
     "status": 200,
-    "time_s": 0.006090924998716218,
+    "time_s": 0.0735283600006369,
     "size_kb": 75.1337890625,
     "ok": true
   },
@@ -99,23 +99,23 @@
     "label": "individual:total-sequential",
     "path": "sum",
     "status": 200,
-    "time_s": 0.05628311600048619,
-    "size_kb": 486.5146484375,
+    "time_s": 0.2593943820011191,
+    "size_kb": 486.4853515625,
     "ok": true
   },
   {
     "label": "parallel:event-info",
     "path": "/api/events/2025tuhc/info",
     "status": 200,
-    "time_s": 0.0035178519992768997,
-    "size_kb": 0.2451171875,
+    "time_s": 0.11215317799906188,
+    "size_kb": 0.2158203125,
     "ok": true
   },
   {
     "label": "parallel:event-teams",
     "path": "/api/events/2025tuhc/teams",
     "status": 200,
-    "time_s": 0.052955455999835976,
+    "time_s": 0.19784942300066177,
     "size_kb": 130.0390625,
     "ok": true
   },
@@ -123,7 +123,7 @@
     "label": "parallel:all-matches",
     "path": "/api/matches/2025tuhc/all",
     "status": 200,
-    "time_s": 0.051840002999597345,
+    "time_s": 0.10680721899916534,
     "size_kb": 216.353515625,
     "ok": true
   },
@@ -131,7 +131,7 @@
     "label": "parallel:playoff-matches",
     "path": "/api/matches/2025tuhc/playoffs",
     "status": 200,
-    "time_s": 0.052400706001208164,
+    "time_s": 0.10954938500071876,
     "size_kb": 64.7431640625,
     "ok": true
   },
@@ -139,7 +139,7 @@
     "label": "parallel:alliances",
     "path": "/api/alliances/2025tuhc",
     "status": 200,
-    "time_s": 0.05508927199844038,
+    "time_s": 0.15744053500020527,
     "size_kb": 75.1337890625,
     "ok": true
   },
@@ -147,15 +147,15 @@
     "label": "individual:total-parallel",
     "path": "gather",
     "status": 200,
-    "time_s": 0.055705849999867496,
-    "size_kb": 486.5146484375,
+    "time_s": 0.19831680599963875,
+    "size_kb": 486.4853515625,
     "ok": true
   },
   {
     "label": "summary:cold",
     "path": "/api/events/2025tuhc/summary",
     "status": 200,
-    "time_s": 0.0023023220001050504,
+    "time_s": 0.002553611999246641,
     "size_kb": 1.470703125,
     "ok": true
   },
@@ -163,7 +163,7 @@
     "label": "summary:warm",
     "path": "/api/events/2025tuhc/summary",
     "status": 200,
-    "time_s": 0.0020584300000336953,
+    "time_s": 0.002432686000247486,
     "size_kb": 1.470703125,
     "ok": true
   },
@@ -171,7 +171,7 @@
     "label": "summary:awards",
     "path": "/api/events/2025tuhc/summary/awards",
     "status": 200,
-    "time_s": 0.0021502050003618933,
+    "time_s": 4.69057852700098,
     "size_kb": 1.5224609375,
     "ok": true
   },
@@ -179,7 +179,7 @@
     "label": "summary:refresh-stats",
     "path": "/api/events/2025tuhc/summary/refresh-stats",
     "status": 200,
-    "time_s": 0.5713599659993633,
+    "time_s": 0.028268081001442624,
     "size_kb": 0.98046875,
     "ok": true
   },
@@ -187,15 +187,15 @@
     "label": "summary:advancement",
     "path": "/api/events/2025tuhc/summary/advancement",
     "status": 200,
-    "time_s": 0.002942821000033291,
-    "size_kb": 7.5224609375,
+    "time_s": 0.34947849699892686,
+    "size_kb": 7.546875,
     "ok": true
   },
   {
     "label": "team:stats-cold",
     "path": "/api/teams/7672/stats?year=2025",
     "status": 200,
-    "time_s": 0.002185402001487091,
+    "time_s": 0.5605026269986411,
     "size_kb": 5.13671875,
     "ok": true
   },
@@ -203,7 +203,7 @@
     "label": "team:stats-warm",
     "path": "/api/teams/7672/stats?year=2025",
     "status": 200,
-    "time_s": 0.001940831998581416,
+    "time_s": 0.006431791000068188,
     "size_kb": 5.13671875,
     "ok": true
   },
@@ -211,7 +211,7 @@
     "label": "team:h2h-cold",
     "path": "/api/teams/head-to-head/7672/8562?year=2025",
     "status": 200,
-    "time_s": 0.0023446819996024715,
+    "time_s": 1.1430104120008764,
     "size_kb": 0.2314453125,
     "ok": true
   },
@@ -219,7 +219,7 @@
     "label": "team:h2h-warm",
     "path": "/api/teams/head-to-head/7672/8562?year=2025",
     "status": 200,
-    "time_s": 0.0025434439994569402,
+    "time_s": 0.0025044540016097017,
     "size_kb": 0.2314453125,
     "ok": true
   },
@@ -227,7 +227,7 @@
     "label": "team:compare",
     "path": "/api/events/2025tuhc/compare?teams=frc7672,frc8562",
     "status": 200,
-    "time_s": 0.002259598999444279,
+    "time_s": 0.3823461779993522,
     "size_kb": 0.6357421875,
     "ok": true
   },
@@ -235,23 +235,23 @@
     "label": "misc:world-record",
     "path": "/api/events/world-record",
     "status": 200,
-    "time_s": 0.001667721000558231,
-    "size_kb": 0.130859375,
+    "time_s": 11.008016515001145,
+    "size_kb": 0.140625,
     "ok": true
   },
   {
     "label": "misc:season-high-scores",
     "path": "/api/events/season-high-scores?year=2025",
     "status": 200,
-    "time_s": 0.002081619000819046,
-    "size_kb": 2.298828125,
+    "time_s": 3.188445060999584,
+    "size_kb": 2.2998046875,
     "ok": true
   },
   {
     "label": "misc:fast-rankings",
     "path": "/api/events/2025tuhc/fast-rankings",
     "status": 200,
-    "time_s": 0.13445055299962405,
+    "time_s": 2.055503593999674,
     "size_kb": 5.1201171875,
     "ok": true
   },
@@ -259,7 +259,7 @@
     "label": "misc:fast-scores",
     "path": "/api/matches/2025tuhc/scores",
     "status": 200,
-    "time_s": 0.301443186999677,
+    "time_s": 0.8923961640011839,
     "size_kb": 7.2177734375,
     "ok": true
   }

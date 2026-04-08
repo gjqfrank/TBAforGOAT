@@ -23,6 +23,7 @@
      getMatchesByEvent(eventKey)    — query matches via index
      getNotesByTarget(targetKey)    — query notes via target_key index
      getOverridesByTeam(teamKey)    — query tims_overrides via team_key index
+     putOverride(record)            — upsert a single tims_overrides record
      generateLocalId()              — crypto.randomUUID() helper
      cacheTab(eventKey, tab, data)  — store a tab's raw JSON payload
      getCachedTab(eventKey, tab)    — retrieve a single cached tab
@@ -143,6 +144,17 @@ const DB = (() => {
             const req   = index.getAll(teamKey);
 
             req.onsuccess = () => resolve(req.result || []);
+            req.onerror   = () => reject(req.error);
+        });
+    }
+
+    // ── putOverride ────────────────────────────────────────
+    async function putOverride(record) {
+        const db = await initDB();
+        return new Promise((resolve, reject) => {
+            const tx  = db.transaction('tims_overrides', 'readwrite');
+            const req = tx.objectStore('tims_overrides').put(record);
+            req.onsuccess = () => resolve(req.result);
             req.onerror   = () => reject(req.error);
         });
     }
@@ -276,6 +288,7 @@ const DB = (() => {
         getMatchesByEvent,
         getNotesByTarget,
         getOverridesByTeam,
+        putOverride,
         generateLocalId,
         cacheTab,
         getCachedTab,

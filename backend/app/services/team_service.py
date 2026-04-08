@@ -6,6 +6,7 @@ from datetime import date
 from typing import Optional
 from .tba_client import get_tba_client
 from .frc_client import get_frc_client
+from .supabase_client import read_frc_playoff_matches
 
 
 COMP_LEVEL_ORDER = {"qm": 0, "ef": 1, "qf": 2, "sf": 3, "f": 4}
@@ -117,8 +118,8 @@ async def get_team_stats(team_number: int, year: Optional[int] = None) -> dict:
 
     statuses = await _safe(client.get_team_events_statuses(team_key, year)) or {}
 
-    # Pre-fetch playoff matches from FRC API for double-elim events
-    # where the team made playoffs — lighter than TBA full match data
+    # Pre-fetch playoff matches for double-elim events.
+    # Supabase first (match_poller stores raw FRC data), FRC API fallback.
     frc = get_frc_client()
     team_num = int(team_key.replace("frc", ""))
     de_event_keys = []
@@ -129,8 +130,21 @@ async def get_team_stats(team_number: int, year: Optional[int] = None) -> dict:
                 de_event_keys.append(ek)
     de_match_map: dict[str, list[dict]] = {}
     if de_event_keys:
+        async def _get_playoff_matches(ek: str):
+            # Try Supabase first
+            try:
+                sb_matches = await read_frc_playoff_matches(ek)
+                if sb_matches:
+                    # Filter to this team's matches
+                    return [m for m in sb_matches
+                            if any(t.get("teamNumber") == team_num for t in m.get("teams", []))]
+            except Exception:
+                pass
+            # Fallback to FRC API
+            return await _safe(frc.get_matches(year, ek[4:].upper(), level="Playoff", team_number=team_num))
+
         de_results = await asyncio.gather(
-            *[_safe(frc.get_matches(year, ek[4:].upper(), level="Playoff", team_number=team_num)) for ek in de_event_keys]
+            *[_get_playoff_matches(ek) for ek in de_event_keys]
         )
         for ek, matches in zip(de_event_keys, de_results):
             if matches:

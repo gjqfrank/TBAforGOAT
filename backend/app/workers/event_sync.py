@@ -14,14 +14,20 @@ import logging
 from datetime import date, timedelta
 
 from ..services.tba_client import get_tba_client
+from ..services.frc_client import get_frc_client
 from ..services.statbotics_client import get_statbotics_client, get_epa_map
-from ..services.supabase_client import upsert_rows
+from ..services.supabase_client import upsert_rows, merge_event_teams
 from ..services.circuit_breaker import CircuitOpenError
 from .match_poller import set_active_events
 
 log = logging.getLogger(__name__)
 
 SYNC_INTERVAL = 120  # seconds between full sweeps
+
+
+def _strip_nulls(d: dict) -> dict:
+    """Remove keys whose value is None so JSONB || won't nuke good data."""
+    return {k: v for k, v in d.items() if v is not None}
 
 
 def _invalidate_snapshot(event_key: str) -> None:
@@ -90,7 +96,7 @@ async def _sync_event_metadata(year: int) -> set[str]:
             "start_date": start or None,
             "end_date": end or None,
             "competition_type": "frc",
-            "raw_data": json.dumps({
+            "raw_data": {
                 "city": ev.get("city", ""),
                 "state_prov": ev.get("state_prov", ""),
                 "country": ev.get("country", ""),
@@ -100,7 +106,7 @@ async def _sync_event_metadata(year: int) -> set[str]:
                 "week": ev.get("week"),
                 "short_name": ev.get("short_name", ""),
                 "status": status,
-            }),
+            },
         })
 
     if rows:
@@ -114,12 +120,12 @@ async def _sync_event_metadata(year: int) -> set[str]:
 
 
 async def _sync_teams_and_oprs(event_key: str) -> None:
-    """Fetch team list + OPRs from TBA for a single event and upsert."""
+    """Fetch full team list + OPRs from TBA for a single event and upsert."""
     tba = get_tba_client()
 
     try:
         teams_raw, oprs_raw = await asyncio.gather(
-            tba.get_event_teams(event_key),
+            tba.get_event_teams_full(event_key),
             tba.get_event_oprs(event_key),
             return_exceptions=True,
         )
@@ -127,7 +133,7 @@ async def _sync_teams_and_oprs(event_key: str) -> None:
         log.debug("Circuit open — skipping team/OPR sync for %s", event_key)
         return
 
-    # ── Teams table ─────────────────────────────────────
+    # ── Teams table (now stores school_name / rookie_year) ──
     if isinstance(teams_raw, list) and teams_raw:
         team_rows = []
         for t in teams_raw:
@@ -136,11 +142,13 @@ async def _sync_teams_and_oprs(event_key: str) -> None:
                 "team_number": t.get("team_number", 0),
                 "nickname": t.get("nickname", ""),
                 "competition_type": "frc",
-                "raw_tims_data": json.dumps({
+                "raw_tims_data": {
                     "city": t.get("city", ""),
                     "state_prov": t.get("state_prov", ""),
                     "country": t.get("country", ""),
-                }),
+                    "school_name": t.get("school_name", ""),
+                    "rookie_year": t.get("rookie_year"),
+                },
             })
 
         try:
@@ -162,19 +170,27 @@ async def _sync_teams_and_oprs(event_key: str) -> None:
             }
 
     if isinstance(teams_raw, list) and teams_raw:
-        et_rows = []
-        for t in teams_raw:
-            tk = t["key"]
-            existing_data = opr_lookup.get(tk, {})
-            et_rows.append({
-                "event_key": event_key,
-                "team_key": tk,
-                "raw_data": json.dumps(existing_data),
-            })
+        # Ensure event_teams rows exist (upsert with empty raw_data for new teams)
+        et_seed = [
+            {"event_key": event_key, "team_key": t["key"], "raw_data": {}}
+            for t in teams_raw
+        ]
         try:
-            await upsert_rows("event_teams", et_rows)
-        except Exception as e:
-            log.warning("Supabase event_teams upsert failed for %s: %s", event_key, e)
+            await upsert_rows("event_teams", et_seed)
+        except Exception:
+            pass
+
+        # Merge OPR data into raw_data (atomic, preserves rankings/EPA)
+        merge_rows = [
+            {"event_key": event_key, "team_key": t["key"],
+             "data": _strip_nulls(opr_lookup.get(t["key"], {}))}
+            for t in teams_raw if opr_lookup.get(t["key"])
+        ]
+        if merge_rows:
+            try:
+                await merge_event_teams(merge_rows)
+            except Exception as e:
+                log.warning("Supabase event_teams OPR merge failed for %s: %s", event_key, e)
 
         _invalidate_snapshot(event_key)
 
@@ -212,7 +228,7 @@ async def _sync_alliances(event_key: str) -> None:
         current_raw["alliances"] = alliances
         await upsert_rows("events", [{
             "event_key": event_key,
-            "raw_data": json.dumps(current_raw),
+            "raw_data": current_raw,
         }])
         log.debug("Stored alliances for %s", event_key)
         _invalidate_snapshot(event_key)
@@ -234,37 +250,164 @@ async def _sync_epa(event_key: str) -> None:
     if not epa_map:
         return
 
-    # Read current event_teams rows, merge EPA, write back
-    try:
-        from ..services.supabase_client import get_supabase
-        client = await get_supabase()
-        resp = await client.table("event_teams").select(
-            "event_key, team_key, raw_data"
-        ).eq("event_key", event_key).execute()
-
-        rows_to_update = []
-        for row in resp.data or []:
-            tk = row["team_key"]
-            epa = epa_map.get(tk)
-            if epa is None:
-                continue
-
-            raw = row.get("raw_data") or {}
-            if isinstance(raw, str):
-                raw = json.loads(raw)
-            raw["epa"] = epa
-            rows_to_update.append({
-                "event_key": event_key,
-                "team_key": tk,
-                "raw_data": json.dumps(raw),
-            })
-
-        if rows_to_update:
-            await upsert_rows("event_teams", rows_to_update)
-            log.debug("Merged EPA for %d teams at %s", len(rows_to_update), event_key)
+    # Merge EPA into raw_data atomically (preserves OPR/rankings)
+    # Strip nulls inside each EPA block as well
+    merge_rows = [
+        {"event_key": event_key, "team_key": tk,
+         "data": {"epa": _strip_nulls(epa) if isinstance(epa, dict) else epa}}
+        for tk, epa in epa_map.items()
+        if epa is not None
+    ]
+    if merge_rows:
+        try:
+            await merge_event_teams(merge_rows)
+            log.debug("Merged EPA for %d teams at %s", len(merge_rows), event_key)
             _invalidate_snapshot(event_key)
+        except Exception as e:
+            log.warning("EPA merge failed for %s: %s", event_key, e)
+
+
+async def _sync_avatars(event_key: str) -> None:
+    """Fetch avatars for teams at this event and store in team_avatars table."""
+    year = int(event_key[:4]) if event_key[:4].isdigit() else 2026
+    try:
+        from ..services.avatar_cache import get_avatars
+        from ..services.supabase_client import get_supabase
+
+        # Get team keys from Supabase (already ingested by _sync_teams_and_oprs)
+        sb = await get_supabase()
+        resp = await (
+            sb.table("event_teams")
+            .select("team_key")
+            .eq("event_key", event_key)
+            .execute()
+        )
+        team_keys = [r["team_key"] for r in (resp.data or [])]
+        if not team_keys:
+            return
+
+        # Check which already have avatars this year
+        existing = await (
+            sb.table("team_avatars")
+            .select("team_key")
+            .in_("team_key", team_keys)
+            .eq("year", year)
+            .execute()
+        )
+        existing_keys = {r["team_key"] for r in (existing.data or [])}
+        missing = [tk for tk in team_keys if tk not in existing_keys]
+        if not missing:
+            return
+
+        # Fetch from disk cache / TBA and store
+        avatar_map = await get_avatars(missing, year)
+        if avatar_map:
+            rows = [
+                {"team_key": tk, "year": year, "avatar_base64": b64}
+                for tk, b64 in avatar_map.items()
+            ]
+            await upsert_rows("team_avatars", rows)
+            log.debug("Stored %d avatars for %s", len(rows), event_key)
     except Exception as e:
-        log.warning("EPA upsert failed for %s: %s", event_key, e)
+        log.warning("Avatar sync failed for %s: %s", event_key, e)
+
+
+async def _sync_frc_team_data(event_key: str) -> None:
+    """Fetch team info from FRC Events API and store in teams.frc_data.
+
+    The FRC API provides schoolName / nameShort that are often better quality
+    than TBA's school_name.  Stored in a separate JSONB column so TBA data
+    (raw_tims_data) is never overwritten.
+    """
+    frc = get_frc_client()
+    year = int(event_key[:4])
+    event_code = event_key[4:]
+
+    try:
+        frc_teams = await frc.get_event_teams(year, event_code)
+    except CircuitOpenError:
+        log.debug("Circuit open — skipping FRC team data sync for %s", event_key)
+        return
+    except Exception as e:
+        log.warning("FRC team data fetch failed for %s: %s", event_key, e)
+        return
+
+    if not frc_teams:
+        return
+
+    rows = []
+    for ft in frc_teams:
+        num = ft.get("teamNumber")
+        if not num:
+            continue
+        rows.append({
+            "team_key": f"frc{num}",
+            "team_number": num,
+            "nickname": ft.get("nameShort", ""),
+            "competition_type": "frc",
+            "frc_data": {
+                "schoolName": ft.get("schoolName", ""),
+                "nameShort": ft.get("nameShort", ""),
+                "nameFull": ft.get("nameFull", ""),
+                "city": ft.get("city", ""),
+                "stateProv": ft.get("stateProv", ""),
+                "country": ft.get("country", ""),
+                "rookieYear": ft.get("rookieYear"),
+                "website": ft.get("website", ""),
+            },
+        })
+
+    if rows:
+        try:
+            await upsert_rows("teams", rows)
+            log.debug("Stored FRC team data for %d teams at %s", len(rows), event_key)
+        except Exception as e:
+            log.warning("FRC team data upsert failed for %s: %s", event_key, e)
+
+
+async def _sync_regional_pool(year: int, ongoing: set[str]) -> None:
+    """Sync FRC Events API v3.2 regional advancement data into Supabase.
+
+    Fetches:
+     - Per-event advancement detail for each ongoing regional/district event
+     - Global qualified-team pool (one row with event_key=NULL)
+    """
+    frc = get_frc_client()
+    from ..services.supabase_client import get_supabase
+
+    # ── Global pool ─────────────────────────────────────────
+    try:
+        global_teams = await frc.get_regional_pool(year)
+        if global_teams:
+            sb = await get_supabase()
+            await sb.table("regional_pool").upsert({
+                "year": year,
+                "event_key": None,
+                "payload": global_teams,
+            }, on_conflict="year,event_key").execute()
+            log.debug("Stored global regional pool (%d teams)", len(global_teams))
+    except CircuitOpenError:
+        log.debug("Circuit open — skipping global regional pool sync")
+    except Exception as e:
+        log.warning("Global regional pool sync failed: %s", e)
+
+    # ── Per-event detail ────────────────────────────────────
+    for ek in ongoing:
+        event_code = ek[4:]
+        try:
+            detail = await frc.get_regional_pool_event(year, event_code)
+            if detail:
+                sb = await get_supabase()
+                await sb.table("regional_pool").upsert({
+                    "year": year,
+                    "event_key": ek,
+                    "payload": detail,
+                }, on_conflict="year,event_key").execute()
+                log.debug("Stored regional pool detail for %s", ek)
+        except CircuitOpenError:
+            log.debug("Circuit open — skipping regional pool for %s", ek)
+        except Exception as e:
+            log.warning("Regional pool sync failed for %s: %s", ek, e)
 
 
 async def run_event_sync(year: int | None = None) -> None:
@@ -285,15 +428,20 @@ async def run_event_sync(year: int | None = None) -> None:
             else:
                 log.debug("No active events found")
 
-            # 2) For ongoing events, sync teams/OPRs, alliances, EPA
+            # 2) For ongoing events, sync teams/OPRs, alliances, EPA, FRC data, avatars
             tasks = []
             for ek in ongoing:
                 tasks.append(_sync_teams_and_oprs(ek))
                 tasks.append(_sync_alliances(ek))
                 tasks.append(_sync_epa(ek))
+                tasks.append(_sync_frc_team_data(ek))
+                tasks.append(_sync_avatars(ek))
 
             if tasks:
                 await asyncio.gather(*tasks, return_exceptions=True)
+
+            # 3) Regional pool (v3.2) — once per sweep, not per event
+            await _sync_regional_pool(year, ongoing)
 
         except Exception as e:
             log.error("Event sync sweep error: %s", e)

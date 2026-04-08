@@ -7,18 +7,22 @@ single asyncio task started by the FastAPI lifespan.
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 from datetime import datetime, timezone
 
 from ..services.frc_client import get_frc_client
-from ..services.supabase_client import get_supabase, upsert_rows
+from ..services.supabase_client import get_supabase, upsert_rows, merge_event_teams, delete_orphaned_matches
 from ..services.circuit_breaker import CircuitOpenError
 
 log = logging.getLogger(__name__)
 
 POLL_INTERVAL = 5       # seconds between sweeps
 RANKINGS_INTERVAL = 15  # seconds between ranking refreshes
+
+
+def _strip_nulls(d: dict) -> dict:
+    """Remove keys whose value is None so JSONB || won't nuke good data."""
+    return {k: v for k, v in d.items() if v is not None}
 
 
 def _invalidate_snapshot(event_key: str) -> None:
@@ -132,15 +136,20 @@ async def _poll_matches(event_key: str) -> None:
             "match_number": match_num,
             "set_number": m.get("playNumber", 1),
             "status": status,
-            "alliances": json.dumps(alliances),
-            "score_breakdown": json.dumps(m.get("scoreBreakdown") or {}),
+            "alliances": alliances,
+            "score_breakdown": m.get("scoreBreakdown") or {},
             "scheduled_time": scheduled,
-            "raw_data": json.dumps(m),
+            "raw_data": m,
         })
 
     if rows:
         try:
             await upsert_rows("matches", rows)
+            # Purge ghost matches (deleted from live schedule by event operator)
+            valid_keys = {r["match_key"] for r in rows}
+            orphan_count = await delete_orphaned_matches(event_key, valid_keys)
+            if orphan_count:
+                log.info("Purged %d ghost matches from %s", orphan_count, event_key)
             log.debug("Upserted %d matches for %s", len(rows), event_key)
             _invalidate_snapshot(event_key)
         except Exception as e:
@@ -175,7 +184,7 @@ async def _poll_rankings(event_key: str) -> None:
         rows.append({
             "event_key": event_key,
             "team_key": team_key,
-            "raw_data": json.dumps({
+            "data": _strip_nulls({
                 "rank": r.get("rank"),
                 "wins": r.get("wins", 0),
                 "losses": r.get("losses", 0),
@@ -189,8 +198,8 @@ async def _poll_rankings(event_key: str) -> None:
 
     if rows:
         try:
-            await upsert_rows("event_teams", rows)
-            log.debug("Upserted %d rankings for %s", len(rows), event_key)
+            await merge_event_teams(rows)
+            log.debug("Merged %d rankings for %s", len(rows), event_key)
             _invalidate_snapshot(event_key)
         except Exception as e:
             log.warning("Supabase rankings upsert failed for %s: %s", event_key, e)

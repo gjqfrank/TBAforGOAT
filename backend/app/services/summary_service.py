@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import date
+from datetime import date, datetime, timezone
 from . import payload_cache
 from .region_service import _load_region_stats, get_event_history
 from .supabase_client import get_cached_summary, set_cached_summary
@@ -14,9 +14,9 @@ _API_SEMAPHORE = asyncio.Semaphore(10)
 
 # Cache TTLs (seconds)
 _SUMMARY_TTL = 300       # 5 min — demographics, HoF, scorers
-_AWARDS_TTL = 600        # 10 min — expensive awards section
-_CONNECTIONS_TTL = 900   # 15 min — very heavy (years × teams)
-_SEASON_AWARDS_TTL = 600 # 10 min — scans all events per team
+_AWARDS_TTL = 3600       # 1 hr — past award winners (historical, rarely changes)
+_CONNECTIONS_TTL = 3600  # 1 hr — prior playoff connections (historical)
+_SEASON_AWARDS_TTL = 3600 # 1 hr — season awards (historical)
 _ADVANCEMENT_TTL = 300   # 5 min — moderate cost
 
 
@@ -74,11 +74,23 @@ async def get_event_summary(event_key: str) -> dict:
     if cached:
         return cached
 
-    # 2) Supabase cache (survives restarts)
+    # 2) Supabase cache (survives restarts) — respect TTL for live events
     sb_row = await get_cached_summary(event_key)
     if sb_row and sb_row.get("summary"):
-        payload_cache.write_payload("summary", event_key, sb_row["summary"])
-        return sb_row["summary"]
+        sb_fresh = True
+        updated = sb_row.get("updated_at")
+        if updated:
+            try:
+                if isinstance(updated, str):
+                    updated = datetime.fromisoformat(updated.replace("Z", "+00:00"))
+                age = (datetime.now(timezone.utc) - updated).total_seconds()
+                if age > _SUMMARY_TTL:
+                    sb_fresh = False
+            except Exception:
+                sb_fresh = False
+        if sb_fresh:
+            payload_cache.write_payload("summary", event_key, sb_row["summary"])
+            return sb_row["summary"]
 
     # 3) Build from scratch
     result = await _build_event_summary(event_key)
@@ -202,7 +214,10 @@ async def get_event_summary_awards(event_key: str) -> dict:
     # 3) Build from scratch
     result = await _build_event_summary_awards(event_key)
     payload_cache.write_payload("awards", event_key, result)
-    await set_cached_summary(event_key, awards=result)
+    # Only persist to Supabase when we have meaningful data
+    if any(result.get(k) for k in ("past_event_champions", "past_season_awards",
+                                    "current_season_winners", "impact_recipients")):
+        await set_cached_summary(event_key, awards=result)
     return result
 
 
@@ -526,15 +541,29 @@ async def _build_regional_advancement(
 ) -> dict:
     """Build advancement for 2026+ regionals using the FRC v3.2 eventdetail
     endpoint, which has the authoritative regional point rankings and
-    qualification flags (award points are weighted differently than TBA)."""
+    qualification flags (award points are weighted differently than TBA).
+
+    Reads from Supabase first (regional_pool table), falls back to FRC API.
+    """
     from .frc_client import get_frc_client
-    frc = get_frc_client()
+    from .supabase_client import read_regional_pool_event
 
     event_code = event_key[4:].upper()
+
+    # ── Try Supabase first ──────────────────────────────────
+    event_detail = None
     try:
-        event_detail = await frc.get_regional_pool_event(year, event_code)
+        event_detail = await read_regional_pool_event(year, event_key)
     except Exception:
-        event_detail = None
+        pass
+
+    # ── FRC API fallback ────────────────────────────────────
+    if not event_detail:
+        frc = get_frc_client()
+        try:
+            event_detail = await frc.get_regional_pool_event(year, event_code)
+        except Exception:
+            event_detail = None
 
     team_details = (event_detail or {}).get("teamDetails", [])
 
@@ -614,12 +643,27 @@ async def _fetch_regional_pool_for_event(
     team_nums: set[int], year: int,
 ) -> list[dict]:
     """Return global regional pool rank + qualification status for
-    teams at this event (uses FRC Events API v3.2)."""
+    teams at this event.
+
+    Reads from Supabase (regional_pool table) first, falls back to FRC API v3.2.
+    """
+    from .supabase_client import read_regional_pool_global
     from .frc_client import get_frc_client
-    frc = get_frc_client()
+
+    all_teams = None
     try:
-        all_teams = await frc.get_regional_pool(year)
+        all_teams = await read_regional_pool_global(year)
     except Exception:
+        pass
+
+    if not all_teams:
+        frc = get_frc_client()
+        try:
+            all_teams = await frc.get_regional_pool(year)
+        except Exception:
+            return []
+
+    if not all_teams:
         return []
     # Filter to teams at this event
     result = []
@@ -1062,7 +1106,8 @@ async def get_current_season_awards(event_key: str) -> dict:
     # 3) Build from scratch
     result = await _build_current_season_awards(event_key)
     payload_cache.write_payload("season_awards", event_key, result)
-    await set_cached_summary(sb_key, summary=result)
+    if result.get("season_awards"):
+        await set_cached_summary(sb_key, summary=result)
     return result
 
 
@@ -1326,6 +1371,9 @@ async def get_event_connections(event_key: str, all_time: bool = False) -> list[
     cached = payload_cache.read_payload("connections", cache_key, _CONNECTIONS_TTL)
     if cached:
         cached.pop("_ts", None)
+        # If we served the 3-year version, also warm the all-time cache in bg
+        if not all_time:
+            _maybe_warm_alltime_connections(event_key)
         return cached.get("connections", [])
 
     # 2) Supabase cache
@@ -1333,6 +1381,9 @@ async def get_event_connections(event_key: str, all_time: bool = False) -> list[
     sb_row = await get_cached_summary(sb_key)
     if sb_row and sb_row.get("summary"):
         payload_cache.write_payload("connections", cache_key, sb_row["summary"])
+        # Also warm all-time in bg when serving 3-year
+        if not all_time:
+            _maybe_warm_alltime_connections(event_key)
         return sb_row["summary"].get("connections", [])
 
     # 3) Build from scratch
@@ -1346,23 +1397,55 @@ async def get_event_connections(event_key: str, all_time: bool = False) -> list[
 
     payload = {"connections": result}
     payload_cache.write_payload("connections", cache_key, payload)
-    await set_cached_summary(sb_key, summary=payload)
+    if result:
+        await set_cached_summary(sb_key, summary=payload)
+
+    # After building 3-year, kick off all-time build in background
+    if not all_time:
+        _maybe_warm_alltime_connections(event_key)
+
     return result
 
 
+_alltime_warm_tasks: set[str] = set()  # track in-flight warming tasks
+
+
+def _maybe_warm_alltime_connections(event_key: str):
+    """Kick off background task to build all-time connections if not cached."""
+    all_key = f"{event_key}_all"
+    if all_key in _alltime_warm_tasks:
+        return
+    cached = payload_cache.read_payload("connections", all_key, _CONNECTIONS_TTL)
+    if cached:
+        return
+    _alltime_warm_tasks.add(all_key)
+    asyncio.ensure_future(_warm_alltime_connections(event_key, all_key))
+
+
+async def _warm_alltime_connections(event_key: str, all_key: str):
+    """Background task: build and cache all-time connections for an event."""
+    try:
+        await get_event_connections(event_key, all_time=True)
+    except Exception:
+        pass
+    finally:
+        _alltime_warm_tasks.discard(all_key)
+
+
 async def get_match_connections(event_key: str, team_numbers: list[int], all_time: bool = False) -> list[dict]:
-    """Fetch prior playoff connections for a specific set of teams (e.g. the 6 on the field)."""
-    client = get_tba_client()
-    year = int(event_key[:4])
-    # Build minimal team dicts from team numbers
-    team_keys = [f"frc{n}" for n in team_numbers]
-    tasks = [client.get_team(tk) for tk in team_keys]
-    raw_teams = await asyncio.gather(*tasks)
-    teams = [t for t in raw_teams if t]
-    if not teams:
+    """Fetch prior playoff connections for a specific set of teams (e.g. the 6 on the field).
+
+    Uses the full-event connections cache and filters to pairs where both
+    teams are in the requested set, avoiding expensive per-call recomputation.
+    """
+    all_conns = await get_event_connections(event_key, all_time=all_time)
+    if not all_conns:
         return []
-    lookback = None if all_time else 3
-    return await _find_playoff_connections(teams, event_key, year, lookback_years=lookback)
+    team_set = set(team_numbers)
+    return [
+        c for c in all_conns
+        if c.get("team_a") in team_set and c.get("team_b") in team_set
+    ]
 
 
 async def _find_playoff_connections(

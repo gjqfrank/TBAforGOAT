@@ -8,7 +8,6 @@ const API = {
         if (!resp.ok) {
             const body = await resp.json().catch(() => ({}));
             const detail = body.detail || '';
-            // Build a user-friendly message based on status code
             let message;
             switch (resp.status) {
                 case 429:
@@ -30,6 +29,21 @@ const API = {
                     message = detail || `Request failed (HTTP ${resp.status}). Please try again.`;
             }
             const err = new Error(message);
+            err.status = resp.status;
+            throw err;
+        }
+        return resp.json();
+    },
+
+    async put(path, body) {
+        const resp = await fetch(`/api${path}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        if (!resp.ok) {
+            const data = await resp.json().catch(() => ({}));
+            const err = new Error(data.detail || `Request failed (HTTP ${resp.status})`);
             err.status = resp.status;
             throw err;
         }
@@ -70,6 +84,13 @@ const API = {
         API.get(`/teams/${num}/stats${year ? `?year=${year}` : ''}`),    teamAwardsSummary: (teamNums) =>
         API.get(`/teams/awards-summary?teams=${teamNums.join(',')}`),    headToHead: (a, b, year, allTime) =>
         API.get(`/teams/head-to-head/${a}/${b}${year ? `?year=${year}&` : '?'}all_time=${allTime ? 'true' : 'false'}`),
+
+    // ── TIMS Overrides ──────────────────────────────────
+    timsGet:     (teamKey) => API.get(`/teams/${teamKey}/tims-overrides`),
+    timsPut:     (teamKey, body) => API.put(`/teams/${teamKey}/tims-overrides`, body),
+    timsHistory: (teamKey) => API.get(`/teams/${teamKey}/tims-overrides/history`),
+    timsDelete:  (teamKey) => fetch(`/api/teams/${teamKey}/tims-overrides`, { method: 'DELETE' })
+                     .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))),
 
     // ── Compare ─────────────────────────────────────────
     compareTeams: (ek, teamKeys) =>

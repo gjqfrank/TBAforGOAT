@@ -2,17 +2,43 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from datetime import date
 from .tba_client import get_tba_client
 from .frc_client import get_frc_client
 from .statbotics_client import get_epa_map
-from .supabase_client import get_supabase
+from .supabase_client import (
+    get_supabase,
+    merge_event_teams,
+    read_events_by_year,
+    read_event,
+    read_event_teams_full,
+    read_matches,
+    read_team_avatars,
+)
 
 log = logging.getLogger(__name__)
 
 # Concurrency limit for outbound API calls within this module
 _API_SEMAPHORE = asyncio.Semaphore(10)
+
+
+def _sb_teams_valid(sb_rows: list[dict]) -> bool:
+    """Return True if Supabase event_teams data is rich enough to use.
+
+    A "valid cache hit" requires that at least one row has rank OR opr data
+    inside ``raw_data``.  If workers have only pushed EPA (Statbotics)
+    without any TBA/FRC data, the rows exist but are too incomplete to
+    serve—fall through to the API path instead.
+    """
+    for r in sb_rows:
+        rd = r.get("raw_data") or {}
+        if isinstance(rd, str):
+            rd = json.loads(rd)
+        if rd.get("rank") is not None or rd.get("opr") is not None:
+            return True
+    return False
 
 # TBA event types to exclude from the season dropdown (off-season, preseason, unlabeled)
 _EXCLUDE_TYPES = {99, 100, -1}
@@ -97,9 +123,55 @@ def _resolve_region(country: str, state_prov: str, district: dict | None) -> str
 async def get_season_events(year: int, include_offseason: bool = False) -> list[dict]:
     """Return a lightweight list of events for *year*.
 
+    Reads from Supabase first; falls back to TBA if Supabase has no data.
     By default off-season / preseason events are excluded.
     Pass *include_offseason=True* to include event_type 99.
     """
+    # ── Try Supabase first ──────────────────────────────────
+    try:
+        sb_rows = await read_events_by_year(year)
+    except Exception as e:
+        log.warning("Supabase events read failed for %d: %s", year, e)
+        sb_rows = []
+
+    if sb_rows:
+        # When including offseason, only exclude truly junk types (-1, 100)
+        exclude = {100, -1} if include_offseason else _EXCLUDE_TYPES
+        events = []
+        for row in sb_rows:
+            raw = row.get("raw_data") or {}
+            if isinstance(raw, str):
+                raw = json.loads(raw)
+            etype = raw.get("event_type", -1)
+            if etype in exclude:
+                continue
+            events.append({
+                "key": row["event_key"],
+                "name": row.get("name", ""),
+                "short_name": raw.get("short_name") or row.get("name", ""),
+                "week": raw.get("week"),
+                "start_date": str(row.get("start_date", "")),
+                "end_date": str(row.get("end_date", "")),
+                "city": raw.get("city", ""),
+                "state_prov": raw.get("state_prov", ""),
+                "country": raw.get("country", ""),
+                "event_type": etype,
+                "event_type_string": raw.get("event_type_string", ""),
+                "district": raw.get("district"),
+                "region": (
+                    "FIRST Championship"
+                    if etype in {3, 4, 6}
+                    else _resolve_region(
+                        raw.get("country", ""),
+                        raw.get("state_prov", ""),
+                        raw.get("district"),
+                    )
+                ),
+            })
+        events.sort(key=lambda e: (e["name"] or "").lower())
+        return events
+
+    # ── Fallback: TBA ───────────────────────────────────────
     client = get_tba_client()
     raw = await client.get_events_by_year(year)
 
@@ -161,7 +233,11 @@ async def _load_tims_overrides(team_keys: list[str]) -> dict[str, dict]:
         resp = (
             await sb.table("tims_overrides")
             .select("team_key, custom_nickname, custom_sponsor_read, "
-                    "custom_robot_name, custom_motto")
+                    "custom_robot_name, custom_motto, custom_organization, "
+                    "custom_location, custom_top_sponsors, custom_pronunciation, "
+                    "custom_hardware, custom_auto_strategy, custom_teleop_strategy, "
+                    "custom_number_display, "
+                    "author_name, author_event_key, updated_at")
             .in_("team_key", team_keys)
             .eq("is_deleted", False)
             .execute()
@@ -170,7 +246,12 @@ async def _load_tims_overrides(team_keys: list[str]) -> dict[str, dict]:
         for row in resp.data or []:
             overrides = {}
             for field in ("custom_nickname", "custom_sponsor_read",
-                          "custom_robot_name", "custom_motto"):
+                          "custom_robot_name", "custom_motto",
+                          "custom_organization", "custom_location",
+                          "custom_top_sponsors", "custom_pronunciation",
+                          "custom_hardware", "custom_auto_strategy",
+                          "custom_teleop_strategy", "custom_number_display",
+                          "author_name", "author_event_key", "updated_at"):
                 if row.get(field) is not None:
                     overrides[field] = row[field]
             if overrides:
@@ -191,8 +272,35 @@ def _apply_tims_overrides(team: dict, overrides: dict) -> None:
         team["robot_name"] = overrides["custom_robot_name"]
     if "custom_motto" in overrides:
         team["motto"] = overrides["custom_motto"]
-    if overrides:
-        team["has_tims_overrides"] = True
+    if "custom_organization" in overrides:
+        team["school_name"] = overrides["custom_organization"]
+    if "custom_location" in overrides:
+        parts = [p.strip() for p in overrides["custom_location"].split(",", 1)]
+        if len(parts) >= 2:
+            team["city"] = parts[0]
+            team["state_prov"] = parts[1]
+        else:
+            team["city"] = overrides["custom_location"]
+    if "custom_top_sponsors" in overrides:
+        team["top_sponsors"] = overrides["custom_top_sponsors"]
+    if "custom_pronunciation" in overrides:
+        team["name_pronounce"] = overrides["custom_pronunciation"]
+    if "custom_hardware" in overrides:
+        team["hardware"] = overrides["custom_hardware"]
+    if "custom_auto_strategy" in overrides:
+        team["auto_strategy"] = overrides["custom_auto_strategy"]
+    if "custom_teleop_strategy" in overrides:
+        team["teleop_strategy"] = overrides["custom_teleop_strategy"]
+    if "custom_number_display" in overrides:
+        team["number_display"] = overrides["custom_number_display"]
+    # Audit metadata (for frontend display of "Last updated by")
+    if "author_name" in overrides:
+        team["tims_author"] = overrides["author_name"]
+    if "author_event_key" in overrides:
+        team["tims_event_key"] = overrides["author_event_key"]
+    if "updated_at" in overrides:
+        team["tims_updated_at"] = overrides["updated_at"]
+    team["has_tims_overrides"] = True
 
 
 def _event_status(start_date: str, end_date: str) -> str:
@@ -213,6 +321,40 @@ def _event_status(start_date: str, end_date: str) -> str:
 
 
 async def get_event_info(event_key: str) -> dict:
+    # ── Try Supabase first ──────────────────────────────────
+    try:
+        row = await read_event(event_key)
+    except Exception:
+        row = None
+
+    if row:
+        raw = row.get("raw_data") or {}
+        if isinstance(raw, str):
+            raw = json.loads(raw)
+        start = str(row.get("start_date", ""))
+        end = str(row.get("end_date", ""))
+        etype = raw.get("event_type", -1)
+        region = "" if etype in (3, 4) else _resolve_region(
+            raw.get("country", ""),
+            raw.get("state_prov", ""),
+            raw.get("district"),
+        )
+        return {
+            "key": row["event_key"],
+            "name": row.get("name", ""),
+            "year": int(event_key[:4]) if event_key[:4].isdigit() else None,
+            "city": raw.get("city", ""),
+            "state_prov": raw.get("state_prov", ""),
+            "country": raw.get("country", ""),
+            "event_type_string": raw.get("event_type_string", ""),
+            "event_type": etype,
+            "start_date": start,
+            "end_date": end,
+            "status": _event_status(start, end),
+            "region": region,
+        }
+
+    # ── Fallback: TBA ───────────────────────────────────────
     client = get_tba_client()
     ev = await client.get_event(event_key)
     start = ev.get("start_date", "")
@@ -241,14 +383,111 @@ async def get_event_info(event_key: str) -> dict:
 
 
 async def get_event_teams_with_stats(event_key: str) -> list[dict]:
-    """Return every team at the event enriched with rank, record, and OPR."""
-    client = get_tba_client()
+    """Return every team at the event enriched with rank, record, and OPR.
 
-    # Teams must succeed; rankings/OPRs may be unavailable early in the event
-    teams = await client.get_event_teams_full(event_key)
-
-    # Determine the year for media lookups
+    Reads from Supabase first (populated by workers); falls back to
+    TBA + Statbotics if Supabase has no data for this event.
+    """
     year = int(event_key[:4]) if event_key[:4].isdigit() else date.today().year
+
+    # ── Try Supabase first ──────────────────────────────────
+    try:
+        sb_rows = await read_event_teams_full(event_key)
+    except Exception as e:
+        log.warning("Supabase event_teams read failed for %s: %s", event_key, e)
+        sb_rows = []
+
+    if sb_rows and _sb_teams_valid(sb_rows):
+        # Read avatars from Supabase team_avatars table
+        all_keys = [r["team_key"] for r in sb_rows]
+        try:
+            avatar_map = await read_team_avatars(all_keys, year)
+        except Exception:
+            avatar_map = {}
+
+        result = []
+        for r in sb_rows:
+            tk = r["team_key"]
+            raw = r.get("raw_data") or {}
+            if isinstance(raw, str):
+                raw = json.loads(raw)
+            tims = r.get("tims_data") or {}
+            if isinstance(tims, str):
+                tims = json.loads(tims)
+            frc_d = r.get("frc_data") or {}
+            if isinstance(frc_d, str):
+                frc_d = json.loads(frc_d)
+            epa_block = raw.get("epa") or {}
+
+            # Total RP from sort_orders (same logic as FRC API path)
+            sort_orders = raw.get("sort_orders") or []
+            mp = raw.get("matches_played", 0)
+            if sort_orders and isinstance(sort_orders[0], (int, float)):
+                ranking_points = round(sort_orders[0] * mp, 1) if mp else None
+            else:
+                ranking_points = None
+
+            result.append({
+                "team_key": tk,
+                "team_number": r.get("team_number", 0),
+                "nickname": r.get("nickname", ""),
+                "school_name": frc_d.get("schoolName") or tims.get("school_name", ""),
+                "city": frc_d.get("city") or tims.get("city", ""),
+                "state_prov": frc_d.get("stateProv") or tims.get("state_prov", ""),
+                "country": frc_d.get("country") or tims.get("country", ""),
+                "rookie_year": tims.get("rookie_year") or frc_d.get("rookieYear"),
+                "avatar": avatar_map.get(tk),
+                "rank": raw.get("rank", "-"),
+                "wins": raw.get("wins", 0),
+                "losses": raw.get("losses", 0),
+                "ties": raw.get("ties", 0),
+                "qual_average": raw.get("qual_average", 0),
+                "ranking_points": ranking_points,
+                "opr": round(raw.get("opr", 0), 2) if raw.get("opr") else 0,
+                "epa": epa_block.get("epa"),
+                "epa_auto": epa_block.get("epa_auto"),
+                "epa_teleop": epa_block.get("epa_teleop"),
+                "epa_endgame": epa_block.get("epa_endgame"),
+            })
+
+        result.sort(key=lambda x: x["rank"] if isinstance(x["rank"], int) else 999)
+
+        # ── Merge TIMS overrides ────────────────────────────
+        all_team_keys = [t["team_key"] for t in result]
+        tims_map = await _load_tims_overrides(all_team_keys)
+        for t in result:
+            overrides = tims_map.get(t["team_key"])
+            if overrides:
+                _apply_tims_overrides(t, overrides)
+
+        # ── Backfill EPA from Statbotics if missing in Supabase ─
+        if not any(t.get("epa") for t in result):
+            try:
+                epa_map = await get_epa_map(event_key)
+                if epa_map:
+                    for t in result:
+                        epa_block = epa_map.get(t["team_key"]) or {}
+                        t["epa"] = epa_block.get("epa")
+                        t["epa_auto"] = epa_block.get("epa_auto")
+                        t["epa_teleop"] = epa_block.get("epa_teleop")
+                        t["epa_endgame"] = epa_block.get("epa_endgame")
+                    # Persist to Supabase so future requests don't need live fetch
+                    merge_rows = [
+                        {"event_key": event_key, "team_key": tk,
+                         "data": {"epa": epa}}
+                        for tk, epa in epa_map.items()
+                        if epa is not None
+                    ]
+                    if merge_rows:
+                        asyncio.create_task(_safe(merge_event_teams(merge_rows)))
+            except Exception as e:
+                log.debug("EPA backfill skipped for %s: %s", event_key, e)
+
+        return result
+
+    # ── Fallback: TBA + Statbotics (original path) ──────────
+    client = get_tba_client()
+    teams = await client.get_event_teams_full(event_key)
 
     rankings, oprs, epa_data = await asyncio.gather(
         _safe(client.get_event_rankings(event_key)),
@@ -347,15 +586,55 @@ async def get_event_teams_with_stats(event_key: str) -> list[dict]:
 
 
 async def get_fast_rankings(event_key: str) -> list[dict]:
-    """Return lightweight rank/record/RP data from the FRC Events API (real-time).
+    """Return lightweight rank/record/RP data.
 
-    This is much faster than a full refresh because it:
-    1. Hits the FRC API (120s cache, ~instant from FIRST) instead of TBA (300s, 20-30s lag).
-    2. Skips avatars, OPRs, and EPA — those don't change between matches.
-    3. Returns only the fields that actually change: rank, W-L-T, RP, qual_average.
-
-    The frontend merges this lightweight payload into the existing team table.
+    Reads from Supabase (updated every 15s by match_poller) first.
+    Falls back to FRC API → TBA if Supabase has no ranking data.
     """
+    # ── Try Supabase first ──────────────────────────────────
+    try:
+        sb_rows = await read_event_teams_full(event_key)
+    except Exception:
+        sb_rows = []
+
+    if sb_rows:
+        # Check if any row has rank data (workers may not have polled yet)
+        has_ranks = False
+        for r in sb_rows:
+            rd = r.get("raw_data") or {}
+            if isinstance(rd, str):
+                rd = json.loads(rd)
+            if rd.get("rank") is not None:
+                has_ranks = True
+                break
+
+        if has_ranks:
+            result = []
+            for r in sb_rows:
+                raw = r.get("raw_data") or {}
+                if isinstance(raw, str):
+                    raw = json.loads(raw)
+                if raw.get("rank") is None:
+                    continue
+                sort_orders = raw.get("sort_orders") or []
+                mp = raw.get("matches_played", 0)
+                if sort_orders and isinstance(sort_orders[0], (int, float)):
+                    ranking_points = round(sort_orders[0] * mp, 1) if mp else None
+                else:
+                    ranking_points = None
+                result.append({
+                    "team_key": r["team_key"],
+                    "rank": raw.get("rank", "-"),
+                    "wins": raw.get("wins", 0),
+                    "losses": raw.get("losses", 0),
+                    "ties": raw.get("ties", 0),
+                    "qual_average": raw.get("qual_average", 0),
+                    "ranking_points": ranking_points,
+                })
+            result.sort(key=lambda x: x["rank"] if isinstance(x["rank"], int) else 999)
+            return result
+
+    # ── Fallback: FRC API → TBA ─────────────────────────────
     year = int(event_key[:4]) if event_key[:4].isdigit() else date.today().year
     event_code = event_key[4:]
     frc = get_frc_client()
@@ -427,11 +706,102 @@ async def get_fast_rankings(event_key: str) -> list[dict]:
 
 
 async def get_team_comparison(event_key: str, teams_csv: str) -> dict:
-    """Compare 2-6 teams at an event with detailed stats."""
+    """Compare 2-6 teams at an event with detailed stats.
+
+    Reads team stats from Supabase first; falls back to TBA.
+    Match scores are always read from Supabase (matches table) when available.
+    """
     team_keys = [t.strip() for t in teams_csv.split(",") if t.strip()]
     if len(team_keys) < 2 or len(team_keys) > 6:
         raise ValueError("Provide between 2 and 6 team keys")
 
+    # ── Try Supabase for team data + matches ────────────────
+    sb_teams = []
+    sb_matches = []
+    try:
+        sb_teams, sb_matches = await asyncio.gather(
+            read_event_teams_full(event_key),
+            read_matches(event_key),
+        )
+    except Exception:
+        pass
+
+    if sb_teams and _sb_teams_valid(sb_teams):
+        # Build lookups from Supabase data
+        team_raw_map: dict[str, dict] = {}
+        team_info_map: dict[str, dict] = {}
+        for r in sb_teams:
+            tk = r["team_key"]
+            raw = r.get("raw_data") or {}
+            if isinstance(raw, str):
+                raw = json.loads(raw)
+            tims = r.get("tims_data") or {}
+            if isinstance(tims, str):
+                tims = json.loads(tims)
+            frc_d = r.get("frc_data") or {}
+            if isinstance(frc_d, str):
+                frc_d = json.loads(frc_d)
+            team_raw_map[tk] = raw
+            team_info_map[tk] = {
+                "team_number": r.get("team_number", 0),
+                "nickname": r.get("nickname", ""),
+                "city": frc_d.get("city") or tims.get("city", ""),
+                "state_prov": frc_d.get("stateProv") or tims.get("state_prov", ""),
+                "country": frc_d.get("country") or tims.get("country", ""),
+            }
+
+        # Compute per-team scores from matches
+        team_scores: dict[str, list[int]] = {}
+        for m in sb_matches:
+            if m.get("comp_level") != "qm":
+                continue
+            alliances = m.get("alliances") or {}
+            if isinstance(alliances, str):
+                alliances = json.loads(alliances)
+            for color in ("red", "blue"):
+                alliance = alliances.get(color) or {}
+                score = alliance.get("score", -1)
+                if score < 0:
+                    continue
+                for tk in alliance.get("team_keys", []):
+                    team_scores.setdefault(tk, []).append(score)
+
+        comparison = []
+        for tk in team_keys:
+            raw = team_raw_map.get(tk, {})
+            info = team_info_map.get(tk, {})
+            epa_block = raw.get("epa") or {}
+            scores = team_scores.get(tk, [])
+
+            sort_orders = raw.get("sort_orders") or []
+            avg_rp = round(sort_orders[0], 2) if sort_orders and isinstance(sort_orders[0], (int, float)) else 0
+
+            comparison.append({
+                "team_key": tk,
+                "team_number": info.get("team_number", int(tk.replace("frc", ""))),
+                "nickname": info.get("nickname", ""),
+                "city": info.get("city", ""),
+                "state_prov": info.get("state_prov", ""),
+                "country": info.get("country", ""),
+                "avatar": None,
+                "rank": raw.get("rank", "-"),
+                "wins": raw.get("wins", 0),
+                "losses": raw.get("losses", 0),
+                "ties": raw.get("ties", 0),
+                "opr": round(raw.get("opr", 0), 2) if raw.get("opr") else 0,
+                "epa": epa_block.get("epa"),
+                "epa_auto": epa_block.get("epa_auto"),
+                "epa_teleop": epa_block.get("epa_teleop"),
+                "epa_endgame": epa_block.get("epa_endgame"),
+                "avg_rp": avg_rp,
+                "qual_average": round(sum(scores) / len(scores), 2) if scores else 0,
+                "high_score": max(scores) if scores else 0,
+                "matches_played": len(scores),
+            })
+
+        return {"event_key": event_key, "teams": comparison}
+
+    # ── Fallback: TBA + Statbotics ──────────────────────────
     client = get_tba_client()
 
     # Fetch all required data in parallel
