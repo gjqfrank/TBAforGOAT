@@ -17136,7 +17136,7 @@ body.epa-breakdown-active .stat-opr {
     padding: 0.25rem 1.4rem 0.25rem 0.6rem;
   }
 
-  /* Hotrow: wrap + center general on its own row */
+  /* Hotrow: teams only, no General, not tappable */
   .bs-hotrow {
     gap: 0.3rem;
     padding: 0.375rem 0.5rem;
@@ -17144,13 +17144,12 @@ body.epa-breakdown-active .stat-opr {
     justify-content: center;
   }
   .bs-pill-btn {
-    padding: 0.3rem 0.75rem;
+    padding: 0.35rem 1rem;
     font-size: 0.8rem;
+    pointer-events: none;
   }
   .bs-pill-general {
-    font-size: 0.6rem;
-    padding: 0.25rem 0.6rem;
-    order: 0;
+    display: none;
   }
 
   /* Hide desktop dock + macros on mobile (replaced by mobile nav) */
