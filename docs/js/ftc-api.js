@@ -42,21 +42,23 @@ const FTC_API = {
     eventTeams:         (ek) => FTC_API.get(`/events/${ek}/teams`),
     eventAwards:        (ek) => FTC_API.get(`/events/${ek}/awards`),
     eventPastAwards:    (ek) => FTC_API.get(`/events/${ek}/past-awards`),
-    eventSeasonAwards:  (ek) => FTC_API.get(`/events/${ek}/season-awards`),
-    eventConnections:   (ek, allTime) => FTC_API.get(`/events/${ek}/summary/connections?all_time=${allTime ? 'true' : 'false'}`),
     clearCache:         (ek) => FTC_API.get(`/events/${ek}/clear-cache`),
     refreshRankings:    (ek) => FTC_API.get(`/events/${ek}/refresh-rankings`),
     fastRankings:       (ek) => FTC_API.get(`/events/${ek}/fast-rankings`),
     worldRecord:        (season) => FTC_API.get(`/events/world-record/${season || 2025}`),
     gatoolUpdates:      (ek) => FTC_API.get(`/events/${ek}/gatool-updates`),
+    eventConnections:   (ek, allTime, teams) => {
+        let url = `/events/${ek}/summary/connections?all_time=${allTime ? 'true' : 'false'}`;
+        if (teams && teams.length) url += `&teams=${teams.join(',')}`;
+        return FTC_API.get(url);
+    },
 
     // ── Teams ────────────────────────────────────────────
     teamAwardsSummary:  (teamNums) => FTC_API.get(`/events/teams/awards-summary?teams=${teamNums.join(',')}`),
-    teamLookup:         (num, season) => FTC_API.get(`/events/team/${num}?season=${season || 2025}&include_history=true`),
+    teamLookup:         (num, season) => FTC_API.get(`/events/team/${num}?season=${season || 2025}`),
     teamOprHistory:     (num, season) => FTC_API.get(`/events/team/${num}/opr-history?season=${season || 2025}`),
 
     // ── Matches ─────────────────────────────────────────
-    headToHead:     (a, b, _year, allTime) => FTC_API.get(`/matches/head-to-head/${a}/${b}?all_time=${allTime ? 'true' : 'false'}`),
     allMatches:     (ek) => FTC_API.get(`/matches/${ek}/all`),
     playoffMatches: (ek) => FTC_API.get(`/matches/${ek}/playoffs`),
     fastScores:     (ek) => FTC_API.get(`/matches/${ek}/scores`),

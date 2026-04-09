@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from ..services.frc_client import get_frc_client
 from ..services.supabase_client import get_supabase, upsert_rows, merge_event_teams, delete_orphaned_matches
 from ..services.circuit_breaker import CircuitOpenError
+from .schemas import FRCMatch, FRCRanking, validate_list
 
 log = logging.getLogger(__name__)
 
@@ -77,8 +78,13 @@ async def _poll_matches(event_key: str) -> None:
     if not raw_matches:
         return
 
+    valid_matches = validate_list(FRCMatch, raw_matches, f"frc_matches:{event_key}")
+    if not valid_matches:
+        return
+
     rows = []
-    for m in raw_matches:
+    for m_model in valid_matches:
+        m = m_model.model_dump()
         match_num = m.get("matchNumber", 0)
         level = (m.get("tournamentLevel") or "Qualification").lower()
 
@@ -174,8 +180,13 @@ async def _poll_rankings(event_key: str) -> None:
     if not rankings:
         return
 
+    valid_rankings = validate_list(FRCRanking, rankings, f"frc_rankings:{event_key}")
+    if not valid_rankings:
+        return
+
     rows = []
-    for r in rankings:
+    for r_model in valid_rankings:
+        r = r_model.model_dump()
         team_num = r.get("teamNumber")
         if not team_num:
             continue

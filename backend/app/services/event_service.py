@@ -8,6 +8,7 @@ from datetime import date
 from .tba_client import get_tba_client
 from .frc_client import get_frc_client
 from .statbotics_client import get_epa_map
+from .inflight import coalesce
 from .supabase_client import (
     get_supabase,
     merge_event_teams,
@@ -321,6 +322,11 @@ def _event_status(start_date: str, end_date: str) -> str:
 
 
 async def get_event_info(event_key: str) -> dict:
+    """Single-flight coalesced event info lookup."""
+    return await coalesce(f"event_info:{event_key}", _get_event_info_impl, event_key)
+
+
+async def _get_event_info_impl(event_key: str) -> dict:
     # ── Try Supabase first ──────────────────────────────────
     try:
         row = await read_event(event_key)
@@ -387,7 +393,19 @@ async def get_event_teams_with_stats(event_key: str) -> list[dict]:
 
     Reads from Supabase first (populated by workers); falls back to
     TBA + Statbotics if Supabase has no data for this event.
+
+    Uses single-flight coalescing: if 8 iPads hit a cache miss at once,
+    only one request goes to TBA — the rest await the same Future.
     """
+    return await coalesce(
+        f"event_teams:{event_key}",
+        _get_event_teams_with_stats_impl,
+        event_key,
+    )
+
+
+async def _get_event_teams_with_stats_impl(event_key: str) -> list[dict]:
+    """Inner implementation — always called at most once per key."""
     year = int(event_key[:4]) if event_key[:4].isdigit() else date.today().year
 
     # ── Try Supabase first ──────────────────────────────────
@@ -586,6 +604,11 @@ async def get_event_teams_with_stats(event_key: str) -> list[dict]:
 
 
 async def get_fast_rankings(event_key: str) -> list[dict]:
+    """Single-flight coalesced rankings lookup."""
+    return await coalesce(f"fast_rankings:{event_key}", _get_fast_rankings_impl, event_key)
+
+
+async def _get_fast_rankings_impl(event_key: str) -> list[dict]:
     """Return lightweight rank/record/RP data.
 
     Reads from Supabase (updated every 15s by match_poller) first.

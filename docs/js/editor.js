@@ -116,6 +116,10 @@ function openEditor(teamNumber, defaultTab) {
     overlay.classList.remove('hidden');
     document.body.style.overflow = 'hidden';
 
+    // Scroll modal body to top
+    const modalBody = overlay.querySelector('.editor-body');
+    if (modalBody) modalBody.scrollTop = 0;
+
     // Activate requested tab
     _switchEditorTab(_editorTab);
 }
@@ -319,7 +323,6 @@ async function saveOverrideData(teamNumber, payload) {
     body.custom_pronunciation = payload.pronunciation || null;
     body.custom_robot_name    = payload.robot_name    || null;
     body.custom_motto         = payload.motto         || null;
-    body.custom_sponsor_read  = payload.sponsor_read  || null;
     body.custom_number_display = payload.number_display || null;
 
     // Hardware & Playstyle — store as JSON array strings or null
@@ -384,6 +387,7 @@ async function _handleEditorSave() {
     if (result?.success) {
         closeEditor();
         if (typeof showToast === 'function') showToast('Changes saved', 'info', 2500);
+        if (typeof renderPbpMatch === 'function') renderPbpMatch();
     } else {
         const msg = result?.error || 'Unknown error';
         const errEl = document.getElementById('editor-error');
@@ -422,7 +426,8 @@ function _findTeamElement(target) {
     // Fallback: match known team-number selectors (same list as _TEAM_NUM_SELECTORS in app.js)
     const teamNumEl = target.closest('.team-num, .adv-team-num, .pbp-team-number, .top-team-num, .high-score-team, .summary-hof-num, .prestige-entry-num, .conn-team-num, .rp-team-num, .alliance-team-num');
     if (teamNumEl) {
-        const num = parseInt(teamNumEl.textContent.trim(), 10);
+        const raw = teamNumEl.dataset.teamNumber || teamNumEl.textContent.replace(/[^0-9]/g, '');
+        const num = parseInt(raw, 10);
         if (num > 0 && num < 100000) {
             // Synthesize a team key and attach it so the rest of the pipeline works
             const prefix = (typeof competitionMode !== 'undefined' && competitionMode === 'ftc') ? 'ftc' : 'frc';

@@ -28,6 +28,45 @@ function _renderTeamNum(team) {
 }
 
 // ── Back to top button ─────────────────────────────────────
+
+// ── Tag helpers & SVG icons ────────────────────────────────
+function _parseTags(raw) {
+    if (!raw) return [];
+    if (Array.isArray(raw)) return raw.filter(Boolean);
+    return raw.split(',').map(s => s.trim()).filter(Boolean);
+}
+
+const _pbpTagIcons = {
+    hardware: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>',
+    strategy: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a8 8 0 0 0-8 8c0 3 1.5 5.5 4 7v3h8v-3c2.5-1.5 4-4 4-7a8 8 0 0 0-8-8z"/><line x1="10" y1="22" x2="14" y2="22"/></svg>',
+};
+
+const _microTagIcons = {
+    hardware: '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>',
+    strategy: '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a8 8 0 0 0-8 8c0 3 1.5 5.5 4 7v3h8v-3c2.5-1.5 4-4 4-7a8 8 0 0 0-8-8z"/><line x1="10" y1="22" x2="14" y2="22"/></svg>',
+};
+
+/** Render an inline pill card for a list of tags (strategy / hardware) */
+function _renderPbpTags(tags, title, cls) {
+    if (!tags || !tags.length) return '';
+    const icon = _pbpTagIcons[title.toLowerCase()] || '';
+    return `<div class="pbp-attr-tag ${cls}" title="${title}">${icon}<span class="pbp-attr-text">${tags.map(t => _esc(t)).join(', ')}</span></div>`;
+}
+
+/** Render micro breakdown tags (tiny variant for breakdown cards) */
+function _renderBdTags(teamNum) {
+    const ov = _timsCache[teamNum];
+    if (!ov) return '';
+    const parts = [];
+    const hw = _parseTags(ov.hardware);
+    if (hw.length) parts.push(...hw.map(h => `<span class="bd-micro-tag" title="Hardware">${_microTagIcons.hardware}${_esc(h)}</span>`));
+    const strat = _parseTags(ov.auto_strategy).concat(_parseTags(ov.teleop_strategy));
+    if (strat.length) parts.push(...strat.map(s => `<span class="bd-micro-tag" title="Strategy">${_microTagIcons.strategy}${_esc(s)}</span>`));
+    if (!parts.length) return '';
+    return `<div class="bd-micro-tags">${parts.join('')}</div>`;
+}
+
+// ── Back to top button ─────────────────────────────────────
 (function initBackToTop() {
     let ticking = false;
     window.addEventListener('scroll', () => {
@@ -240,6 +279,7 @@ let allianceShowEpa = false;      // toggle: show EPA breakdown in alliance card
 let allianceShowPlayoff = false;  // toggle: show playoff ribbons/status
 let allianceShowAvatars = true;  // toggle: show team avatars
 let allianceShowNames = false;    // toggle: show team nicknames
+let allianceShowAttrs = false;    // toggle: show team attribute tags in alliances
 let pbpShowAwards = false;        // toggle: show blue banners + awards in PBP
 let showPredictions = false;       // settings: show Statbotics win predictions in PBP
 let showGatoolSponsors = false;    // settings: show GATool cloud sponsors in PBP
@@ -277,8 +317,52 @@ let currentEventStatus = null;     // 'ongoing' | 'completed' | 'upcoming' | nul
 // Track which tabs have been rendered from preloaded data
 let renderedTabs = { playoff: false, alliance: false, playbyplay: false, breakdown: false, history: false };
 
+// ── Realtime event handlers (replace setInterval polling) ──
+let _rtRankDebounce = null;   // debounce timer for batched team changes
+let _rtMatchDebounce = null;  // debounce timer for batched match changes
+
+Realtime.onTeamChange((_payload) => {
+    // Debounce: many team rows arrive in quick succession after a match completes
+    clearTimeout(_rtRankDebounce);
+    _rtRankDebounce = setTimeout(() => {
+        if (currentEvent && currentEventStatus === 'ongoing') refreshRankings();
+    }, 500);
+});
+
+Realtime.onMatchChange((payload) => {
+    // Debounce: match updates may arrive in a burst
+    clearTimeout(_rtMatchDebounce);
+    _rtMatchDebounce = setTimeout(() => {
+        if (!currentEvent || currentEventStatus !== 'ongoing') return;
+        // PBP: refresh match data
+        if (pbpData) pbpAutoRefresh();
+        // Playoff: refresh bracket
+        if (renderedTabs.playoff) playoffAutoRefresh();
+        // Breakdown list: check for new has_breakdown flags
+        if (renderedTabs.breakdown && bdData) refreshBdList();
+        // Breakdown match: if current match just got a breakdown, re-fetch it
+        if (bdPollTimer && bdData?.matches?.[bdIndex]) {
+            const mk = bdData.matches[bdIndex].key;
+            const nm = payload.new;
+            if (nm && nm.match_key === mk && nm.score_breakdown) pollBdMatch();
+        }
+    }, 300);
+});
+
+// ── Reconnection reconciliation (missed events during Wi-Fi drop) ──
+Realtime.onReconnect((_eventKey) => {
+    if (!currentEvent || currentEventStatus !== 'ongoing') return;
+    console.info('[Realtime] Reconciling state after reconnect');
+    // Re-fetch ALL live data to cover anything missed while offline
+    refreshRankings();
+    if (pbpData) pbpAutoRefresh();
+    if (renderedTabs.playoff) playoffAutoRefresh();
+    if (renderedTabs.breakdown && bdData) refreshBdList();
+});
+
 // ── Reset event data (used when switching FRC/FTC mode) ────
 function resetEventData() {
+    Realtime.unsubscribe();
     currentEvent = null;
     currentEventYear = null;
     currentEventStatus = null;
@@ -709,6 +793,51 @@ function toggleShowPredictions(on) {
         document.addEventListener('DOMContentLoaded', () => {
             const cb = document.getElementById('toggle-predictions');
             if (cb) cb.checked = true;
+        });
+    }
+})();
+
+// ── Show Team Attributes Toggle (robot name, strategy, hardware) ──
+let showTeamAttrs = false;
+
+function toggleTeamAttrs(on) {
+    showTeamAttrs = on;
+    localStorage.setItem('showTeamAttrs', on ? 'true' : 'false');
+    document.body.classList.toggle('show-team-attrs', on);
+    if (pbpData && pbpData.matches && pbpData.matches.length) {
+        renderPbpMatch();
+    }
+}
+
+(function initTeamAttrs() {
+    const saved = localStorage.getItem('showTeamAttrs');
+    if (saved === 'true') {
+        showTeamAttrs = true;
+        document.addEventListener('DOMContentLoaded', () => {
+            const cb = document.getElementById('toggle-team-attrs');
+            if (cb) cb.checked = true;
+            document.body.classList.add('show-team-attrs');
+        });
+    }
+})();
+
+// ── Hide Stats Toggle ──────────────────────────────────────
+let hideStats = false;
+
+function toggleHideStats(on) {
+    hideStats = on;
+    localStorage.setItem('hideStats', on ? 'true' : 'false');
+    document.body.classList.toggle('hide-stats', on);
+}
+
+(function initHideStats() {
+    const saved = localStorage.getItem('hideStats');
+    if (saved === 'true') {
+        hideStats = true;
+        document.addEventListener('DOMContentLoaded', () => {
+            const cb = document.getElementById('toggle-hide-stats');
+            if (cb) cb.checked = true;
+            document.body.classList.add('hide-stats');
         });
     }
 })();
@@ -2153,6 +2282,7 @@ function clearActiveEvent() {
     localStorage.removeItem('selectedEvent');
     // Clear URL params
     history.replaceState(null, '', location.pathname);
+    Realtime.unsubscribe();
     stopRankingsPolling();
     stopPbpRefresh();
     stopPlayoffRefresh();
@@ -2175,7 +2305,8 @@ const RANKINGS_POLL_INTERVAL = 10_000; // 10 seconds — uses FRC API for near-i
 function startRankingsPolling() {
     stopRankingsPolling();
     if (currentEventStatus !== 'ongoing') return;
-    rankingsRefreshTimer = setInterval(refreshRankings, RANKINGS_POLL_INTERVAL);
+    // Realtime handles live updates — no setInterval needed.
+    // Subscribe once when event loads (see loadEvent).
 }
 
 function stopRankingsPolling() {
@@ -2198,7 +2329,7 @@ async function refreshRankings() {
         }
         // Fallback: full refresh
         const teams = await rApi.refreshRankings(currentEvent);
-        $('event-teams').innerHTML = buildTeamTable(teams);
+        $('event-teams').innerHTML = await buildTeamTable(teams);
         applyRankChangeIndicators(oldMap);
     } catch (err) {
         console.warn('[Rankings refresh]', err);
@@ -2353,6 +2484,7 @@ async function loadEvent(eventKey) {
     stopBdPolling();
     stopBdListRefresh();
     stopPbpRefresh();
+    Realtime.unsubscribe();
     _pbpConnCache = {};
     _pbpConnAllTime = false;
     _pbpAwardsCache = {};
@@ -2455,6 +2587,11 @@ async function loadEvent(eventKey) {
         // Start auto-refresh for ongoing events
         startRankingsPolling();
 
+        // Open Realtime WebSocket channel for live push updates
+        if (currentEventStatus === 'ongoing') {
+            Realtime.subscribe(code);
+        }
+
         // Active event banner
         const statusBadge = info.status
             ? `<span class="aeb-status-badge status-${info.status}">${info.status.toUpperCase()}</span>`
@@ -2481,7 +2618,7 @@ async function loadEvent(eventKey) {
         }
         hide('rankings-empty');
         show('rankings-container');
-        $('event-teams').innerHTML = buildTeamTable(teams);
+        $('event-teams').innerHTML = await buildTeamTable(teams);
         fadeIn('rankings-container');
 
         // Reset dependent tabs — clear both visibility and inner content
@@ -2723,6 +2860,12 @@ async function _loadTimsOverrides() {
                 top_sponsors: t.top_sponsors || '',
                 robot_name: t.robot_name || '',
                 number_display: t.number_display || '',
+                location: [t.city, t.state_prov].filter(Boolean).join(', '),
+                pronunciation: t.name_pronounce || '',
+                motto: t.motto || '',
+                hardware: t.hardware || '',
+                auto_strategy: t.auto_strategy || '',
+                teleop_strategy: t.teleop_strategy || '',
             };
         }
     }
@@ -2744,6 +2887,9 @@ function _applyTimsOverrides(t) {
     if (ov.number_display) copy.number_display = ov.number_display;
     if (ov.pronunciation) copy.name_pronounce = ov.pronunciation;
     if (ov.motto) copy.motto = ov.motto;
+    if (ov.hardware) copy.hardware = ov.hardware;
+    if (ov.auto_strategy) copy.auto_strategy = ov.auto_strategy;
+    if (ov.teleop_strategy) copy.teleop_strategy = ov.teleop_strategy;
     return copy;
 }
 
@@ -2803,10 +2949,10 @@ function applyRankChangeIndicators(oldMap) {
     }, 8000);
 }
 
-function buildTeamTable(teams) {
+async function buildTeamTable(teams) {
     teamsData = teams;
     patchFtcAvatars(teamsData);
-    _loadTimsOverrides();
+    await _loadTimsOverrides();
     // Apply the current sort so upcoming events (sorted by team_number) render correctly
     sortTeamsData();
     return rankingsCardView
@@ -4444,7 +4590,7 @@ async function loadPlayoffs() {
 function startPlayoffRefresh() {
     stopPlayoffRefresh();
     if (currentEventStatus !== 'ongoing') return;
-    playoffRefreshTimer = setInterval(playoffAutoRefresh, PLAYOFF_REFRESH_INTERVAL);
+    // Realtime handles live updates — no setInterval needed.
 }
 
 function stopPlayoffRefresh() {
@@ -5192,6 +5338,10 @@ function toggleAlliancePlayoff(on) {
     allianceShowPlayoff = on;
     if (allianceData) renderAlliances(allianceData);
 }
+function toggleAllianceAttrs(on) {
+    allianceShowAttrs = on;
+    if (allianceData) renderAlliances(allianceData);
+}
 
 function renderAlliances(data) {
     const { alliances, partnerships, max_combined_opr } = data;
@@ -5307,6 +5457,7 @@ function renderAlliances(data) {
                         <span class="team-role">${getRoleLabel(idx, a.teams.length)}</span>
                         ${avatarHtml}
                         <span class="team-num has-tooltip">${_renderTeamNum(t)}${(_timsCache[t.team_number]?.nickname || t.nickname) ? `<span class="custom-tooltip">${_timsCache[t.team_number]?.nickname || t.nickname}</span>` : ''}</span>
+                        ${allianceShowAttrs ? _renderBdTags(t.team_number) : ''}
                         ${allianceShowNames ? `<span class="team-nick">${_timsCache[t.team_number]?.nickname || t.nickname || ''}</span>` : ''}
                         <div class="team-stats-mini">
                             <span${Number(t.rank) >= 1 && Number(t.rank) <= 8 ? ' class="rank-top8"' : ''}>Rank ${t.rank}</span>
@@ -6691,6 +6842,8 @@ function renderPbpTeam(t, sideCls) {
         <div class="pbp-awards-slot" data-team="${t.team_number}"></div>
         <div class="pbp-bottom-row">
             ${t.robot_name ? `<div class="pbp-robot-name" title="Robot Name"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/><line x1="8" y1="16" x2="8" y2="16"/><line x1="16" y1="16" x2="16" y2="16"/></svg><span class="pbp-robot-name-text">${_esc(t.robot_name)}</span></div>` : ''}
+            ${_renderPbpTags(_parseTags(_timsCache[t.team_number]?.hardware), 'Hardware', 'pbp-hardware-tag')}
+            ${_renderPbpTags(_parseTags(_timsCache[t.team_number]?.auto_strategy).concat(_parseTags(_timsCache[t.team_number]?.teleop_strategy)), 'Strategy', 'pbp-strategy-tag')}
             <div class="pbp-sponsors-slot" data-sponsors-team="${t.team_number}">${t._tims_sponsors ? `<div class="pbp-sponsors" title="Sponsors (TIMS)"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg><span class="pbp-sponsors-text">${t._tims_sponsors}</span></div>` : ''}</div>
         </div>
     </div>`;
@@ -6825,8 +6978,8 @@ function pbpToggleAwardsOverflow(el) {
 function startPbpRefresh() {
     stopPbpRefresh();
     if (currentEventStatus !== 'ongoing') return;
-    pbpRefreshTimer = setInterval(pbpAutoRefresh, PBP_REFRESH_INTERVAL);
-    // Show live badge
+    // Realtime handles live updates — no setInterval needed.
+    // Show live badge to indicate the connection is active
     $('pbp-live-badge')?.classList.remove('hidden');
 }
 
@@ -7042,7 +7195,7 @@ async function loadBreakdownTab() {
 // ── Periodic match-list refresh (updates has_breakdown flags) ──
 function startBdListRefresh() {
     stopBdListRefresh();
-    bdListTimer = setInterval(refreshBdList, BD_LIST_REFRESH);
+    // Realtime handles live updates — no setInterval needed.
 }
 function stopBdListRefresh() {
     if (bdListTimer) { clearInterval(bdListTimer); bdListTimer = null; }
@@ -7143,11 +7296,12 @@ async function loadBdMatch() {
 // ── Breakdown auto-polling ────────────────────────────────
 function startBdPolling() {
     stopBdPolling();
-    bdPollTimer = setInterval(pollBdMatch, BD_POLL_INTERVAL);
+    // Mark that we're waiting for a breakdown (Realtime match handler will trigger pollBdMatch)
+    bdPollTimer = true;  // sentinel — indicates we're waiting for breakdown
 }
 
 function stopBdPolling() {
-    if (bdPollTimer) { clearInterval(bdPollTimer); bdPollTimer = null; }
+    bdPollTimer = null;
 }
 
 async function pollBdMatch() {
@@ -7393,13 +7547,16 @@ function renderBdRobot(robot, nickMap, statsMap, color) {
     return `
     <div class="bd-robot-card bd-robot-card-clickable" data-team="${num}" data-color="${color}" onclick="toggleSpotlight(${num}, '${color}')">
         <div class="bd-robot-num has-tooltip">${numHtml}${tooltipHtml}</div>
-        <div class="bd-robot-field">
-            <span class="bd-robot-label">Leave</span>
-            <span class="bd-robot-value ${leaveCls}">${leaveVal}</span>
-        </div>
-        <div class="bd-robot-field">
-            <span class="bd-robot-label">Barge</span>
-            <span class="bd-robot-value ${eg.cls}">${eg.label}</span>
+        <div class="bd-micro-tags-slot">${_renderBdTags(num)}</div>
+        <div class="bd-robot-fields">
+            <div class="bd-robot-field">
+                <span class="bd-robot-label">Leave</span>
+                <span class="bd-robot-value ${leaveCls}">${leaveVal}</span>
+            </div>
+            <div class="bd-robot-field">
+                <span class="bd-robot-label">Barge</span>
+                <span class="bd-robot-value ${eg.cls}">${eg.label}</span>
+            </div>
         </div>
     </div>`;
 }
@@ -7614,13 +7771,16 @@ function renderBdRobotFTC(robot, teamObj, nickMap, statsMap, color) {
     return `
     <div class="bd-robot-card" data-team="${num}" data-color="${color}">
         <div class="bd-robot-num has-tooltip">${num}${tooltipHtml}</div>
-        <div class="bd-robot-field">
-            <span class="bd-robot-label">Auto Leave</span>
-            <span class="bd-robot-value ${leaveCls}">${leaveVal}</span>
-        </div>
-        <div class="bd-robot-field">
-            <span class="bd-robot-label">Endgame</span>
-            <span class="bd-robot-value ${eg.cls}">${eg.label}</span>
+        <div class="bd-micro-tags-slot">${_renderBdTags(num)}</div>
+        <div class="bd-robot-fields">
+            <div class="bd-robot-field">
+                <span class="bd-robot-label">Auto Leave</span>
+                <span class="bd-robot-value ${leaveCls}">${leaveVal}</span>
+            </div>
+            <div class="bd-robot-field">
+                <span class="bd-robot-label">Endgame</span>
+                <span class="bd-robot-value ${eg.cls}">${eg.label}</span>
+            </div>
         </div>
     </div>`;
 }
@@ -7839,13 +7999,16 @@ function renderBdRobot2026(robot, nickMap, statsMap, color) {
     return `
     <div class="bd-robot-card bd-robot-card-clickable" data-team="${num}" data-color="${color}" onclick="toggleSpotlight(${num}, '${color}')">
         <div class="bd-robot-num has-tooltip">${num}${tooltipHtml}</div>
-        <div class="bd-robot-field">
-            <span class="bd-robot-label">Auto Tower</span>
-            <span class="bd-robot-value ${autoCls}">${autoLabel}</span>
-        </div>
-        <div class="bd-robot-field">
-            <span class="bd-robot-label">Endgame</span>
-            <span class="bd-robot-value ${eg.cls}">${eg.label}</span>
+        <div class="bd-micro-tags-slot">${_renderBdTags(num)}</div>
+        <div class="bd-robot-fields">
+            <div class="bd-robot-field">
+                <span class="bd-robot-label">Auto Tower</span>
+                <span class="bd-robot-value ${autoCls}">${autoLabel}</span>
+            </div>
+            <div class="bd-robot-field">
+                <span class="bd-robot-label">Endgame</span>
+                <span class="bd-robot-value ${eg.cls}">${eg.label}</span>
+            </div>
         </div>
     </div>`;
 }
@@ -9819,23 +9982,36 @@ function closeMobUtilPanel() {
 
 /* Settings panel content */
 function _buildMobSettings(container) {
-    const toggles = [
-        { id: 'toggle-theme', label: 'Light mode', fn: 'toggleTheme' },
-        { id: 'toggle-highlight-foreign', label: 'Highlight International Teams', fn: 'toggleHighlightForeign' },
-        { id: 'toggle-highlight-rookie', label: 'Highlight Rookie Teams', fn: 'toggleHighlightRookie' },
-        { id: 'toggle-offseason', label: 'Show Offseason Events', fn: 'toggleShowOffseason' },
-        { id: 'toggle-pbp-awards', label: 'Show Awards in Play by Play', fn: 'togglePbpAwards' },
-        { id: 'toggle-predictions', label: 'Show Win Predictions (Statbotics)', fn: 'toggleShowPredictions' },
-        { id: 'toggle-gatool-sponsors', label: 'Show Sponsors (GATool) (Legacy)', fn: 'toggleGatoolSponsors' },
-        { id: 'toggle-world-record', label: 'Show Season High Score', fn: 'toggleWorldRecord' },
+    const groups = [
+        { title: 'General', toggles: [
+            { id: 'toggle-theme', label: 'Light mode', fn: 'toggleTheme' },
+            { id: 'toggle-highlight-foreign', label: 'Highlight International Teams', fn: 'toggleHighlightForeign' },
+            { id: 'toggle-highlight-rookie', label: 'Highlight Rookie Teams', fn: 'toggleHighlightRookie' },
+            { id: 'toggle-offseason', label: 'Show Offseason Events', fn: 'toggleShowOffseason' },
+            { id: 'toggle-world-record', label: 'Show Season High Score', fn: 'toggleWorldRecord' },
+        ]},
+        { title: 'Play-by-Play', toggles: [
+            { id: 'toggle-pbp-awards', label: 'Show Awards', fn: 'togglePbpAwards' },
+            { id: 'toggle-predictions', label: 'Show Win Predictions (Statbotics)', fn: 'toggleShowPredictions' },
+            { id: 'toggle-gatool-sponsors', label: 'Sponsors', fn: 'toggleGatoolSponsors' },
+            { id: 'toggle-sponsor-first-only', label: 'Hide Sponsors After First Appearance', fn: 'toggleSponsorFirstOnly' },
+            { id: 'toggle-team-attrs', label: 'Show Team Attributes', fn: 'toggleTeamAttrs' },
+            { id: 'toggle-hide-stats', label: 'Hide Stats', fn: 'toggleHideStats' },
+        ]},
     ];
-    toggles.forEach(t => {
-        const orig = document.getElementById(t.id);
-        const checked = orig ? orig.checked : false;
-        const lbl = document.createElement('label');
-        lbl.className = 'settings-toggle';
-        lbl.innerHTML = `<input type="checkbox" ${checked ? 'checked' : ''} onchange="${t.fn}(this.checked); var o=document.getElementById('${t.id}'); if(o) o.checked=this.checked;"><span class="toggle-slider"></span><span class="toggle-label">${t.label}</span>`;
-        container.appendChild(lbl);
+    groups.forEach(g => {
+        const hdr = document.createElement('div');
+        hdr.className = 'settings-group-title';
+        hdr.textContent = g.title;
+        container.appendChild(hdr);
+        g.toggles.forEach(t => {
+            const orig = document.getElementById(t.id);
+            const checked = orig ? orig.checked : false;
+            const lbl = document.createElement('label');
+            lbl.className = 'settings-toggle';
+            lbl.innerHTML = `<input type="checkbox" ${checked ? 'checked' : ''} onchange="${t.fn}(this.checked); var o=document.getElementById('${t.id}'); if(o) o.checked=this.checked;"><span class="toggle-slider"></span><span class="toggle-label">${t.label}</span>`;
+            container.appendChild(lbl);
+        });
     });
 }
 
@@ -10347,9 +10523,9 @@ function renderTeamCards(teams) {
             if (!currentEvent) return;
             // Trigger a re-load of rankings
             const eventKey = currentEvent;
-            getActiveAPI().eventTeams(eventKey).then(data => {
+            getActiveAPI().eventTeams(eventKey).then(async data => {
                 if (data && !data.error) {
-                    $('event-teams').innerHTML = buildTeamTable(data.teams || data);
+                    $('event-teams').innerHTML = await buildTeamTable(data.teams || data);
                     showToast('Rankings refreshed', 'info', 2000);
                     updateMobileNavBadges();
                 }

@@ -1691,7 +1691,85 @@ async def get_ftc_head_to_head(
 
 # ── FTC Event Connections ──────────────────────────────────
 
+_CONNECTIONS_TTL = 3600  # 1 hour disk cache TTL
+
+_ftc_alltime_warm_tasks: set[str] = set()
+
+
 async def get_ftc_event_connections(
+    event_key: str, *, all_time: bool = False, lookback: int = 3,
+) -> list[dict]:
+    """Public entry point — 3-tier cache-aside: disk → Supabase → build."""
+    cache_key = f"{event_key}_all" if all_time else event_key
+
+    # 1) Disk cache
+    cached = read_payload("connections", cache_key, _CONNECTIONS_TTL)
+    if cached:
+        cached.pop("_ts", None)
+        if not all_time:
+            _maybe_warm_ftc_alltime(event_key)
+        return cached.get("connections", [])
+
+    # 2) Supabase cache
+    sb_key = f"conn_{cache_key}"
+    sb_row = await get_cached_summary(sb_key)
+    if sb_row and sb_row.get("summary"):
+        write_payload("connections", cache_key, sb_row["summary"])
+        if not all_time:
+            _maybe_warm_ftc_alltime(event_key)
+        return sb_row["summary"].get("connections", [])
+
+    # 3) Build from scratch
+    result = await _build_ftc_connections(event_key, all_time=all_time, lookback=lookback)
+
+    payload = {"connections": result}
+    write_payload("connections", cache_key, payload)
+    if result:
+        await set_cached_summary(sb_key, summary=payload)
+
+    if not all_time:
+        _maybe_warm_ftc_alltime(event_key)
+
+    return result
+
+
+def _maybe_warm_ftc_alltime(event_key: str):
+    """Kick off background build of all-time FTC connections if not cached."""
+    all_key = f"{event_key}_all"
+    if all_key in _ftc_alltime_warm_tasks:
+        return
+    cached = read_payload("connections", all_key, _CONNECTIONS_TTL)
+    if cached:
+        return
+    _ftc_alltime_warm_tasks.add(all_key)
+    asyncio.ensure_future(_warm_ftc_alltime(event_key, all_key))
+
+
+async def _warm_ftc_alltime(event_key: str, all_key: str):
+    """Background: build and cache all-time FTC connections."""
+    try:
+        await get_ftc_event_connections(event_key, all_time=True)
+    except Exception:
+        pass
+    finally:
+        _ftc_alltime_warm_tasks.discard(all_key)
+
+
+async def get_ftc_match_connections(
+    event_key: str, team_numbers: list[int], *, all_time: bool = False,
+) -> list[dict]:
+    """Filter full-event FTC connections to teams on the field."""
+    all_conns = await get_ftc_event_connections(event_key, all_time=all_time)
+    if not all_conns:
+        return []
+    team_set = set(team_numbers)
+    return [
+        c for c in all_conns
+        if c.get("team_a") in team_set and c.get("team_b") in team_set
+    ]
+
+
+async def _build_ftc_connections(
     event_key: str, *, all_time: bool = False, lookback: int = 3,
 ) -> list[dict]:
     """Find pairs of teams at an FTC event that share prior playoff history.

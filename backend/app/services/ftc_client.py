@@ -163,6 +163,7 @@ class FTCClient:
         *,
         level: str | None = None,
         team_number: int | None = None,
+        bypass_cache: bool = False,
     ) -> list[dict]:
         """Match results."""
         url = f"/{season}/matches/{event_code}"
@@ -173,7 +174,7 @@ class FTCClient:
             params.append(f"teamNumber={team_number}")
         if params:
             url += "?" + "&".join(params)
-        data = await self.get(url)
+        data = await self.get(url, bypass_cache=bypass_cache)
         return data.get("matches", [])
 
     # ── Score Details ───────────────────────────────────

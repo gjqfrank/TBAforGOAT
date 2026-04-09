@@ -68,6 +68,7 @@
                         </button>
                     </div>
                     <div class="settings-title">Settings</div>
+                    <div class="settings-group-title">General</div>
                     <label class="settings-toggle">
                         <input type="checkbox" id="toggle-theme" onchange="toggleTheme(this.checked)">
                         <span class="toggle-slider"></span>
@@ -89,9 +90,15 @@
                         <span class="toggle-label">Show Offseason Events</span>
                     </label>
                     <label class="settings-toggle">
+                        <input type="checkbox" id="toggle-world-record" onchange="toggleWorldRecord(this.checked)" checked>
+                        <span class="toggle-slider"></span>
+                        <span class="toggle-label">Show Season High Score</span>
+                    </label>
+                    <div class="settings-group-title">Play-by-Play</div>
+                    <label class="settings-toggle">
                         <input type="checkbox" id="toggle-pbp-awards" onchange="togglePbpAwards(this.checked)">
                         <span class="toggle-slider"></span>
-                        <span class="toggle-label">Show Awards in Play by Play</span>
+                        <span class="toggle-label">Show Awards</span>
                     </label>
                     <label class="settings-toggle">
                         <input type="checkbox" id="toggle-predictions" onchange="toggleShowPredictions(this.checked)">
@@ -101,17 +108,22 @@
                     <label class="settings-toggle">
                         <input type="checkbox" id="toggle-gatool-sponsors" onchange="toggleGatoolSponsors(this.checked)">
                         <span class="toggle-slider"></span>
-                        <span class="toggle-label">Show Sponsors (GATool) (Legacy)</span>
+                        <span class="toggle-label">Sponsors</span>
                     </label>
-                    <label class="settings-toggle" id="sponsor-first-only-row" style="display:none">
+                    <label class="settings-toggle" id="sponsor-first-only-row">
                         <input type="checkbox" id="toggle-sponsor-first-only" onchange="toggleSponsorFirstOnly(this.checked)">
                         <span class="toggle-slider"></span>
                         <span class="toggle-label">Hide Sponsors After First Appearance</span>
                     </label>
                     <label class="settings-toggle">
-                        <input type="checkbox" id="toggle-world-record" onchange="toggleWorldRecord(this.checked)" checked>
+                        <input type="checkbox" id="toggle-team-attrs" onchange="toggleTeamAttrs(this.checked)">
                         <span class="toggle-slider"></span>
-                        <span class="toggle-label">Show Season High Score</span>
+                        <span class="toggle-label">Show Team Attributes</span>
+                    </label>
+                    <label class="settings-toggle">
+                        <input type="checkbox" id="toggle-hide-stats" onchange="toggleHideStats(this.checked)">
+                        <span class="toggle-slider"></span>
+                        <span class="toggle-label">Hide Stats</span>
                     </label>
                 </div>
             </div>
@@ -558,6 +570,7 @@
                 <label class="toggle-label"><input type="checkbox" id="alliance-toggle-avatars" checked onchange="toggleAllianceAvatars(this.checked)"> Avatars</label>
                 <label class="toggle-label"><input type="checkbox" id="alliance-toggle-epa" onchange="toggleAllianceEpa(this.checked)"> EPA Breakdown</label>
                 <label class="toggle-label"><input type="checkbox" id="alliance-toggle-playoff" onchange="toggleAlliancePlayoff(this.checked)"> Playoff Status</label>
+                <label class="toggle-label"><input type="checkbox" id="alliance-toggle-attrs" onchange="toggleAllianceAttrs(this.checked)"> Attributes</label>
             </div>
             <div id="alliance-grid"></div>
         </section>
@@ -844,11 +857,13 @@
         <button class="landscape-hint-close" onclick="dismissLandscapeHint()">&times;</button>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
     <script src="js/api.js"></script>
     <script src="js/ftc-api.js"></script>
     <script src="js/db.js"></script>
     <script src="js/sync.js"></script>
     <script src="js/auth.js"></script>
+    <script src="js/realtime.js"></script>
     <script src="js/editor.js"></script>
 
     <script src="js/app.js"></script>

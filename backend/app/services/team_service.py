@@ -6,6 +6,7 @@ from datetime import date
 from typing import Optional
 from .tba_client import get_tba_client
 from .frc_client import get_frc_client
+from .inflight import coalesce
 from .supabase_client import read_frc_playoff_matches
 
 
@@ -82,6 +83,12 @@ async def _safe(coro):
 
 
 async def get_team_stats(team_number: int, year: Optional[int] = None) -> dict:
+    """Single-flight coalesced team stats lookup."""
+    cache_key = f"team_stats:{team_number}:{year or 'current'}"
+    return await coalesce(cache_key, _get_team_stats_impl, team_number, year)
+
+
+async def _get_team_stats_impl(team_number: int, year: Optional[int] = None) -> dict:
     """Comprehensive stats for a single team in a given year."""
     client = get_tba_client()
     team_key = f"frc{team_number}"

@@ -425,6 +425,8 @@ def _format_team_dossier(d: dict) -> str:
     lines = [f"Team {d['team_number']} — {d['nickname']}"]
 
     # Identity
+    cur_year = d.get("current_year", date.today().year)
+    lines.append(f"  Current season: {cur_year}")
     location_parts = [p for p in [d.get("city"), d.get("state_prov"), d.get("country")] if p]
     if location_parts:
         lines.append(f"  From: {', '.join(location_parts)}")
@@ -434,7 +436,6 @@ def _format_team_dossier(d: dict) -> str:
     # Prestige — banners with recency context
     banner_count = d.get("blue_banners", 0)
     banner_years = d.get("blue_banner_years", [])
-    cur_year = d.get("current_year", date.today().year)
     if banner_count:
         last_banner = max(banner_years) if banner_years else None
         drought = (cur_year - last_banner) if last_banner else None

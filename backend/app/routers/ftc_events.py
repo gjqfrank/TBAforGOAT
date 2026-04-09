@@ -1,42 +1,11 @@
 """FTC Event endpoints — info, teams, summary, season list."""
 from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import Response
 from ..services import ftc_event_service
 from ..services.ftc_client import get_ftc_client
 from ..services.gatool_client import get_gatool_client
 from ..services.error_utils import raise_api_error
-import httpx
 
 router = APIRouter()
-
-# ── FTC Avatar CSS proxy (FIRST scoring server has no CORS headers) ──
-_AVATAR_CSS_URL = "https://ftc-scoring.firstinspires.org/avatars/composed/{year}.css"
-_avatar_css_cache: dict[int, str] = {}
-
-
-@router.get("/avatar-css/{year}")
-async def ftc_avatar_css(year: int):
-    """Proxy the FTC scoring server's avatar CSS (no CORS headers on origin)."""
-    if year < 2019 or year > 2030:
-        raise HTTPException(status_code=400, detail="Invalid year")
-    if year in _avatar_css_cache:
-        return Response(
-            content=_avatar_css_cache[year],
-            media_type="text/css",
-            headers={"Cache-Control": "public, max-age=86400"},
-        )
-    try:
-        async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.get(_AVATAR_CSS_URL.format(year=year))
-            resp.raise_for_status()
-        _avatar_css_cache[year] = resp.text
-        return Response(
-            content=resp.text,
-            media_type="text/css",
-            headers={"Cache-Control": "public, max-age=86400"},
-        )
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Could not fetch FTC avatar CSS: {e}")
 
 
 @router.get("/teams/awards-summary")
@@ -151,20 +120,6 @@ async def event_awards(event_key: str):
         raise_api_error(e, fallback_detail=f"Could not load FTC awards for event '{event_key}'.")
 
 
-@router.get("/{event_key}/summary/connections")
-async def ftc_event_connections(
-    event_key: str,
-    all_time: bool = Query(False, description="Search all-time instead of last 3 seasons"),
-):
-    """Prior playoff connections between teams at an FTC event."""
-    try:
-        return await ftc_event_service.get_ftc_event_connections(event_key, all_time=all_time)
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise_api_error(e, fallback_detail=f"Could not load FTC connections for event '{event_key}'.")
-
-
 @router.get("/{event_key}/past-awards")
 async def ftc_past_awards(event_key: str):
     """Previous-season Inspire/Winner/Finalist awards for FTC teams at an event."""
@@ -174,17 +129,6 @@ async def ftc_past_awards(event_key: str):
         raise
     except Exception as e:
         raise_api_error(e, fallback_detail=f"Could not load FTC past awards for event '{event_key}'.")
-
-
-@router.get("/{event_key}/season-awards")
-async def ftc_season_awards(event_key: str):
-    """Current-season Inspire/Winner/Finalist awards earned at prior events for FTC teams at an event."""
-    try:
-        return await ftc_event_service.get_ftc_current_season_awards(event_key)
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise_api_error(e, fallback_detail=f"Could not load FTC season awards for event '{event_key}'.")
 
 
 @router.get("/world-record/{season}")
@@ -202,10 +146,10 @@ async def ftc_world_record(season: int):
 
 
 @router.get("/team/{team_number}")
-async def team_lookup(team_number: int, season: int = Query(2025), include_history: bool = Query(False)):
+async def team_lookup(team_number: int, season: int = Query(2025)):
     """FTC individual team lookup using FTC Events API + FTC Scout."""
     try:
-        return await ftc_event_service.get_team_lookup(team_number, season, include_history=include_history)
+        return await ftc_event_service.get_team_lookup(team_number, season)
     except HTTPException:
         raise
     except Exception as e:
@@ -221,3 +165,21 @@ async def team_opr_history(team_number: int, season: int = Query(2025)):
         raise
     except Exception as e:
         raise_api_error(e, fallback_detail=f"Could not load OPR history for FTC team {team_number}.")
+
+
+@router.get("/{event_key}/summary/connections")
+async def ftc_event_connections(
+    event_key: str,
+    all_time: bool = Query(False, description="Search all-time instead of last 3 years"),
+    teams: str = Query(None, description="Comma-separated FTC team numbers. If omitted, checks all teams at the event."),
+):
+    """Prior playoff connections for FTC teams at an event (cache-aside)."""
+    try:
+        if teams:
+            team_numbers = [int(t.strip()) for t in teams.split(",") if t.strip()]
+            return await ftc_event_service.get_ftc_match_connections(event_key, team_numbers, all_time=all_time)
+        return await ftc_event_service.get_ftc_event_connections(event_key, all_time=all_time)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise_api_error(e, fallback_detail=f"Could not load FTC connections for event '{event_key}'.")

@@ -29,12 +29,17 @@ async def lifespan(app: FastAPI):
 
     # Only start workers when Supabase is configured
     supabase_url = os.environ.get("SUPABASE_URL", "")
-    if supabase_url:
+    disable_workers = os.environ.get("DISABLE_WORKERS", "")
+    if supabase_url and not disable_workers:
         from .workers.match_poller import run_match_poller
         from .workers.event_sync import run_event_sync
+        from .workers.ftc_event_sync import run_ftc_event_sync
+        from .workers.ftc_match_poller import run_ftc_match_poller
 
         tasks.append(asyncio.create_task(run_event_sync(), name="event-sync"))
         tasks.append(asyncio.create_task(run_match_poller(), name="match-poller"))
+        tasks.append(asyncio.create_task(run_ftc_event_sync(), name="ftc-event-sync"))
+        tasks.append(asyncio.create_task(run_ftc_match_poller(), name="ftc-match-poller"))
         log.info("Ingestion workers started (%d tasks)", len(tasks))
     else:
         log.info("SUPABASE_URL not set — ingestion workers disabled")
@@ -75,8 +80,8 @@ app.add_middleware(
 
 # ── Rate-limiter middleware (in-memory, per-IP) ─────────────
 _RATE_WINDOW = 60          # seconds
-_RATE_LIMIT_GENERAL = 60   # requests per window for normal endpoints
-_RATE_LIMIT_HEAVY = 20     # requests per window for heavy endpoints (raised from 10)
+_RATE_LIMIT_GENERAL = 200  # requests per window for normal endpoints (raised: BFF cache hits are cheap)
+_RATE_LIMIT_HEAVY = 40     # requests per window for heavy endpoints (raised: most are cached)
 
 # Trusted consumers get higher ceilings but aren't unlimited
 _RATE_LIMIT_TRUSTED_GENERAL = 600   # raised from 300

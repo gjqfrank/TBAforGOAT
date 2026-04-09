@@ -3,7 +3,7 @@
     "label": "main:event-info",
     "path": "/api/events/2025tuhc/info",
     "status": 200,
-    "time_s": 0.05370063000009395,
+    "time_s": 0.0407782070005851,
     "size_kb": 0.2158203125,
     "ok": true
   },
@@ -11,23 +11,23 @@
     "label": "main:event-teams",
     "path": "/api/events/2025tuhc/teams",
     "status": 200,
-    "time_s": 2.3641318530007993,
-    "size_kb": 130.0390625,
+    "time_s": 4.767025932999786,
+    "size_kb": 130.1669921875,
     "ok": true
   },
   {
     "label": "main:phase1-total",
     "path": "parallel",
     "status": 200,
-    "time_s": 2.36462912999923,
-    "size_kb": 130.2548828125,
+    "time_s": 4.767481144999692,
+    "size_kb": 130.3828125,
     "ok": true
   },
   {
     "label": "main:all-matches",
     "path": "/api/matches/2025tuhc/all",
     "status": 200,
-    "time_s": 0.8543762310000602,
+    "time_s": 0.7658617380002397,
     "size_kb": 216.353515625,
     "ok": true
   },
@@ -35,7 +35,7 @@
     "label": "main:playoff-matches",
     "path": "/api/matches/2025tuhc/playoffs",
     "status": 200,
-    "time_s": 0.64511074100119,
+    "time_s": 0.46932225299951824,
     "size_kb": 64.7431640625,
     "ok": true
   },
@@ -43,7 +43,7 @@
     "label": "main:alliances",
     "path": "/api/alliances/2025tuhc",
     "status": 200,
-    "time_s": 9.991433318000418,
+    "time_s": 6.137931596000271,
     "size_kb": 75.1337890625,
     "ok": true
   },
@@ -51,7 +51,7 @@
     "label": "main:phase2-total",
     "path": "parallel",
     "status": 200,
-    "time_s": 9.992028603999643,
+    "time_s": 6.138445229999888,
     "size_kb": 356.23046875,
     "ok": true
   },
@@ -59,15 +59,15 @@
     "label": "main:full-event-load",
     "path": "sum",
     "status": 200,
-    "time_s": 12.356657733998873,
-    "size_kb": 486.4853515625,
+    "time_s": 10.90592637499958,
+    "size_kb": 486.61328125,
     "ok": true
   },
   {
     "label": "main:summary-cold",
     "path": "/api/events/2025tuhc/summary",
     "status": 200,
-    "time_s": 0.09421507799925166,
+    "time_s": 0.041288179999355634,
     "size_kb": 1.470703125,
     "ok": true
   },
@@ -75,7 +75,7 @@
     "label": "main:summary-awards-cold",
     "path": "/api/events/2025tuhc/summary/awards",
     "status": 200,
-    "time_s": 0.06014676400081953,
+    "time_s": 0.04175443499934772,
     "size_kb": 1.5224609375,
     "ok": true
   },
@@ -83,7 +83,7 @@
     "label": "main:team-stats-cold",
     "path": "/api/teams/7672/stats?year=2025",
     "status": 200,
-    "time_s": 0.5079880390003382,
+    "time_s": 0.4714557369998147,
     "size_kb": 5.13671875,
     "ok": true
   },
@@ -91,7 +91,7 @@
     "label": "main:h2h-cold",
     "path": "/api/teams/head-to-head/7672/8562?year=2025",
     "status": 200,
-    "time_s": 0.7840632970001025,
+    "time_s": 0.6167743180003527,
     "size_kb": 0.2314453125,
     "ok": true
   },
@@ -99,7 +99,7 @@
     "label": "main-warm:event-info",
     "path": "/api/events/2025tuhc/info",
     "status": 200,
-    "time_s": 0.08152500399955898,
+    "time_s": 0.041155324000101245,
     "size_kb": 0.2158203125,
     "ok": true
   },
@@ -107,15 +107,15 @@
     "label": "main-warm:event-teams",
     "path": "/api/events/2025tuhc/teams",
     "status": 200,
-    "time_s": 0.2382266950007761,
-    "size_kb": 130.0390625,
+    "time_s": 0.20461719800005085,
+    "size_kb": 130.1669921875,
     "ok": true
   },
   {
     "label": "main-warm:all-matches",
     "path": "/api/matches/2025tuhc/all",
     "status": 200,
-    "time_s": 0.0896988690001308,
+    "time_s": 0.09500627100078418,
     "size_kb": 216.353515625,
     "ok": true
   },
@@ -123,7 +123,7 @@
     "label": "main-warm:playoff-matches",
     "path": "/api/matches/2025tuhc/playoffs",
     "status": 200,
-    "time_s": 0.047389883000505506,
+    "time_s": 0.05625724499986973,
     "size_kb": 64.7431640625,
     "ok": true
   },
@@ -131,7 +131,7 @@
     "label": "main-warm:alliances",
     "path": "/api/alliances/2025tuhc",
     "status": 200,
-    "time_s": 0.36156397899867443,
+    "time_s": 0.4448771649995251,
     "size_kb": 75.1337890625,
     "ok": true
   },
@@ -139,8 +139,8 @@
     "label": "main-warm:full-event-load",
     "path": "parallel",
     "status": 200,
-    "time_s": 0.5997906739994505,
-    "size_kb": 486.4853515625,
+    "time_s": 0.649494362999576,
+    "size_kb": 486.61328125,
     "ok": true
   }
 ]

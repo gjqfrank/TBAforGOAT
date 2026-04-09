@@ -2,8 +2,22 @@
    api.js — thin fetch wrapper for the backend
    ═══════════════════════════════════════════════════════════ */
 
+// ── In-flight request deduplication (client-side single-flight) ──
+const _inflight = new Map();
+
 const API = {
     async get(path) {
+        // If an identical GET is already in-flight, piggyback on its promise
+        if (_inflight.has(path)) return _inflight.get(path);
+
+        const promise = API._fetch(path);
+        _inflight.set(path, promise);
+        try { return await promise; }
+        finally { _inflight.delete(path); }
+    },
+
+    /** Raw fetch — callers should go through get() for dedup */
+    async _fetch(path) {
         const resp = await fetch(`/api${path}`);
         if (!resp.ok) {
             const body = await resp.json().catch(() => ({}));
@@ -30,6 +44,7 @@ const API = {
             }
             const err = new Error(message);
             err.status = resp.status;
+            err.retryAfter = body.retry_after || null;
             throw err;
         }
         return resp.json();

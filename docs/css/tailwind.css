@@ -1572,6 +1572,17 @@ header h1 {
   border-bottom: 1px solid var(--border);
 }
 
+.settings-group-title {
+  font-size: .62rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  margin-top: .6rem;
+  margin-bottom: .25rem;
+  opacity: .7;
+}
+
 .settings-toggle {
   display: flex;
   align-items: center;
@@ -3654,6 +3665,13 @@ input.input-loading {
   flex-wrap: nowrap;
 }
 
+.alliance-team-row .bd-micro-tags {
+  display: inline-flex;
+  gap: .2rem;
+  margin: 0;
+  flex-shrink: 0;
+}
+
 .alliance-team-row:hover {
   background: var(--primary-soft);
 }
@@ -5085,6 +5103,10 @@ input.input-loading {
   margin-top: .6rem;
 }
 
+body.hide-stats .pbp-team-stats {
+  display: none !important;
+}
+
 .pbp-stat {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -5158,11 +5180,12 @@ input.input-loading {
 }
 
 .pbp-sponsors-slot {
-  margin-top: .25rem;
   padding: 0;
 }
 
-.pbp-sponsors {
+/* ── Unified attribute tags (sponsors, robot name, strategy, hardware) ── */
+
+.pbp-attr-tag {
   display: inline-flex;
   align-items: center;
   gap: .3rem;
@@ -5175,22 +5198,33 @@ input.input-loading {
   word-break: break-word;
 }
 
-.pbp-sponsors-icon {
+.pbp-attr-tag svg {
   width: 11px;
   height: 11px;
   flex-shrink: 0;
-  color: var(--text-muted, #94a3b8);
   opacity: .6;
 }
 
-.pbp-sponsors-text {
+.pbp-attr-text {
   font-size: .68rem;
   color: var(--text-muted, #94a3b8);
   line-height: 1.35;
   word-break: break-word;
 }
 
-/* ── PBP bottom row (robot name + sponsors inline) ──────── */
+/* ── Tag visibility: hidden by default, shown by body toggle ── */
+.pbp-robot-name,
+.pbp-strategy-tag,
+.pbp-hardware-tag {
+  display: none;
+}
+body.show-team-attrs .pbp-robot-name,
+body.show-team-attrs .pbp-strategy-tag,
+body.show-team-attrs .pbp-hardware-tag {
+  display: inline-flex;
+}
+
+/* ── PBP bottom row (sponsors + attributes inline) ──────── */
 
 .pbp-bottom-row {
   display: flex;
@@ -5202,30 +5236,6 @@ input.input-loading {
 
 .pbp-bottom-row:empty {
   display: none;
-}
-
-.pbp-robot-name {
-  display: inline-flex;
-  align-items: center;
-  gap: .3rem;
-  padding: .2rem .55rem;
-  background: color-mix(in srgb, var(--primary, #818cf8) 12%, transparent);
-  border-radius: 999px;
-  font-size: .68rem;
-  color: var(--primary, #818cf8);
-  line-height: 1.35;
-}
-
-.pbp-robot-name svg {
-  width: 11px;
-  height: 11px;
-  flex-shrink: 0;
-  opacity: .7;
-}
-
-.pbp-robot-name-text {
-  font-size: .68rem;
-  line-height: 1.35;
 }
 
 /* ── Styled number separator (dash in "11-370") ─────────── */
@@ -5904,6 +5914,8 @@ input.input-loading {
   border-radius: var(--radius);
   padding: .4rem .6rem;
   text-align: center;
+  display: flex;
+  flex-direction: column;
 }
 
 .bd-robot-num {
@@ -5911,6 +5923,49 @@ input.input-loading {
   font-family: var(--mono);
   font-size: .9rem;
   margin-bottom: .2rem;
+}
+
+/* ── Micro tags in breakdown cards ─────────────────────── */
+.bd-micro-tags-slot {
+  min-height: 1.4rem;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  margin-bottom: .15rem;
+}
+
+.bd-micro-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  justify-content: center;
+}
+
+.bd-micro-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: .1rem .35rem;
+  background: color-mix(in srgb, var(--text-muted, #94a3b8) 10%, transparent);
+  border-radius: 999px;
+  font-size: .55rem;
+  color: var(--text-muted, #94a3b8);
+  line-height: 1.2;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bd-micro-tag svg {
+  width: 9px;
+  height: 9px;
+  flex-shrink: 0;
+  opacity: .5;
+}
+
+.bd-robot-fields {
+  margin-top: auto;
 }
 
 .bd-robot-field {
@@ -7861,15 +7916,33 @@ tr:hover .compare-cb,
 
   .pbp-team-stats,
         .pbp-awards-slot,
-        .pbp-bottom-row,
         .pbp-team-highscore {
     display: none;
   }
 
-  /* Show sponsors on mobile when the setting is enabled */
+  /* Bottom row: hide children individually on mobile */
+  .pbp-sponsors-slot,
+  .pbp-robot-name,
+  .pbp-strategy-tag,
+  .pbp-hardware-tag {
+    display: none;
+  }
 
-  body.show-sponsors .pbp-bottom-row {
-    display: flex !important;
+  /* Show sponsors on mobile when the setting is enabled */
+  body.show-sponsors .pbp-sponsors-slot {
+    display: block;
+  }
+
+  /* Show team attributes (robot name, strategy, hardware) when enabled */
+  body.show-team-attrs .pbp-robot-name,
+  body.show-team-attrs .pbp-strategy-tag,
+  body.show-team-attrs .pbp-hardware-tag {
+    display: inline-flex;
+  }
+
+  /* Hide PbP stat boxes when enabled */
+  body.hide-stats .pbp-team-stats {
+    display: none !important;
   }
 
   /* Prediction bar stacks below */
@@ -7922,6 +7995,9 @@ tr:hover .compare-cb,
   .rp-table-wrap {
     max-height: 400px;
   }
+
+  .rp-hdr-full { display: none !important; }
+  .rp-hdr-short { display: inline !important; }
 
   .rp-table {
     font-size: .72rem;
@@ -9053,7 +9129,9 @@ tr:hover .compare-cb,
     display: none !important;
   }
 
-  .pbp-bottom-row {
+  .pbp-robot-name,
+  .pbp-strategy-tag,
+  .pbp-hardware-tag {
     display: none !important;
   }
 
@@ -9062,9 +9140,20 @@ tr:hover .compare-cb,
   }
 
   /* Show sponsors on mobile landscape when the setting is enabled */
+  body.show-sponsors .pbp-sponsors-slot {
+    display: block !important;
+  }
 
-  body.show-sponsors .pbp-bottom-row {
-    display: flex !important;
+  /* Show team attributes on mobile landscape when enabled */
+  body.show-team-attrs .pbp-robot-name,
+  body.show-team-attrs .pbp-strategy-tag,
+  body.show-team-attrs .pbp-hardware-tag {
+    display: inline-flex !important;
+  }
+
+  /* Hide PbP stat boxes on mobile landscape when enabled */
+  body.hide-stats .pbp-team-stats {
+    display: none !important;
   }
 
   .pbp-alliance-score {
@@ -9774,6 +9863,10 @@ tr:hover .compare-cb,
 }
 
 /* Advancement tables */
+
+/* Full / short header labels — short hidden by default, shown on mobile */
+.rp-hdr-short { display: none; }
+.rp-hdr-full { display: inline; }
 
 .adv-table-wrap {
   overflow-x: auto;
@@ -12964,6 +13057,13 @@ body.epa-breakdown-active .stat-opr {
   animation: editor-fade-in .15s ease-out;
 }
 
+@media (max-width: 768px) {
+  .editor-overlay {
+    align-items: flex-start;
+    padding-top: 1rem;
+  }
+}
+
 .editor-overlay.hidden {
   display: none;
 }
@@ -13994,6 +14094,7 @@ body.epa-breakdown-active .stat-opr {
 
 .mob-util-lookup-search input {
   flex: 1;
+  min-width: 0;
   background: rgba(255,255,255,.06);
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -14140,15 +14241,15 @@ body.epa-breakdown-active .stat-opr {
 }
 
 .mob-util-body .upcoming-event-card {
-  padding: .3rem 0;
+  padding: .4rem .6rem;
 }
 
 .mob-util-body .upcoming-event-name {
-  font-size: .7rem;
+  font-size: .8rem;
 }
 
 .mob-util-body .upcoming-event-meta {
-  font-size: .6rem;
+  font-size: .7rem;
 }
 
 .mob-util-body .empty {
@@ -14201,6 +14302,7 @@ body.epa-breakdown-active .stat-opr {
   font-weight: 500;
   font-family: var(--font);
   cursor: pointer;
+  box-shadow: none;
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -14306,63 +14408,63 @@ body.epa-breakdown-active .stat-opr {
 /* ── Mobile history panel (Region / Event) ───────── */
 
 .mob-hist-title {
-  font-size: .78rem;
+  font-size: .95rem;
   font-weight: 700;
   color: var(--text);
-  margin-bottom: .35rem;
+  margin-bottom: .45rem;
   border-bottom: 2px solid var(--primary);
-  padding-bottom: .2rem;
+  padding-bottom: .25rem;
 }
 
 .mob-hist-stats {
   display: flex;
   flex-wrap: wrap;
-  gap: .25rem;
-  margin-bottom: .4rem;
+  gap: .35rem;
+  margin-bottom: .5rem;
 }
 
 .mob-hist-stat {
-  flex: 1 1 calc(33% - .25rem);
+  flex: 1 1 calc(33% - .35rem);
   background: rgba(255,255,255,.04);
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: .25rem .15rem;
+  padding: .35rem .2rem;
   text-align: center;
-  min-width: 55px;
+  min-width: 60px;
 }
 
 .mob-hist-val {
   display: block;
-  font-size: .7rem;
+  font-size: .85rem;
   font-weight: 700;
   color: var(--primary);
 }
 
 .mob-hist-lbl {
   display: block;
-  font-size: .5rem;
+  font-size: .65rem;
   color: var(--text-muted);
 }
 
 .mob-hist-section {
-  margin-top: .35rem;
+  margin-top: .45rem;
 }
 
 .mob-hist-sec-title {
   display: block;
-  font-size: .65rem;
+  font-size: .8rem;
   font-weight: 700;
   color: var(--text);
-  margin-bottom: .2rem;
+  margin-bottom: .25rem;
 }
 
 .mob-hist-chip {
   display: inline-block;
-  font-size: .58rem;
+  font-size: .72rem;
   background: rgba(255,255,255,.05);
   border: 1px solid var(--border);
   border-radius: 6px;
-  padding: .15rem .35rem;
+  padding: .2rem .4rem;
   margin: .1rem .1rem;
   color: var(--text-secondary);
 }
@@ -14370,14 +14472,14 @@ body.epa-breakdown-active .stat-opr {
 .mob-hist-chip em {
   font-style: normal;
   color: var(--text-muted);
-  font-size: .52rem;
+  font-size: .65rem;
 }
 
 .mob-hist-lb {
   list-style: none;
   padding: 0;
   margin: 0;
-  font-size: .62rem;
+  font-size: .78rem;
   color: var(--text-secondary);
 }
 
@@ -14385,13 +14487,13 @@ body.epa-breakdown-active .stat-opr {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: .15rem 0;
+  padding: .2rem 0;
   border-bottom: 1px solid rgba(255,255,255,.03);
 }
 
 .mob-hist-lb li b {
   color: var(--primary);
-  font-size: .65rem;
+  font-size: .8rem;
 }
 
 .mob-hist-table {
@@ -14401,20 +14503,20 @@ body.epa-breakdown-active .stat-opr {
 .mob-hist-table table {
   width: 100%;
   border-collapse: collapse;
-  font-size: .58rem;
+  font-size: .72rem;
 }
 
 .mob-hist-table th {
-  font-size: .52rem;
+  font-size: .65rem;
   text-transform: uppercase;
   color: var(--text-muted);
-  padding: .15rem .25rem;
+  padding: .2rem .3rem;
   text-align: left;
   border-bottom: 1px solid var(--border);
 }
 
 .mob-hist-table td {
-  padding: .15rem .25rem;
+  padding: .2rem .3rem;
   color: var(--text-secondary);
   border-bottom: 1px solid rgba(255,255,255,.03);
 }

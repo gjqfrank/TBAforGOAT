@@ -18,6 +18,7 @@ from ..services.frc_client import get_frc_client
 from ..services.statbotics_client import get_statbotics_client, get_epa_map
 from ..services.supabase_client import upsert_rows, merge_event_teams
 from ..services.circuit_breaker import CircuitOpenError
+from .schemas import TBAEvent, TBATeam, FRCRanking, validate_list
 from .match_poller import set_active_events
 
 log = logging.getLogger(__name__)
@@ -77,9 +78,16 @@ async def _sync_event_metadata(year: int) -> set[str]:
     if not raw_events:
         return set()
 
+    # Validate upstream payload shape before touching Supabase
+    valid_events = validate_list(TBAEvent, raw_events, "tba_events")
+    if not valid_events:
+        log.warning("All TBA events failed validation — skipping")
+        return set()
+
     ongoing: set[str] = set()
     rows = []
-    for ev in raw_events:
+    for ev_model in valid_events:
+        ev = ev_model.model_dump()
         etype = ev.get("event_type", -1)
         if etype in {-1, 100}:  # junk types
             continue
@@ -135,8 +143,10 @@ async def _sync_teams_and_oprs(event_key: str) -> None:
 
     # ── Teams table (now stores school_name / rookie_year) ──
     if isinstance(teams_raw, list) and teams_raw:
+        valid_teams = validate_list(TBATeam, teams_raw, f"tba_teams:{event_key}")
         team_rows = []
-        for t in teams_raw:
+        for t_model in valid_teams:
+            t = t_model.model_dump()
             team_rows.append({
                 "team_key": t["key"],
                 "team_number": t.get("team_number", 0),
@@ -169,11 +179,11 @@ async def _sync_teams_and_oprs(event_key: str) -> None:
                 "ccwm": ccwms.get(tkey),
             }
 
-    if isinstance(teams_raw, list) and teams_raw:
+    if isinstance(teams_raw, list) and teams_raw and valid_teams:
         # Ensure event_teams rows exist (upsert with empty raw_data for new teams)
         et_seed = [
-            {"event_key": event_key, "team_key": t["key"], "raw_data": {}}
-            for t in teams_raw
+            {"event_key": event_key, "team_key": t_model.key, "raw_data": {}}
+            for t_model in valid_teams
         ]
         try:
             await upsert_rows("event_teams", et_seed)
@@ -182,9 +192,9 @@ async def _sync_teams_and_oprs(event_key: str) -> None:
 
         # Merge OPR data into raw_data (atomic, preserves rankings/EPA)
         merge_rows = [
-            {"event_key": event_key, "team_key": t["key"],
-             "data": _strip_nulls(opr_lookup.get(t["key"], {}))}
-            for t in teams_raw if opr_lookup.get(t["key"])
+            {"event_key": event_key, "team_key": t_model.key,
+             "data": _strip_nulls(opr_lookup.get(t_model.key, {}))}
+            for t_model in valid_teams if opr_lookup.get(t_model.key)
         ]
         if merge_rows:
             try:
