@@ -12,8 +12,8 @@ from ..config import ANTHROPIC_API_KEY
 log = logging.getLogger(__name__)
 
 # ── In-memory caches ────────────────────────────────────────
-# Storyline: key → (timestamp, storyline_text, match_count)
-_cache: dict[str, tuple[float, str, int | None]] = {}
+# Storyline: key → (timestamp, result_dict)
+_cache: dict[str, tuple[float, dict]] = {}
 _CACHE_TTL = 7200  # 2 hours (fallback when match count unchanged)
 
 # Team dossier: (team_key, event_key) → (timestamp, dossier_dict)
@@ -715,7 +715,16 @@ async def generate_storyline(
     match_key: Optional[str] = None,
     team_number: Optional[int] = None,
 ) -> dict:
-    """Generate an AI storyline. Returns {"storyline": str, "cached": bool}."""
+    """Generate an AI storyline.
+
+    Returns a structured payload:
+    {
+        "content":  { "storyline": str },
+        "meta":     { "cached": bool, "generated_at": str|None,
+                      "input_tokens": int|None, "output_tokens": int|None,
+                      "match_count": int|None, "model": str|None }
+    }
+    """
     from .inflight import coalesce
 
     if not is_available():
@@ -737,6 +746,29 @@ async def generate_storyline(
     )
 
 
+def _make_response(storyline: str, *, cached: bool,
+                   generated_at: str | None = None,
+                   input_tokens: int | None = None,
+                   output_tokens: int | None = None,
+                   match_count: int | None = None,
+                   model: str | None = None) -> dict:
+    """Build a structured response separating content from metadata."""
+    return {
+        "content": {"storyline": storyline},
+        "meta": {
+            "cached": cached,
+            "generated_at": generated_at,
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "match_count": match_count,
+            "model": model,
+        },
+        # Legacy compat — web frontend reads these flat keys
+        "storyline": storyline,
+        "cached": cached,
+    }
+
+
 async def _get_event_match_count(event_key: str) -> int | None:
     """Get current match count for event-aware invalidation."""
     try:
@@ -750,25 +782,26 @@ async def _get_event_match_count(event_key: str) -> int | None:
     return None
 
 
-async def _load_from_supabase(cache_key: str) -> tuple[str, int | None] | None:
-    """Try to load a cached storyline from Supabase."""
+async def _load_from_supabase(cache_key: str) -> dict | None:
+    """Try to load a cached storyline from Supabase. Returns full row or None."""
     try:
         from .supabase_client import get_supabase
         sb = await get_supabase()
         resp = await sb.table("storyline_cache").select(
-            "storyline, match_count, created_at"
+            "storyline, match_count, input_tokens, output_tokens, updated_at"
         ).eq("cache_key", cache_key).execute()
         if resp.data:
-            row = resp.data[0]
-            return (row["storyline"], row.get("match_count"))
+            return resp.data[0]
     except Exception as e:
         log.debug("Supabase storyline load failed for %s: %s", cache_key, e)
     return None
 
 
 async def _save_to_supabase(cache_key: str, event_key: str, storyline: str,
-                            match_count: int | None) -> None:
-    """Persist a storyline to Supabase (fire-and-forget)."""
+                            match_count: int | None,
+                            input_tokens: int | None = None,
+                            output_tokens: int | None = None) -> None:
+    """Persist a storyline to Supabase (synchronous — source of truth)."""
     try:
         from .supabase_client import get_supabase
         sb = await get_supabase()
@@ -777,9 +810,14 @@ async def _save_to_supabase(cache_key: str, event_key: str, storyline: str,
             "event_key": event_key,
             "storyline": storyline,
             "match_count": match_count,
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
         }, on_conflict="cache_key").execute()
     except Exception as e:
-        log.debug("Supabase storyline save failed for %s: %s", cache_key, e)
+        log.warning("Supabase storyline save failed for %s: %s", cache_key, e)
+
+
+_LLM_MODEL = "claude-sonnet-4-20250514"
 
 
 async def _generate_storyline_inner(
@@ -790,38 +828,47 @@ async def _generate_storyline_inner(
     team_number: Optional[int],
 ) -> dict:
     """Core generation logic — called via inflight coalescing."""
+    from datetime import datetime, timezone
+
     now = time.time()
+    now_iso = datetime.now(timezone.utc).isoformat()
 
     # ── Layer 1: In-memory cache with event-aware invalidation ──
     if cache_key in _cache:
-        ts, text, cached_match_count = _cache[cache_key]
+        ts, cached_result = _cache[cache_key]
         age = now - ts
         if age < _CACHE_TTL:
+            mc = cached_result.get("meta", {}).get("match_count")
             # For team storylines, check if match count changed (new results)
             if mode == "team" and age > 300:  # re-check after 5 min
                 current_count = await _get_event_match_count(event_key)
-                if current_count is not None and cached_match_count is not None:
-                    if current_count != cached_match_count:
+                if current_count is not None and mc is not None:
+                    if current_count != mc:
                         log.info("Storyline cache invalidated for %s: match count %s→%s",
-                                 cache_key, cached_match_count, current_count)
+                                 cache_key, mc, current_count)
                     else:
-                        return {"storyline": text, "cached": True}
+                        return cached_result
                 else:
-                    return {"storyline": text, "cached": True}
+                    return cached_result
             else:
-                return {"storyline": text, "cached": True}
+                return cached_result
 
-    # ── Layer 2: Supabase persistent cache ──
-    sb_hit = await _load_from_supabase(cache_key)
-    if sb_hit:
-        sb_text, sb_match_count = sb_hit
-        # Check if event state changed
+    # ── Layer 2: Supabase persistent cache (source of truth) ──
+    sb_row = await _load_from_supabase(cache_key)
+    if sb_row:
+        sb_mc = sb_row.get("match_count")
         current_count = await _get_event_match_count(event_key)
-        if sb_match_count is not None and current_count == sb_match_count:
-            # Still valid — promote to memory cache
-            _cache[cache_key] = (now, sb_text, sb_match_count)
-            return {"storyline": sb_text, "cached": True}
-        # Otherwise, stale — regenerate
+        if sb_mc is not None and current_count == sb_mc:
+            result = _make_response(
+                sb_row["storyline"], cached=True,
+                generated_at=sb_row.get("updated_at"),
+                input_tokens=sb_row.get("input_tokens"),
+                output_tokens=sb_row.get("output_tokens"),
+                match_count=sb_mc,
+                model=_LLM_MODEL,
+            )
+            _cache[cache_key] = (now, result)
+            return result
 
     # ── Layer 3: Generate fresh ──
     match_count = await _get_event_match_count(event_key)
@@ -834,7 +881,8 @@ async def _generate_storyline_inner(
         system_prompt = _TEAM_SYSTEM_PROMPT
 
     if not dossier:
-        return {"storyline": "No data available for this storyline.", "cached": False}
+        return _make_response(
+            "No data available for this storyline.", cached=False)
 
     # Call LLM
     client = _get_client()
@@ -844,30 +892,165 @@ async def _generate_storyline_inner(
         "'showcasing', 'demonstrating', or 'statement'. "
         "Write like a newspaper beat reporter — factual and vivid."
     )
+
+    in_tok = out_tok = None
     try:
         response = await client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model=_LLM_MODEL,
             max_tokens=500,
             system=system_prompt,
             messages=[{"role": "user", "content": user_msg}],
         )
         storyline = response.content[0].text.strip()
 
-        # ── Cost/usage logging ──
         usage = getattr(response, "usage", None)
         if usage:
-            in_tok = getattr(usage, "input_tokens", 0)
-            out_tok = getattr(usage, "output_tokens", 0)
-            log.info("Storyline LLM usage [%s]: %d input + %d output tokens "
+            in_tok = getattr(usage, "input_tokens", None)
+            out_tok = getattr(usage, "output_tokens", None)
+            log.info("Storyline LLM usage [%s]: %s in + %s out tokens "
                      "(mode=%s, event=%s)", cache_key, in_tok, out_tok,
                      mode, event_key)
     except Exception as e:
         log.error("Anthropic API error: %s", e)
         raise RuntimeError(f"AI service error: {e}")
 
-    # ── Populate caches ──
-    _cache[cache_key] = (now, storyline, match_count)
-    # Fire-and-forget Supabase persist
-    asyncio.create_task(_save_to_supabase(cache_key, event_key, storyline, match_count))
+    # ── Persist to Supabase (synchronous — source of truth) ──
+    await _save_to_supabase(cache_key, event_key, storyline,
+                            match_count, in_tok, out_tok)
 
-    return {"storyline": storyline, "cached": False}
+    result = _make_response(
+        storyline, cached=False,
+        generated_at=now_iso,
+        input_tokens=in_tok,
+        output_tokens=out_tok,
+        match_count=match_count,
+        model=_LLM_MODEL,
+    )
+    _cache[cache_key] = (now, result)
+    return result
+
+
+async def generate_storyline_stream(
+    mode: str,
+    event_key: str,
+    match_key: Optional[str] = None,
+    team_number: Optional[int] = None,
+):
+    """SSE generator — yields storyline tokens as they arrive.
+
+    Events emitted:
+      event: start     data: {"cache_key": "...", "cached": false}
+      event: token     data: {"text": "..."}
+      event: done      data: {full structured response}
+      event: error     data: {"detail": "..."}
+
+    If cached, emits start(cached=true) then done immediately.
+    """
+    import json as _json
+    from .inflight import coalesce
+    from datetime import datetime, timezone
+
+    if not is_available():
+        yield f"event: error\ndata: {_json.dumps({'detail': 'Anthropic API key not configured'})}\n\n"
+        return
+
+    # Cache key
+    if mode == "match" and match_key:
+        cache_key = f"match:{match_key}"
+    elif mode == "team" and team_number:
+        cache_key = f"team:{event_key}:{team_number}"
+    else:
+        yield f"event: error\ndata: {_json.dumps({'detail': 'Invalid mode or missing parameters'})}\n\n"
+        return
+
+    # Check caches first — if hit, skip streaming
+    now = time.time()
+    if cache_key in _cache:
+        ts, cached_result = _cache[cache_key]
+        if now - ts < _CACHE_TTL:
+            yield f"event: start\ndata: {_json.dumps({'cache_key': cache_key, 'cached': True})}\n\n"
+            yield f"event: done\ndata: {_json.dumps(cached_result)}\n\n"
+            return
+
+    sb_row = await _load_from_supabase(cache_key)
+    if sb_row:
+        sb_mc = sb_row.get("match_count")
+        current_count = await _get_event_match_count(event_key)
+        if sb_mc is not None and current_count == sb_mc:
+            result = _make_response(
+                sb_row["storyline"], cached=True,
+                generated_at=sb_row.get("updated_at"),
+                input_tokens=sb_row.get("input_tokens"),
+                output_tokens=sb_row.get("output_tokens"),
+                match_count=sb_mc, model=_LLM_MODEL,
+            )
+            _cache[cache_key] = (now, result)
+            yield f"event: start\ndata: {_json.dumps({'cache_key': cache_key, 'cached': True})}\n\n"
+            yield f"event: done\ndata: {_json.dumps(result)}\n\n"
+            return
+
+    # ── Fresh generation with token streaming ──
+    yield f"event: start\ndata: {_json.dumps({'cache_key': cache_key, 'cached': False})}\n\n"
+
+    match_count = await _get_event_match_count(event_key)
+
+    if mode == "match":
+        dossier = await _assemble_match_dossier(event_key, match_key)
+        system_prompt = _MATCH_SYSTEM_PROMPT
+    else:
+        dossier = await _assemble_team_dossier(event_key, team_number)
+        system_prompt = _TEAM_SYSTEM_PROMPT
+
+    if not dossier:
+        empty = _make_response("No data available for this storyline.", cached=False)
+        yield f"event: done\ndata: {_json.dumps(empty)}\n\n"
+        return
+
+    client = _get_client()
+    user_msg = (
+        f"Generate a storyline based on this dossier:\n\n{dossier}\n\n"
+        "IMPORTANT REMINDER: Do not use the words 'powerhouse', 'proving', "
+        "'showcasing', 'demonstrating', or 'statement'. "
+        "Write like a newspaper beat reporter — factual and vivid."
+    )
+
+    try:
+        chunks: list[str] = []
+        async with client.messages.stream(
+            model=_LLM_MODEL,
+            max_tokens=500,
+            system=system_prompt,
+            messages=[{"role": "user", "content": user_msg}],
+        ) as stream:
+            async for text in stream.text_stream:
+                chunks.append(text)
+                yield f"event: token\ndata: {_json.dumps({'text': text})}\n\n"
+
+        storyline = "".join(chunks).strip()
+        final_msg = await stream.get_final_message()
+        usage = getattr(final_msg, "usage", None)
+        in_tok = getattr(usage, "input_tokens", None) if usage else None
+        out_tok = getattr(usage, "output_tokens", None) if usage else None
+
+        if in_tok or out_tok:
+            log.info("Storyline LLM stream [%s]: %s in + %s out tokens "
+                     "(mode=%s, event=%s)", cache_key, in_tok, out_tok,
+                     mode, event_key)
+
+        # Persist synchronously
+        await _save_to_supabase(cache_key, event_key, storyline,
+                                match_count, in_tok, out_tok)
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        result = _make_response(
+            storyline, cached=False,
+            generated_at=now_iso,
+            input_tokens=in_tok, output_tokens=out_tok,
+            match_count=match_count, model=_LLM_MODEL,
+        )
+        _cache[cache_key] = (time.time(), result)
+        yield f"event: done\ndata: {_json.dumps(result)}\n\n"
+
+    except Exception as e:
+        log.error("Anthropic streaming error: %s", e)
+        yield f"event: error\ndata: {_json.dumps({'detail': str(e)})}\n\n"
