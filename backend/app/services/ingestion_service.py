@@ -166,13 +166,22 @@ async def ingest_event(event_key: str) -> str:
         for r in rankings_raw:
             tn = r.get("teamNumber")
             if tn:
+                # FRC Events API uses sortOrder1..6 (not sortOrders array)
+                sort_orders = r.get("sortOrders")
+                if not sort_orders:
+                    so = []
+                    for i in range(1, 7):
+                        v = r.get(f"sortOrder{i}")
+                        if v is not None:
+                            so.append(v)
+                    sort_orders = so or None
                 rank_lookup[f"frc{tn}"] = {
                     "rank": r.get("rank"),
                     "wins": r.get("wins", 0),
                     "losses": r.get("losses", 0),
                     "ties": r.get("ties", 0),
                     "qual_average": r.get("qualAverage"),
-                    "sort_orders": r.get("sortOrders"),
+                    "sort_orders": sort_orders,
                     "matches_played": r.get("matchesPlayed", 0),
                     "dq": r.get("dq", 0),
                 }

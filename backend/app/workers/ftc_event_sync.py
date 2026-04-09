@@ -316,17 +316,18 @@ async def _sync_ftc_alliances(event_key: str) -> None:
             "event_key", event_key
         ).execute()
 
-        current_raw = {}
-        if resp.data and resp.data[0].get("raw_data"):
-            current_raw = resp.data[0]["raw_data"]
-            if isinstance(current_raw, str):
-                current_raw = _json.loads(current_raw)
+        if not resp.data:
+            log.debug("Event row missing for %s — skipping FTC alliance store", event_key)
+            return
+
+        current_raw = resp.data[0].get("raw_data") or {}
+        if isinstance(current_raw, str):
+            current_raw = _json.loads(current_raw)
 
         current_raw["alliances"] = alliances
-        await upsert_rows("events", [{
-            "event_key": event_key,
-            "raw_data": current_raw,
-        }])
+        await sb.table("events").update(
+            {"raw_data": current_raw}
+        ).eq("event_key", event_key).execute()
         log.debug("Stored FTC alliances for %s", event_key)
     except Exception as e:
         log.warning("FTC alliances upsert failed for %s: %s", event_key, e)

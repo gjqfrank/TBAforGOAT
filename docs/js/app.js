@@ -21,7 +21,7 @@ function showToast(message, type = 'info', duration = 3500) {
 /** Render a team number: use number_display (e.g. "11-370") when available,
  *  with dashes rendered as a styled separator. Falls back to raw number. */
 function _renderTeamNum(team) {
-    const nd = team.number_display;
+    const nd = (_timsCache[team.team_number]?.number_display) || team.number_display;
     if (!nd) return String(team.team_number);
     // Render dashes/hyphens as styled separators
     return nd.replace(/-/g, '<span class="num-sep">-</span>');
@@ -6841,10 +6841,10 @@ function renderPbpTeam(t, sideCls) {
         </div>
         <div class="pbp-awards-slot" data-team="${t.team_number}"></div>
         <div class="pbp-bottom-row">
+            <div class="pbp-sponsors-slot" data-sponsors-team="${t.team_number}">${t._tims_sponsors ? `<div class="pbp-sponsors" title="Sponsors (TIMS)"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg><span class="pbp-sponsors-text">${t._tims_sponsors}</span></div>` : ''}</div>
             ${t.robot_name ? `<div class="pbp-robot-name" title="Robot Name"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/><line x1="8" y1="16" x2="8" y2="16"/><line x1="16" y1="16" x2="16" y2="16"/></svg><span class="pbp-robot-name-text">${_esc(t.robot_name)}</span></div>` : ''}
             ${_renderPbpTags(_parseTags(_timsCache[t.team_number]?.hardware), 'Hardware', 'pbp-hardware-tag')}
             ${_renderPbpTags(_parseTags(_timsCache[t.team_number]?.auto_strategy).concat(_parseTags(_timsCache[t.team_number]?.teleop_strategy)), 'Strategy', 'pbp-strategy-tag')}
-            <div class="pbp-sponsors-slot" data-sponsors-team="${t.team_number}">${t._tims_sponsors ? `<div class="pbp-sponsors" title="Sponsors (TIMS)"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg><span class="pbp-sponsors-text">${t._tims_sponsors}</span></div>` : ''}</div>
         </div>
     </div>`;
 }
@@ -8044,10 +8044,16 @@ function renderRpProgress(bd) {
 let _spotlightTeam = null;  // currently spotlighted team number
 
 function toggleSpotlight(teamNum, color) {
+    if (_spotlightTeam === teamNum) { closeSpotlight(); return; }
+
+    // On mobile, render spotlight inside the mob-util panel
+    if (window.innerWidth <= 768) {
+        _openMobSpotlight(teamNum, color);
+        return;
+    }
+
     const panel = $('bd-spotlight');
     if (!panel) return;
-
-    if (_spotlightTeam === teamNum) { closeSpotlight(); return; }
     _spotlightTeam = teamNum;
 
     const m = bdData && bdData.matches ? bdData.matches[bdIndex] : null;
@@ -8407,6 +8413,80 @@ function _renderSpotlightFallback(panel, robot, gameYear, color, nick, teamNum, 
         </div>`;
 }
 
+function _openMobSpotlight(teamNum, color) {
+    _spotlightTeam = teamNum;
+
+    const m = bdData && bdData.matches ? bdData.matches[bdIndex] : null;
+    const bd = bdCache[m?.key];
+    if (!bd) return;
+
+    const alliance = bd[color];
+    if (!alliance) return;
+    const abdwn = alliance.breakdown;
+    const robot = abdwn.robots.find(r => r.team_number === teamNum);
+    if (!robot) return;
+
+    const nickMap = {};
+    const statsMap = {};
+    if (m) {
+        for (const side of ['red', 'blue']) {
+            if (m[side] && m[side].teams)
+                m[side].teams.forEach(t => {
+                    if (t.nickname) nickMap[t.team_number] = t.nickname;
+                    statsMap[t.team_number] = { opr: t.opr, epa: t.epa };
+                });
+        }
+    }
+    const nick = nickMap[teamNum] || '';
+    const st = statsMap[teamNum] || {};
+    const oprStr = st.opr != null ? st.opr : '\u2013';
+    const epaStr = st.epa != null ? st.epa : '\u2013';
+    const colorLabel = color === 'red' ? 'Red Alliance' : 'Blue Alliance';
+
+    openMobUtilPanel('spotlight');
+    const body = document.getElementById('mob-util-body');
+    const header = document.getElementById('mob-util-header');
+    if (!body || !header) return;
+
+    header.innerHTML = `<span class="mob-util-title">${teamNum} ${nick}</span>`;
+    body.innerHTML = `<div class="spotlight-card spotlight-${color}" style="border:none;box-shadow:none;">
+        <div class="spotlight-header" style="flex-wrap:wrap;">
+            <div class="spotlight-team-info">
+                <span class="spotlight-team-num">${teamNum}</span>
+                ${nick ? `<span class="spotlight-team-nick">${nick}</span>` : ''}
+                <span class="spotlight-alliance-badge spotlight-badge-${color}">${colorLabel}</span>
+                <span class="spotlight-stat-pill">OPR ${oprStr}</span>
+                <span class="spotlight-stat-pill">EPA ${epaStr}</span>
+            </div>
+        </div>
+        <div id="spotlight-storyline"></div>
+        <div class="spotlight-loading">Loading individual performance\u2026</div>
+    </div>`;
+
+    // Highlight/dim robot cards
+    document.querySelectorAll('.bd-robot-card').forEach(card => {
+        const cardTeam = parseInt(card.dataset.team);
+        card.classList.toggle('bd-spotlight-active', cardTeam === teamNum);
+        card.classList.toggle('bd-spotlight-dimmed', cardTeam !== teamNum);
+    });
+
+    const frcLevel = (m?.comp_level || 'qm') === 'qm' ? 'Qualification' : 'Playoff';
+    const currentMatchNum = m?.match_number || 0;
+    const _perfApi = isFTCMode() ? null : API;
+
+    if (!_perfApi) {
+        _renderSpotlightFallback(body.querySelector('.spotlight-card'), robot, bd.game_year, color, nick, teamNum, colorLabel);
+        return;
+    }
+    _perfApi.teamPerf(currentEvent, teamNum).then(perf => {
+        if (_spotlightTeam !== teamNum) return;
+        _renderSpotlightContent(body.querySelector('.spotlight-card'), perf, robot, bd.game_year, color, nick, teamNum, colorLabel, frcLevel, currentMatchNum, oprStr, epaStr);
+    }).catch(() => {
+        if (_spotlightTeam !== teamNum) return;
+        _renderSpotlightFallback(body.querySelector('.spotlight-card'), robot, bd.game_year, color, nick, teamNum, colorLabel);
+    });
+}
+
 function closeSpotlight() {
     _spotlightTeam = null;
     const panel = $('bd-spotlight');
@@ -8414,6 +8494,8 @@ function closeSpotlight() {
     document.querySelectorAll('.bd-robot-card').forEach(card => {
         card.classList.remove('bd-spotlight-active', 'bd-spotlight-dimmed');
     });
+    // Close mobile panel if open in spotlight mode
+    if (_mobUtilMode === 'spotlight') closeMobUtilPanel();
 }
 
 
@@ -9557,7 +9639,7 @@ function renderRegionFacts(data) {
         html += '<h4>Hall of Fame Teams</h4>';
         html += '<div class="history-team-chips">';
         for (const t of data.hof_teams) {
-            html += `<span class="history-chip hof-chip">${t.team_number} <span class="chip-name">${_esc(t.nickname)}</span> <span class="chip-years">${t.years.join(', ')}</span></span>`;
+            html += `<span class="history-chip hof-chip"><span class="chip-team">${t.team_number}</span> <span class="chip-name">${_esc(t.nickname)}</span> <span class="chip-years">${t.years.join(', ')}</span></span>`;
         }
         html += '</div></div>';
     }
@@ -9568,7 +9650,7 @@ function renderRegionFacts(data) {
         html += '<h4>Einstein Winners</h4>';
         html += '<div class="history-team-chips">';
         for (const t of data.einstein_winners) {
-            html += `<span class="history-chip einstein-win-chip">${t.team_number} <span class="chip-name">${_esc(t.nickname)}</span> <span class="chip-years">${t.years.join(', ')}</span></span>`;
+            html += `<span class="history-chip einstein-win-chip"><span class="chip-team">${t.team_number}</span> <span class="chip-name">${_esc(t.nickname)}</span> <span class="chip-years">${t.years.join(', ')}</span></span>`;
         }
         html += '</div></div>';
     }
@@ -9579,7 +9661,7 @@ function renderRegionFacts(data) {
         html += '<h4>Impact Award Finalists</h4>';
         html += '<div class="history-team-chips">';
         for (const t of data.impact_finalists) {
-            html += `<span class="history-chip impact-chip">${t.team_number} <span class="chip-name">${_esc(t.nickname)}</span> <span class="chip-years">${t.years.join(', ')}</span></span>`;
+            html += `<span class="history-chip impact-chip"><span class="chip-team">${t.team_number}</span> <span class="chip-name">${_esc(t.nickname)}</span> <span class="chip-years">${t.years.join(', ')}</span></span>`;
         }
         html += '</div></div>';
     }
@@ -9591,7 +9673,7 @@ function renderRegionFacts(data) {
         html += '<table class="data-table history-table"><thead><tr><th>#</th><th>Team</th><th>Apps</th><th>Years</th></tr></thead><tbody>';
         const einsteinSlice = data.einstein_teams.slice(0, 15);
         for (const t of einsteinSlice) {
-            html += `<tr><td>${t.team_number}</td><td>${_esc(t.nickname)}</td><td class="num">${t.years.length}</td><td class="years-cell">${t.years.join(', ')}</td></tr>`;
+            html += `<tr><td class="team-num">${t.team_number}</td><td>${_esc(t.nickname)}</td><td class="num">${t.years.length}</td><td class="years-cell">${t.years.join(', ')}</td></tr>`;
         }
         if (data.einstein_teams.length > 15) {
             html += `<tr class="more-row"><td colspan="4">+${data.einstein_teams.length - 15} more</td></tr>`;
@@ -9607,14 +9689,14 @@ function renderRegionFacts(data) {
         const vis = data.top_international_visitors;
         const SHOW = 5;
         vis.slice(0, SHOW).forEach(v => {
-            html += `<span class="history-chip visitor-chip">${v.team_number} <span class="chip-name">${_esc(v.nickname)}</span> <span class="chip-country">${_esc(v.country)}</span> <span class="chip-count">${v.appearances}×</span></span>`;
+            html += `<span class="history-chip visitor-chip"><span class="chip-team">${v.team_number}</span> <span class="chip-name">${_esc(v.nickname)}</span> <span class="chip-country">${_esc(v.country)}</span> <span class="chip-count">${v.appearances}×</span></span>`;
         });
         if (vis.length > SHOW) {
             const extra = vis.length - SHOW;
             html += `<span class="history-chip-more" onclick="this.nextElementSibling.classList.toggle('hidden');this.textContent=this.textContent.startsWith('+')?'− collapse':'+${extra} more'">+${extra} more</span>`;
             html += '<span class="history-chip-extra hidden">';
             vis.slice(SHOW).forEach(v => {
-                html += `<span class="history-chip visitor-chip">${v.team_number} <span class="chip-name">${_esc(v.nickname)}</span> <span class="chip-country">${_esc(v.country)}</span> <span class="chip-count">${v.appearances}×</span></span>`;
+                html += `<span class="history-chip visitor-chip"><span class="chip-team">${v.team_number}</span> <span class="chip-name">${_esc(v.nickname)}</span> <span class="chip-country">${_esc(v.country)}</span> <span class="chip-count">${v.appearances}×</span></span>`;
             });
             html += '</span>';
         }
@@ -9983,6 +10065,13 @@ function closeMobUtilPanel() {
     if (panel) {
         panel.classList.remove('open');
         setTimeout(() => { if (!panel.classList.contains('open')) panel.style.display = ''; }, 220);
+    }
+    // Clear spotlight state when closing mobile spotlight panel
+    if (_mobUtilMode === 'spotlight') {
+        _spotlightTeam = null;
+        document.querySelectorAll('.bd-robot-card').forEach(card => {
+            card.classList.remove('bd-spotlight-active', 'bd-spotlight-dimmed');
+        });
     }
     _mobUtilMode = null;
 }
@@ -10498,7 +10587,7 @@ function renderTeamCards(teams) {
         const epaVal = parseFloat(t.epa);
         const epaCls = !isNaN(epaVal) && epaVal >= p75EPA ? ' epa-top25' : (!isNaN(epaVal) && epaVal > avgEPA ? ' epa-above-avg' : '');
 
-        return `<div class="rank-card${isIntl ? ' foreign-team-row' : ''}${isRookie ? ' rookie-team-row' : ''}" data-team-key="${t.team_key}" onclick="floatLookupQuick(${t.team_number})">
+        return `<div class="rank-card${isIntl ? ' foreign-team-row' : ''}${isRookie ? ' rookie-team-row' : ''}" data-team-key="${t.team_key}">
             <div class="rank-card-top">
                 <span class="rank-card-rank${Number(t.rank) >= 1 && Number(t.rank) <= 8 ? ' rank-top8' : ''}">#${t.rank}</span>
                 ${avatarImg}

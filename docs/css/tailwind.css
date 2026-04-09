@@ -11334,6 +11334,12 @@ tr:hover .compare-cb,
   opacity: .7;
 }
 
+.chip-team {
+  color: #fff;
+  font-weight: 700;
+  font-family: var(--mono);
+}
+
 .chip-years {
   font-size: .68rem;
   color: var(--muted);

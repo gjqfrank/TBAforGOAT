@@ -192,6 +192,19 @@ async def _poll_rankings(event_key: str) -> None:
             continue
         team_key = f"frc{team_num}"
 
+        # FRC Events API returns sortOrder1, sortOrder2, … as individual
+        # fields rather than a single sortOrders array.  Build the array
+        # from whichever form is present so downstream RP calculation
+        # (sort_orders[0] * matches_played) always works.
+        sort_orders = r.get("sortOrders")
+        if not sort_orders:
+            so = []
+            for i in range(1, 7):
+                v = r.get(f"sortOrder{i}")
+                if v is not None:
+                    so.append(v)
+            sort_orders = so or None
+
         rows.append({
             "event_key": event_key,
             "team_key": team_key,
@@ -201,7 +214,7 @@ async def _poll_rankings(event_key: str) -> None:
                 "losses": r.get("losses", 0),
                 "ties": r.get("ties", 0),
                 "qual_average": r.get("qualAverage"),
-                "sort_orders": r.get("sortOrders"),
+                "sort_orders": sort_orders,
                 "matches_played": r.get("matchesPlayed", 0),
                 "dq": r.get("dq", 0),
             }),

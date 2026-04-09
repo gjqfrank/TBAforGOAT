@@ -229,17 +229,20 @@ async def _sync_alliances(event_key: str) -> None:
             "event_key", event_key
         ).execute()
 
-        current_raw = {}
-        if resp.data and resp.data[0].get("raw_data"):
-            current_raw = resp.data[0]["raw_data"]
-            if isinstance(current_raw, str):
-                current_raw = json.loads(current_raw)
+        # If the event row doesn't exist yet, skip — an upsert with only
+        # event_key + raw_data would violate the NOT NULL name column.
+        if not resp.data:
+            log.debug("Event row missing for %s — skipping alliance store", event_key)
+            return
+
+        current_raw = resp.data[0].get("raw_data") or {}
+        if isinstance(current_raw, str):
+            current_raw = json.loads(current_raw)
 
         current_raw["alliances"] = alliances
-        await upsert_rows("events", [{
-            "event_key": event_key,
-            "raw_data": current_raw,
-        }])
+        await client.table("events").update(
+            {"raw_data": current_raw}
+        ).eq("event_key", event_key).execute()
         log.debug("Stored alliances for %s", event_key)
         _invalidate_snapshot(event_key)
     except Exception as e:
