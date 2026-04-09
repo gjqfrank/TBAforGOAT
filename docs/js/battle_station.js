@@ -121,9 +121,9 @@ const BattleStation = (() => {
 
     function _showEmpty() {
         const root = document.getElementById('bs-root');
-        if (root) root.innerHTML = '';
+        if (root) { root.innerHTML = ''; root.style.display = 'none'; }
         const empty = document.getElementById('bs-empty');
-        if (empty) empty.classList.remove('hidden');
+        if (empty) { empty.classList.remove('hidden'); empty.style.display = ''; }
     }
 
     // ── Realtime wiring (once) ─────────────────────────────
@@ -171,44 +171,43 @@ const BattleStation = (() => {
     // ── Rendering ──────────────────────────────────────────
     function _render() {
         const empty = document.getElementById('bs-empty');
-        if (empty) empty.classList.add('hidden');
+        if (empty) { empty.classList.add('hidden'); empty.style.display = 'none'; }
 
         const root = document.getElementById('bs-root');
         if (!root) return;
+        root.style.display = '';
 
         const label = _match.label || _match.match_key || 'Match';
         const reds  = _getTeamNums(_match.red);
         const blues = _getTeamNums(_match.blue);
 
-        root.innerHTML = `
-            <div class="flex flex-col h-[calc(100vh-7rem)] bg-slate-950">
-                <!-- Header -->
-                <div class="flex items-center justify-center gap-3 px-4 py-2 bg-slate-900/80 border-b border-slate-800">
-                    <svg class="w-4 h-4 text-amber-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-                    <span class="text-sm font-bold text-slate-100 tracking-wide uppercase font-mono" id="bs-match-label">${_esc(label)}</span>
-                    <span class="text-xs text-slate-500 font-mono" id="bs-note-count">${_notes.length} notes</span>
-                </div>
+        root.innerHTML = /* html */`
+            <!-- ▸ SKELETON: flex-col, fills parent, no scroll on outer shell -->
+            <div class="bs-shell">
 
-                <!-- Hot Row -->
-                <div class="flex items-center justify-center gap-1 px-3 py-1.5 bg-slate-900/60 border-b border-slate-800" id="bs-hotrow">
-                    ${reds.map((n, i) => `<button class="bs-hot-btn bs-hot-red${_ctx === 'frc' + n ? ' bs-hot-active' : ''}" data-team="frc${n}" onclick="BattleStation._onHotClick(this)" title="Red ${i + 1}"><span class="font-mono text-xs text-red-400">${n}</span></button>`).join('')}
-                    <button class="bs-hot-btn bs-hot-match${_ctx === 'match' ? ' bs-hot-active' : ''}" data-team="match" onclick="BattleStation._onHotClick(this)" title="Full Match"><span class="font-mono text-xs font-bold text-slate-200">MATCH</span></button>
-                    ${blues.map((n, i) => `<button class="bs-hot-btn bs-hot-blue${_ctx === 'frc' + n ? ' bs-hot-active' : ''}" data-team="frc${n}" onclick="BattleStation._onHotClick(this)" title="Blue ${i + 1}"><span class="font-mono text-xs text-blue-400">${n}</span></button>`).join('')}
-                </div>
-
-                <!-- Timeline (scrollable spine) -->
-                <div class="flex-1 overflow-y-auto relative" id="bs-timeline">
-                    <!-- Vertical center spine -->
-                    <div class="absolute top-0 bottom-0 left-1/2 w-px bg-slate-800 -translate-x-px pointer-events-none"></div>
-                    <div class="flex flex-col gap-1 py-3 px-2 min-h-full" id="bs-timeline-inner">
-                        <!-- notes injected here -->
+                <!-- ▸ TOP: Hot-Row — shrink-0, never scrolls -->
+                <div class="bs-hotrow" id="bs-hotrow">
+                    <div class="bs-hotrow-inner">
+                        ${reds.map((n, i) => `<button class="bs-hot-btn bs-hot-red${_ctx === 'frc' + n ? ' bs-hot-active' : ''}" data-team="frc${n}" onclick="BattleStation._onHotClick(this)" title="Red ${i + 1}"><span class="font-mono text-xs text-red-400">${n}</span></button>`).join('')}
+                        <button class="bs-hot-btn bs-hot-match${_ctx === 'match' ? ' bs-hot-active' : ''}" data-team="match" onclick="BattleStation._onHotClick(this)" title="Full Match">
+                            <span class="font-mono text-[10px] font-bold text-slate-300 tracking-wider">${_esc(label)}</span>
+                        </button>
+                        ${blues.map((n, i) => `<button class="bs-hot-btn bs-hot-blue${_ctx === 'frc' + n ? ' bs-hot-active' : ''}" data-team="frc${n}" onclick="BattleStation._onHotClick(this)" title="Blue ${i + 1}"><span class="font-mono text-xs text-blue-400">${n}</span></button>`).join('')}
                     </div>
+                    <span class="text-[10px] text-slate-600 font-mono" id="bs-note-count">${_notes.length} notes</span>
                 </div>
 
-                <!-- Macro Deck + Input (frosty footer) -->
-                <div class="bg-slate-900/80 backdrop-blur-md border-t border-slate-700 px-3 py-2 flex flex-col gap-2 shrink-0" id="bs-footer">
-                    <!-- Macro buttons -->
-                    <div class="flex items-center justify-center gap-1.5 flex-wrap" id="bs-macros">
+                <!-- ▸ MIDDLE: Spine + Feed — flex-1 overflow-y-auto -->
+                <div class="bs-feed" id="bs-timeline">
+                    <!-- The literal vertical center spine — always visible -->
+                    <div class="bs-spine"></div>
+                    <!-- Notes land here -->
+                    <div class="bs-feed-inner" id="bs-timeline-inner"></div>
+                </div>
+
+                <!-- ▸ BOTTOM: Pinned input bar — shrink-0, glassmorphism -->
+                <div class="bs-dock" id="bs-footer">
+                    <div class="bs-dock-macros" id="bs-macros">
                         ${Object.entries(LEXICON).map(([code, def]) => `
                             <button class="bs-macro-btn bs-macro-${def.color}" onclick="BattleStation._onMacro('${code}')" title="${def.label}">
                                 ${def.icon()}
@@ -216,10 +215,11 @@ const BattleStation = (() => {
                             </button>
                         `).join('')}
                     </div>
-                    <!-- Text input -->
-                    <form class="flex gap-2" onsubmit="BattleStation._onSubmit(event)">
-                        <input type="text" id="bs-input" class="flex-1 bg-slate-800 border border-slate-700 rounded-md px-3 py-1.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-slate-500 font-mono" placeholder="Add a note…" autocomplete="off" />
-                        <button type="submit" class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-semibold rounded-md transition-colors">Send</button>
+                    <form class="bs-dock-input" onsubmit="BattleStation._onSubmit(event)">
+                        <input type="text" id="bs-input"
+                               class="bs-input"
+                               placeholder="Add a note…" autocomplete="off" />
+                        <button type="submit" class="bs-send-btn">Send</button>
                     </form>
                 </div>
             </div>
@@ -260,53 +260,64 @@ const BattleStation = (() => {
         if (note.type === 'system') {
             const def = LEXICON[note.content] || { label: note.content, color: 'slate', icon: _iconWarning };
             return `
-                <div class="flex justify-center relative py-1">
+                <div class="bs-row bs-row-center">
+                    <div class="bs-col-left"></div>
                     <div class="bs-sys-badge bs-sys-${def.color}">
                         ${def.icon()}
                         <span class="text-[10px] font-bold uppercase tracking-wider leading-none">${_esc(def.label)}</span>
                         <span class="text-[9px] opacity-60 font-mono">${time}</span>
                     </div>
+                    <div class="bs-col-right"></div>
                 </div>`;
         }
 
         // ── Manual note (red left / blue right / center fallback) ──
         const teamNum = note.team_key ? note.team_key.replace(/\D/g, '') : '';
+        const meta = `<span class="text-[10px] text-slate-500">${_esc(note.author)} · ${time}</span>`;
 
         if (side === 'red') {
             return `
-                <div class="flex pr-[52%] pl-2 py-0.5">
-                    <div class="bs-note bs-note-red">
-                        <div class="flex items-baseline gap-2">
-                            <span class="font-mono text-[11px] font-bold text-red-400">${teamNum}</span>
-                            <span class="text-[10px] text-slate-500">${_esc(note.author)} · ${time}</span>
+                <div class="bs-row">
+                    <div class="bs-col-left">
+                        <div class="bs-note bs-note-red">
+                            <div class="flex items-baseline gap-2 justify-end">
+                                ${meta}
+                                <span class="font-mono text-[11px] font-bold text-red-400">${teamNum}</span>
+                            </div>
+                            <p class="text-xs text-slate-300 leading-snug text-right">${_esc(note.content)}</p>
                         </div>
-                        <p class="text-xs text-slate-300 leading-snug">${_esc(note.content)}</p>
                     </div>
+                    <div class="bs-col-right"></div>
                 </div>`;
         }
 
         if (side === 'blue') {
             return `
-                <div class="flex pl-[52%] pr-2 py-0.5">
-                    <div class="bs-note bs-note-blue">
-                        <div class="flex items-baseline gap-2">
-                            <span class="font-mono text-[11px] font-bold text-blue-400">${teamNum}</span>
-                            <span class="text-[10px] text-slate-500">${_esc(note.author)} · ${time}</span>
+                <div class="bs-row">
+                    <div class="bs-col-left"></div>
+                    <div class="bs-col-right">
+                        <div class="bs-note bs-note-blue">
+                            <div class="flex items-baseline gap-2">
+                                <span class="font-mono text-[11px] font-bold text-blue-400">${teamNum}</span>
+                                ${meta}
+                            </div>
+                            <p class="text-xs text-slate-300 leading-snug">${_esc(note.content)}</p>
                         </div>
-                        <p class="text-xs text-slate-300 leading-snug">${_esc(note.content)}</p>
                     </div>
                 </div>`;
         }
 
-        // Center / unassigned
+        // Center / unassigned — spans both columns
         return `
-            <div class="flex justify-center px-8 py-0.5">
-                <div class="bs-note bs-note-neutral">
-                    <div class="flex items-baseline gap-2">
-                        <span class="text-[10px] text-slate-500">${_esc(note.author)} · ${time}</span>
+            <div class="bs-row bs-row-center">
+                <div class="bs-col-left"></div>
+                <div class="bs-note bs-note-neutral" style="position:relative;z-index:1;">
+                    <div class="flex items-baseline gap-2 justify-center">
+                        ${meta}
                     </div>
-                    <p class="text-xs text-slate-300 leading-snug">${_esc(note.content)}</p>
+                    <p class="text-xs text-slate-300 leading-snug text-center">${_esc(note.content)}</p>
                 </div>
+                <div class="bs-col-right"></div>
             </div>`;
     }
 
