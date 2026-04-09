@@ -16482,3 +16482,139 @@ body.epa-breakdown-active .stat-opr {
     font-weight: 800;
   }
 }
+
+/* ═══ BATTLE STATION ═══════════════════════════════════════ */
+
+/* Hot-row team/match buttons */
+.bs-hot-btn {
+  padding: 0.25rem 0.5rem;
+  border: 1px solid rgb(51 65 85 / 0.6);  /* slate-700/60 */
+  border-radius: 0.375rem;
+  background: rgb(15 23 42 / 0.6);        /* slate-900/60 */
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.bs-hot-btn:hover {
+  background: rgb(30 41 59 / 0.8);        /* slate-800/80 */
+}
+.bs-hot-active.bs-hot-red {
+  border-color: rgb(239 68 68 / 0.4);     /* red-500/40 */
+  background: rgb(127 29 29 / 0.25);      /* red-900/25 */
+}
+.bs-hot-active.bs-hot-blue {
+  border-color: rgb(59 130 246 / 0.4);    /* blue-500/40 */
+  background: rgb(30 58 138 / 0.25);      /* blue-900/25 */
+}
+.bs-hot-active.bs-hot-match {
+  border-color: rgb(148 163 184 / 0.4);   /* slate-400/40 */
+  background: rgb(30 41 59 / 0.5);        /* slate-800/50 */
+}
+
+/* Timeline note bubbles */
+.bs-note {
+  border-radius: 0.375rem;
+  padding: 0.375rem 0.5rem;
+  max-width: 100%;
+  border: 1px solid transparent;
+}
+.bs-note-red {
+  background: rgb(127 29 29 / 0.12);
+  border-color: rgb(239 68 68 / 0.15);
+}
+.bs-note-blue {
+  background: rgb(30 58 138 / 0.12);
+  border-color: rgb(59 130 246 / 0.15);
+}
+.bs-note-neutral {
+  background: rgb(30 41 59 / 0.4);
+  border-color: rgb(51 65 85 / 0.3);
+}
+
+/* System event badges (centred on spine) */
+.bs-sys-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.2rem 0.625rem;
+  border-radius: 9999px;
+  border: 1px solid;
+  z-index: 1;
+  white-space: nowrap;
+}
+.bs-sys-emerald {
+  background: rgb(6 78 59 / 0.35);
+  border-color: rgb(52 211 153 / 0.4);
+  color: #6ee7b7;
+}
+.bs-sys-sky {
+  background: rgb(7 89 133 / 0.35);
+  border-color: rgb(56 189 248 / 0.4);
+  color: #7dd3fc;
+}
+.bs-sys-amber {
+  background: rgb(120 53 15 / 0.35);
+  border-color: rgb(251 191 36 / 0.4);
+  color: #fcd34d;
+}
+.bs-sys-slate {
+  background: rgb(30 41 59 / 0.6);
+  border-color: rgb(148 163 184 / 0.3);
+  color: #94a3b8;
+}
+.bs-sys-red {
+  background: rgb(127 29 29 / 0.35);
+  border-color: rgb(248 113 113 / 0.5);
+  color: #fca5a5;
+}
+
+/* Macro quick-inject buttons */
+.bs-macro-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.375rem;
+  border: 1px solid;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+.bs-macro-btn:hover {
+  filter: brightness(1.25);
+}
+.bs-macro-emerald {
+  border-color: rgb(52 211 153 / 0.3);
+  color: #6ee7b7;
+}
+.bs-macro-emerald:hover {
+  background: rgb(6 78 59 / 0.25);
+}
+.bs-macro-sky {
+  border-color: rgb(56 189 248 / 0.3);
+  color: #7dd3fc;
+}
+.bs-macro-sky:hover {
+  background: rgb(7 89 133 / 0.25);
+}
+.bs-macro-amber {
+  border-color: rgb(251 191 36 / 0.3);
+  color: #fcd34d;
+}
+.bs-macro-amber:hover {
+  background: rgb(120 53 15 / 0.25);
+}
+.bs-macro-slate {
+  border-color: rgb(148 163 184 / 0.25);
+  color: #94a3b8;
+}
+.bs-macro-slate:hover {
+  background: rgb(30 41 59 / 0.4);
+}
+.bs-macro-red {
+  border-color: rgb(248 113 113 / 0.3);
+  color: #fca5a5;
+}
+.bs-macro-red:hover {
+  background: rgb(127 29 29 / 0.25);
+}

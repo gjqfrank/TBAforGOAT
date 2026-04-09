@@ -1004,6 +1004,11 @@ document.querySelectorAll('.tab').forEach(btn => {
         // Stop PBP live refresh when leaving the PBP tab
         if (btn.dataset.tab !== 'playbyplay') { stopPbpRefresh(); }
 
+        // Unmount Battle Station when leaving its tab
+        if (btn.dataset.tab !== 'battlestation' && typeof BattleStation !== 'undefined') {
+            BattleStation.unmount();
+        }
+
         // Stop playoff refresh when leaving the playoff tab
         if (btn.dataset.tab !== 'playoff') { stopPlayoffRefresh(); }
 
@@ -1106,6 +1111,9 @@ document.querySelectorAll('.tab').forEach(btn => {
                 showSkeleton('pbp-loading', 'pbp-loading-status', 'Loading match data\u2026');
                 loadPlayByPlay();
             }
+        }
+        if (btn.dataset.tab === 'battlestation' && currentEvent) {
+            if (typeof BattleStation !== 'undefined') BattleStation.mount();
         }
         if (btn.dataset.tab === 'breakdown' && currentEventYear && currentEventYear < 2025) {
             // Pre-2025: show unavailable message, skip loading
@@ -6480,6 +6488,11 @@ async function generatePbpTeamStoryline(teamNum) {
 function renderPbpMatch() {
     if (!pbpData || !pbpData.matches.length) return;
     const m = pbpData.matches[pbpIndex];
+
+    // Notify Battle Station of match change
+    if (typeof BattleStation !== 'undefined') {
+        try { BattleStation.refresh(); } catch (_e) { /* not mounted */ }
+    }
 
     // Sync URL with current match key
     if (m.key) {

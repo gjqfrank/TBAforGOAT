@@ -152,6 +152,10 @@
             <svg class="tab-icon w-4 h-4 shrink-0 [stroke-width:2] opacity-70 transition-opacity duration-ct ease-ct" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
             Play by Play
         </button>
+        <button class="tab" data-tab="battlestation">
+            <svg class="tab-icon w-4 h-4 shrink-0 [stroke-width:2] opacity-70 transition-opacity duration-ct ease-ct" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+            Battle Station
+        </button>
         <button class="tab" data-tab="breakdown">
             <svg class="tab-icon w-4 h-4 shrink-0 [stroke-width:2] opacity-70 transition-opacity duration-ct ease-ct" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
             Breakdown
@@ -476,6 +480,16 @@
                 <div id="pbp-footer" class="pbp-footer"></div>
                 <div id="pbp-storyline" class="pbp-storyline-container"></div>
             </div>
+        </section>
+
+        <!-- ═══ Battle Station ═══ -->
+        <section id="tab-battlestation" class="tab-content">
+            <div id="bs-empty" class="empty empty-state">
+                <svg class="empty-icon" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                <p>Load an event and select a match to open Battle Station.</p>
+                <button class="empty-action-btn" onclick="switchToTab('playbyplay')">Go to Play by Play</button>
+            </div>
+            <div id="bs-root"></div>
         </section>
 
         <!-- ═══ Score Breakdown ═══ -->
@@ -828,6 +842,10 @@
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
             Summary
         </button>
+        <button class="mob-more-item" data-tab="battlestation" onclick="mobileNavTo('battlestation'); closeMobileMore()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+            Battle Station
+        </button>
         <button class="mob-more-item" data-tab="breakdown" onclick="mobileNavTo('breakdown'); closeMobileMore()">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
             Breakdown
@@ -865,6 +883,7 @@
     <script src="js/auth.js"></script>
     <script src="js/realtime.js"></script>
     <script src="js/notes_service.js"></script>
+    <script src="js/battle_station.js"></script>
     <script src="js/editor.js"></script>
 
     <script src="js/app.js"></script>
