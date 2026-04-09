@@ -212,7 +212,8 @@ const BattleStation = (() => {
         // Build match dropdown options
         const matches = (typeof pbpData !== 'undefined' && pbpData?.matches) ? pbpData.matches : [];
         const options = matches.map((m, i) => {
-            const lbl = m.label || m.match_key || m.key || ('Match ' + (i + 1));
+            const raw = m.label || m.match_key || m.key || ('Match ' + (i + 1));
+            const lbl = raw.replace(/^Qualification\s*/i, 'Qual ');
             return `<option value="${i}"${i === pbpIndex ? ' selected' : ''}>${_esc(lbl)}</option>`;
         }).join('');
 
