@@ -87,9 +87,11 @@ _RATE_LIMIT_HEAVY = 40     # requests per window for heavy endpoints (raised: mo
 _RATE_LIMIT_TRUSTED_GENERAL = 600   # raised from 300
 _RATE_LIMIT_TRUSTED_HEAVY = 300     # raised from 60
 
-# Endpoints that fan out to many upstream calls
+# Endpoints that fan out to many upstream calls.
+# NOTE: /summary/connections removed — play-by-play fires one request per match
+# with unique team combos; 3-tier cache + inflight.py keeps them cheap after warm-up.
 _HEAVY_PATTERNS = {
-    "/summary/connections", "/summary/awards", "/history",
+    "/summary/awards", "/history",
     "/world-record", "/alliances/", "/storylines/",
 }
 # Paths that are exempt from rate limiting
