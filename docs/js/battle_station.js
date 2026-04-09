@@ -110,7 +110,12 @@ const BattleStation = (() => {
     }
 
     // ── Lifecycle ──────────────────────────────────────────
+    function _isAuthed() {
+        return !window.isGuest;
+    }
+
     function mount() {
+        if (!_isAuthed()) return;
         if (_mounted) return;
         _mounted = true;
         _wireRealtime();
@@ -250,23 +255,23 @@ const BattleStation = (() => {
               </div>
               <div class="bs-spine"></div>
               <div class="bs-feed-inner" id="bs-timeline-inner"></div>
+            </div>
 
-              <!-- ▸ BOTTOM: Macros + input (inside feed for gradient flow) -->
-              <div class="bs-dock">
-                <div class="bs-dock-macros">
-                  ${Object.entries(LEXICON).map(([code, def]) => `
-                    <button class="bs-chip bs-chip-${def.color}"
-                            onclick="BattleStation._onMacro('${code}')" title="${def.label}">
-                      ${def.icon()}
-                      <span>${_esc(def.label)}</span>
-                    </button>`).join('')}
-                </div>
-                <form class="bs-dock-form" onsubmit="BattleStation._onSubmit(event)">
-                  <input type="text" id="bs-input" class="bs-input"
-                         placeholder="Add a note\u2026" autocomplete="off" />
-                  <button type="submit" class="bs-send-btn">Send</button>
-                </form>
-              </div>
+            <!-- ▸ BOTTOM: Macros (floating) + input dock ───── -->
+            <div class="bs-dock-macros">
+              ${Object.entries(LEXICON).map(([code, def]) => `
+                <button class="bs-chip bs-chip-${def.color}"
+                        onclick="BattleStation._onMacro('${code}')" title="${def.label}">
+                  ${def.icon()}
+                  <span>${_esc(def.label)}</span>
+                </button>`).join('')}
+            </div>
+            <div class="bs-dock">
+              <form class="bs-dock-form" onsubmit="BattleStation._onSubmit(event)">
+                <input type="text" id="bs-input" class="bs-input"
+                       placeholder="Add a note\u2026" autocomplete="off" />
+                <button type="submit" class="bs-send-btn">Send</button>
+              </form>
             </div>
 
           </div>`;
@@ -328,8 +333,8 @@ const BattleStation = (() => {
                   ${avatar}
                   <div class="bs-bubble bs-bubble-red">
                     <div class="bs-bubble-head">
-                      <span class="bs-bubble-team bs-bubble-team-red">${teamNum}</span>
                       <span class="bs-bubble-time">${tPlus}</span>
+                      <span class="bs-bubble-team bs-bubble-team-red">${teamNum}</span>
                     </div>
                     <p class="bs-bubble-body">${_esc(note.content)}</p>
                   </div>
@@ -381,7 +386,7 @@ const BattleStation = (() => {
     }
 
     async function _onMacro(code) {
-        if (!_eventKey) return;
+        if (!_isAuthed() || !_eventKey) return;
         const optimistic = {
             id: 'opt-' + Date.now(),
             event_key: _eventKey,
@@ -409,6 +414,7 @@ const BattleStation = (() => {
 
     async function _onSubmit(e) {
         e.preventDefault();
+        if (!_isAuthed()) return;
         const input = document.getElementById('bs-input');
         if (!input) return;
         const text = input.value.trim();
@@ -456,6 +462,7 @@ const BattleStation = (() => {
     // ── Mobile submit (from nav bar input pill) ─────────
     async function _onMobileSubmit(e) {
         e.preventDefault();
+        if (!_isAuthed()) return;
         const input = document.getElementById('mob-bs-input');
         if (!input) return;
         const text = input.value.trim();
