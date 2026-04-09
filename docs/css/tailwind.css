@@ -16497,10 +16497,11 @@ body.epa-breakdown-active .stat-opr {
   flex-direction: column;
   height: calc(100vh - 10rem);
   min-height: 360px;
-  background: var(--surface);
+  background: var(--card);
   border-radius: var(--radius-lg);
   overflow: hidden;
   border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
   font-family: var(--font, 'Inter', system-ui, sans-serif);
 }
 
@@ -16632,6 +16633,8 @@ body.epa-breakdown-active .stat-opr {
   overflow-x: hidden;
   position: relative;
   background: transparent;
+  display: flex;
+  flex-direction: column;
 }
 
 .bs-spine {
@@ -16646,22 +16649,31 @@ body.epa-breakdown-active .stat-opr {
   z-index: 0;
 }
 
-/* Alliance gradient washes */
+/* Alliance gradient washes — cover full scrollable area */
 .bs-gradient-red {
-  position: absolute;
-  left: 0; top: 0; bottom: 0;
-  width: 50%;
+  position: sticky;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
   pointer-events: none;
-  background: linear-gradient(to right, rgb(127 29 29 / 0.20), transparent);
+  background: linear-gradient(to right, rgb(127 29 29 / 0.20), transparent 50%);
   z-index: 0;
+  float: left;
+  margin-bottom: -100%;
 }
 .bs-gradient-blue {
-  position: absolute;
-  right: 0; top: 0; bottom: 0;
-  width: 50%;
+  position: sticky;
+  top: 0;
+  right: 0;
+  width: 100%;
+  height: 100%;
   pointer-events: none;
-  background: linear-gradient(to left, rgb(30 58 138 / 0.20), transparent);
+  background: linear-gradient(to left, rgb(30 58 138 / 0.20), transparent 50%);
   z-index: 0;
+  float: right;
+  margin-top: -100%;
+  margin-bottom: -100%;
 }
 
 .bs-feed-inner {
@@ -16671,7 +16683,8 @@ body.epa-breakdown-active .stat-opr {
   flex-direction: column;
   gap: 0.625rem;
   padding: 1rem 0;
-  min-height: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .bs-empty-feed {
@@ -16849,15 +16862,14 @@ body.epa-breakdown-active .stat-opr {
   animation: bs-fade-in-down 0.25s ease-out both;
 }
 
-/* ── BOTTOM: Floating contextual dock ──────────────────── */
+/* ── BOTTOM: Dock (inside feed, floats on gradient) ──── */
 .bs-dock {
-  flex: 0 0 auto;
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   gap: 0;
-  padding: 0.25rem 0.75rem 0.75rem;
-  background: transparent;
-  position: relative;
+  padding: 0.5rem 0.75rem 0.75rem;
 }
 .bs-dock-macros {
   display: flex;
@@ -16978,10 +16990,10 @@ body.epa-breakdown-active .stat-opr {
 
 /* Alliance gradient — fainter in light (5%) vs dark (20%) */
 [data-theme="light"] .bs-gradient-red {
-  background: linear-gradient(to right, rgb(239 68 68 / 0.05), transparent);
+  background: linear-gradient(to right, rgb(239 68 68 / 0.05), transparent 50%);
 }
 [data-theme="light"] .bs-gradient-blue {
-  background: linear-gradient(to left, rgb(59 130 246 / 0.05), transparent);
+  background: linear-gradient(to left, rgb(59 130 246 / 0.05), transparent 50%);
 }
 
 /* Dropdown arrow for light */
@@ -17012,3 +17024,146 @@ body.epa-breakdown-active .stat-opr {
 [data-theme="light"] .bs-chip-slate:hover { background: rgba(100, 116, 139, 0.06); border-color: rgba(100, 116, 139, 0.20); }
 [data-theme="light"] .bs-chip-red { color: #dc2626; }
 [data-theme="light"] .bs-chip-red:hover { background: rgba(220, 38, 38, 0.06); border-color: rgba(220, 38, 38, 0.20); }
+
+/* ═══════════════════════════════════════════════════════════
+ *  BATTLE STATION — MOBILE / RESPONSIVE
+ * ═══════════════════════════════════════════════════════════ */
+
+/* BS mobile nav — replaces standard nav when BS is active */
+.mob-bs-nav {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  max-width: 400px;
+  margin: 0 auto;
+  pointer-events: auto;
+}
+.mob-bs-nav.hidden { display: none; }
+
+/* Back button (circle with lightning icon) */
+.mob-bs-back {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 58px;
+  height: 58px;
+  background: var(--surface-glass);
+  backdrop-filter: blur(24px) saturate(1.5);
+  -webkit-backdrop-filter: blur(24px) saturate(1.5);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  box-shadow: 0 4px 24px rgba(0,0,0,.4), inset 0 0 0 .5px rgba(255,255,255,.06);
+  color: var(--primary);
+  cursor: pointer;
+  flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+  transition: background .15s, transform .1s;
+}
+.mob-bs-back:active { transform: scale(.9); }
+.mob-bs-back svg { filter: drop-shadow(0 0 4px var(--primary-glow)); }
+
+/* Input pill — text field inside a floating glass capsule */
+.mob-bs-pill {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  height: 58px;
+  background: var(--surface-glass);
+  backdrop-filter: blur(24px) saturate(1.5);
+  -webkit-backdrop-filter: blur(24px) saturate(1.5);
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 999px;
+  box-shadow: 0 4px 24px rgba(0,0,0,.4);
+  padding: 0 .5rem;
+  overflow: hidden;
+}
+
+.mob-bs-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  padding: 0 .75rem;
+  font-size: .88rem;
+  font-family: var(--font, 'Inter', system-ui, sans-serif);
+  color: var(--text);
+  outline: none;
+  height: 100%;
+}
+.mob-bs-input::placeholder { color: var(--text-muted); }
+
+.mob-bs-send {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background: linear-gradient(135deg, #6366f1 0%, #818cf8 100%);
+  border: none;
+  border-radius: 50%;
+  color: #fff;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: transform .1s;
+}
+.mob-bs-send:active { transform: scale(.9); }
+.mob-bs-send svg { pointer-events: none; }
+
+/* Macro chips floating above the input pill on mobile */
+.mob-bs-macros {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .3rem;
+  flex-wrap: wrap;
+  max-width: 400px;
+  margin: 0 auto .35rem;
+  pointer-events: auto;
+}
+.mob-bs-macros.hidden { display: none; }
+
+@media (max-width: 768px) {
+  /* Full-screen BS */
+  .bs-shell {
+    height: calc(100vh - 5rem);
+    height: calc(100dvh - 5rem);
+    border-radius: 0;
+    border: none;
+    box-shadow: none;
+  }
+
+  /* Hide desktop header + dock on mobile (replaced by mobile nav) */
+  .bs-match-bar { display: none; }
+  .bs-hotrow {
+    gap: 0.3rem;
+    padding: 0.375rem 0.5rem;
+    flex-wrap: wrap;
+  }
+  .bs-pill-btn {
+    padding: 0.4rem 1rem;
+    font-size: 0.875rem;
+  }
+  .bs-pill-general {
+    font-size: 0.75rem;
+  }
+  .bs-dock {
+    padding: 0.375rem 0.5rem 0.5rem;
+  }
+  .bs-dock-macros { display: none; }
+  .bs-input {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.8125rem;
+  }
+  .bs-send-btn {
+    padding: 0.5rem 1rem;
+    font-size: 0.75rem;
+  }
+
+  /* Bubbles smaller */
+  .bs-bubble { max-width: 75%; padding: 0.5rem 0.75rem; }
+  .bs-bubble-team { font-size: 1rem; }
+  .bs-bubble-body { font-size: 0.8125rem; }
+  .bs-avatar { width: 1.5rem; height: 1.5rem; font-size: 0.5rem; }
+  .bs-col { gap: 0.375rem; }
+  .bs-col-left { padding-right: 0.75rem; }
+  .bs-col-right { padding-left: 0.75rem; }
+}

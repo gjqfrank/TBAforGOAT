@@ -224,7 +224,7 @@ const BattleStation = (() => {
 
             <!-- ▸ BOTTOM TIER: Context pills ───────────────── -->
             <div class="bs-hotrow">
-              ${[...reds].reverse().map(n => `
+              ${reds.map(n => `
                 <button class="bs-pill-btn bs-pill-red${_ctx === 'frc' + n ? ' bs-pill-active' : ''}"
                         data-team="frc${n}" onclick="BattleStation._onHotClick(this)">
                   ${n}
@@ -248,23 +248,23 @@ const BattleStation = (() => {
               <div class="bs-gradient-blue"></div>
               <div class="bs-spine"></div>
               <div class="bs-feed-inner" id="bs-timeline-inner"></div>
-            </div>
 
-            <!-- ▸ BOTTOM: Stealth macros + input ──────────── -->
-            <div class="bs-dock">
-              <div class="bs-dock-macros">
-                ${Object.entries(LEXICON).map(([code, def]) => `
-                  <button class="bs-chip bs-chip-${def.color}"
-                          onclick="BattleStation._onMacro('${code}')" title="${def.label}">
-                    ${def.icon()}
-                    <span>${_esc(def.label)}</span>
-                  </button>`).join('')}
+              <!-- ▸ BOTTOM: Macros + input (inside feed for gradient flow) -->
+              <div class="bs-dock">
+                <div class="bs-dock-macros">
+                  ${Object.entries(LEXICON).map(([code, def]) => `
+                    <button class="bs-chip bs-chip-${def.color}"
+                            onclick="BattleStation._onMacro('${code}')" title="${def.label}">
+                      ${def.icon()}
+                      <span>${_esc(def.label)}</span>
+                    </button>`).join('')}
+                </div>
+                <form class="bs-dock-form" onsubmit="BattleStation._onSubmit(event)">
+                  <input type="text" id="bs-input" class="bs-input"
+                         placeholder="Add a note\u2026" autocomplete="off" />
+                  <button type="submit" class="bs-send-btn">Send</button>
+                </form>
               </div>
-              <form class="bs-dock-form" onsubmit="BattleStation._onSubmit(event)">
-                <input type="text" id="bs-input" class="bs-input"
-                       placeholder="Add a note\u2026" autocomplete="off" />
-                <button type="submit" class="bs-send-btn">Send</button>
-              </form>
             </div>
 
           </div>`;
@@ -451,6 +451,48 @@ const BattleStation = (() => {
         }
     }
 
+    // ── Mobile submit (from nav bar input pill) ─────────
+    async function _onMobileSubmit(e) {
+        e.preventDefault();
+        const input = document.getElementById('mob-bs-input');
+        if (!input) return;
+        const text = input.value.trim();
+        if (!text || !_eventKey) return;
+        input.value = '';
+        const teamKey = (_ctx !== 'match') ? _ctx : null;
+        _ctx = 'match';
+        document.querySelectorAll('.bs-pill-btn').forEach(b => b.classList.remove('bs-pill-active'));
+        const generalBtn = document.querySelector('.bs-pill-general');
+        if (generalBtn) generalBtn.classList.add('bs-pill-active');
+        const author = _getAuthor();
+        const optimistic = {
+            id: 'opt-' + Date.now(),
+            event_key: _eventKey,
+            match_key: _matchKey,
+            team_key: teamKey,
+            author: author,
+            content: text,
+            type: 'manual',
+            created_at: new Date().toISOString(),
+        };
+        _notes.push(optimistic);
+        _renderTimeline();
+        _scrollToTop();
+        try {
+            await NotesService.insertNote({
+                event_key: _eventKey,
+                match_key: _matchKey,
+                team_key: teamKey,
+                author: author,
+                content: text,
+                type: 'manual',
+            });
+        } catch (e2) {
+            console.error('[BattleStation] Mobile submit failed:', e2);
+            input.value = text;
+        }
+    }
+
     // ── Public API ─────────────────────────────────────────
     return {
         mount,
@@ -460,5 +502,6 @@ const BattleStation = (() => {
         _onMatchSelect,
         _onMacro,
         _onSubmit,
+        _onMobileSubmit,
     };
 })();

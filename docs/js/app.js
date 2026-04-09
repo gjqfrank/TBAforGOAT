@@ -9871,13 +9871,20 @@ function syncMobileNav(tabName) {
     }
 
     // Dynamic PbP navbar: swap standard nav ↔ PbP controls on mobile
+    // Dynamic BS navbar: swap standard nav ↔ BS input pill on mobile
     const stdNav = document.querySelector('.mobile-bottom-nav-inner');
     const pbpNav = document.getElementById('mob-pbp-nav');
+    const bsNav  = document.getElementById('mob-bs-nav');
+    const bsMacros = document.getElementById('mob-bs-macros');
     if (stdNav && pbpNav) {
         const isPbp = tabName === 'playbyplay';
-        stdNav.style.display = isPbp ? 'none' : '';
+        const isBs  = tabName === 'battlestation';
+        stdNav.style.display = (isPbp || isBs) ? 'none' : '';
         pbpNav.classList.toggle('hidden', !isPbp);
+        if (bsNav)    bsNav.classList.toggle('hidden', !isBs);
+        if (bsMacros) bsMacros.classList.toggle('hidden', !isBs);
         if (isPbp) _syncMobPbpLabel();
+        if (isBs)  _syncMobBsMacros();
     }
 }
 
@@ -9890,6 +9897,52 @@ function _syncMobPbpLabel() {
         lbl.textContent = m?._pbpLabel || (m?.label || 'Match').replace(/^Qualification\s*/i, 'Qual ');
     } else {
         lbl.textContent = 'Match';
+    }
+}
+
+/** Populate mobile BS macro chips */
+function _syncMobBsMacros() {
+    const container = document.getElementById('mob-bs-macros');
+    if (!container) return;
+    if (container.children.length) return; // already built
+    const LEXICON = {
+        AUTO_START:    { label: 'Auto',        color: 'emerald' },
+        TELEOP_START:  { label: 'Teleop',      color: 'sky' },
+        ENDGAME_START: { label: 'Endgame',     color: 'amber' },
+        MATCH_OVER:    { label: 'Match Over',  color: 'slate' },
+        FIELD_FAULT:   { label: 'Field Fault', color: 'red' },
+    };
+    Object.entries(LEXICON).forEach(([code, def]) => {
+        const btn = document.createElement('button');
+        btn.className = `bs-chip bs-chip-${def.color}`;
+        btn.textContent = def.label;
+        btn.onclick = () => BattleStation._onMacro(code);
+        container.appendChild(btn);
+    });
+}
+
+/** Toggle between BS custom nav and standard nav on mobile */
+function toggleMobileBsNav() {
+    const stdNav = document.querySelector('.mobile-bottom-nav-inner');
+    const bsNav  = document.getElementById('mob-bs-nav');
+    const bsMacros = document.getElementById('mob-bs-macros');
+    if (!stdNav || !bsNav) return;
+    const bsVisible = !bsNav.classList.contains('hidden');
+    if (bsVisible) {
+        stdNav.style.display = '';
+        bsNav.classList.add('hidden');
+        if (bsMacros) bsMacros.classList.add('hidden');
+        document.querySelectorAll('.mob-nav-btn').forEach(b => {
+            b.classList.toggle('active', false);
+        });
+        // highlight "more" since BS is under more
+        const moreBtn = document.querySelector('.mob-nav-btn[data-tab="more"]');
+        if (moreBtn) moreBtn.classList.add('active');
+    } else {
+        stdNav.style.display = 'none';
+        bsNav.classList.remove('hidden');
+        if (bsMacros) bsMacros.classList.remove('hidden');
+        _syncMobBsMacros();
     }
 }
 
