@@ -11,9 +11,14 @@ from ..config import ANTHROPIC_API_KEY
 
 log = logging.getLogger(__name__)
 
-# ── Cache: key → (timestamp, storyline_text) ────────────────
-_cache: dict[str, tuple[float, str]] = {}
-_CACHE_TTL = 7200  # 2 hours
+# ── In-memory caches ────────────────────────────────────────
+# Storyline: key → (timestamp, storyline_text, match_count)
+_cache: dict[str, tuple[float, str, int | None]] = {}
+_CACHE_TTL = 7200  # 2 hours (fallback when match count unchanged)
+
+# Team dossier: (team_key, event_key) → (timestamp, dossier_dict)
+_dossier_cache: dict[str, tuple[float, dict]] = {}
+_DOSSIER_TTL = 300  # 5 minutes — short-lived but avoids rebuild on rapid requests
 
 # ── Anthropic client (lazy) ─────────────────────────────────
 _anthropic_client = None
@@ -117,6 +122,21 @@ async def _safe(coro, default=None):
 
 # ── Dossier assembly ────────────────────────────────────────
 async def _build_team_dossier(team_key: str, event_key: str, year: int) -> dict:
+    """Assemble a rich context dossier for a single team (with short-lived cache)."""
+    # Check dossier cache (avoids ~8 TBA calls per team on rapid requests)
+    dossier_key = f"{team_key}:{event_key}"
+    now = time.time()
+    if dossier_key in _dossier_cache:
+        ts, cached_dossier = _dossier_cache[dossier_key]
+        if now - ts < _DOSSIER_TTL:
+            return cached_dossier
+
+    dossier = await _build_team_dossier_uncached(team_key, event_key, year)
+    _dossier_cache[dossier_key] = (now, dossier)
+    return dossier
+
+
+async def _build_team_dossier_uncached(team_key: str, event_key: str, year: int) -> dict:
     """Assemble a rich context dossier for a single team."""
     from .tba_client import get_tba_client
     from .statbotics_client import get_statbotics_client
@@ -696,6 +716,8 @@ async def generate_storyline(
     team_number: Optional[int] = None,
 ) -> dict:
     """Generate an AI storyline. Returns {"storyline": str, "cached": bool}."""
+    from .inflight import coalesce
+
     if not is_available():
         raise RuntimeError("Anthropic API key not configured")
 
@@ -707,14 +729,103 @@ async def generate_storyline(
     else:
         raise ValueError("Invalid mode or missing parameters")
 
-    # Check cache
-    now = time.time()
-    if cache_key in _cache:
-        ts, text = _cache[cache_key]
-        if now - ts < _CACHE_TTL:
-            return {"storyline": text, "cached": True}
+    # Coalesce concurrent identical requests
+    return await coalesce(
+        f"storyline:{cache_key}",
+        _generate_storyline_inner,
+        cache_key, mode, event_key, match_key, team_number,
+    )
 
-    # Assemble dossier
+
+async def _get_event_match_count(event_key: str) -> int | None:
+    """Get current match count for event-aware invalidation."""
+    try:
+        from .tba_client import get_tba_client
+        tba = get_tba_client()
+        matches = await _safe(tba.get_event_matches(event_key), [])
+        if matches:
+            return sum(1 for m in matches if m.get("actual_time") is not None)
+    except Exception:
+        pass
+    return None
+
+
+async def _load_from_supabase(cache_key: str) -> tuple[str, int | None] | None:
+    """Try to load a cached storyline from Supabase."""
+    try:
+        from .supabase_client import get_supabase
+        sb = await get_supabase()
+        resp = await sb.table("storyline_cache").select(
+            "storyline, match_count, created_at"
+        ).eq("cache_key", cache_key).execute()
+        if resp.data:
+            row = resp.data[0]
+            return (row["storyline"], row.get("match_count"))
+    except Exception as e:
+        log.debug("Supabase storyline load failed for %s: %s", cache_key, e)
+    return None
+
+
+async def _save_to_supabase(cache_key: str, event_key: str, storyline: str,
+                            match_count: int | None) -> None:
+    """Persist a storyline to Supabase (fire-and-forget)."""
+    try:
+        from .supabase_client import get_supabase
+        sb = await get_supabase()
+        await sb.table("storyline_cache").upsert({
+            "cache_key": cache_key,
+            "event_key": event_key,
+            "storyline": storyline,
+            "match_count": match_count,
+        }, on_conflict="cache_key").execute()
+    except Exception as e:
+        log.debug("Supabase storyline save failed for %s: %s", cache_key, e)
+
+
+async def _generate_storyline_inner(
+    cache_key: str,
+    mode: str,
+    event_key: str,
+    match_key: Optional[str],
+    team_number: Optional[int],
+) -> dict:
+    """Core generation logic — called via inflight coalescing."""
+    now = time.time()
+
+    # ── Layer 1: In-memory cache with event-aware invalidation ──
+    if cache_key in _cache:
+        ts, text, cached_match_count = _cache[cache_key]
+        age = now - ts
+        if age < _CACHE_TTL:
+            # For team storylines, check if match count changed (new results)
+            if mode == "team" and age > 300:  # re-check after 5 min
+                current_count = await _get_event_match_count(event_key)
+                if current_count is not None and cached_match_count is not None:
+                    if current_count != cached_match_count:
+                        log.info("Storyline cache invalidated for %s: match count %s→%s",
+                                 cache_key, cached_match_count, current_count)
+                    else:
+                        return {"storyline": text, "cached": True}
+                else:
+                    return {"storyline": text, "cached": True}
+            else:
+                return {"storyline": text, "cached": True}
+
+    # ── Layer 2: Supabase persistent cache ──
+    sb_hit = await _load_from_supabase(cache_key)
+    if sb_hit:
+        sb_text, sb_match_count = sb_hit
+        # Check if event state changed
+        current_count = await _get_event_match_count(event_key)
+        if sb_match_count is not None and current_count == sb_match_count:
+            # Still valid — promote to memory cache
+            _cache[cache_key] = (now, sb_text, sb_match_count)
+            return {"storyline": sb_text, "cached": True}
+        # Otherwise, stale — regenerate
+
+    # ── Layer 3: Generate fresh ──
+    match_count = await _get_event_match_count(event_key)
+
     if mode == "match":
         dossier = await _assemble_match_dossier(event_key, match_key)
         system_prompt = _MATCH_SYSTEM_PROMPT
@@ -741,10 +852,22 @@ async def generate_storyline(
             messages=[{"role": "user", "content": user_msg}],
         )
         storyline = response.content[0].text.strip()
+
+        # ── Cost/usage logging ──
+        usage = getattr(response, "usage", None)
+        if usage:
+            in_tok = getattr(usage, "input_tokens", 0)
+            out_tok = getattr(usage, "output_tokens", 0)
+            log.info("Storyline LLM usage [%s]: %d input + %d output tokens "
+                     "(mode=%s, event=%s)", cache_key, in_tok, out_tok,
+                     mode, event_key)
     except Exception as e:
         log.error("Anthropic API error: %s", e)
         raise RuntimeError(f"AI service error: {e}")
 
-    # Cache result
-    _cache[cache_key] = (now, storyline)
+    # ── Populate caches ──
+    _cache[cache_key] = (now, storyline, match_count)
+    # Fire-and-forget Supabase persist
+    asyncio.create_task(_save_to_supabase(cache_key, event_key, storyline, match_count))
+
     return {"storyline": storyline, "cached": False}

@@ -6355,6 +6355,22 @@ function copyStoryline(btn) {
 }
 
 const _storylineCache = {};   // key → {text, cached}
+const _STORYLINE_SS_PREFIX = 'sl:';  // sessionStorage key prefix
+
+function _slGet(key) {
+    const mem = _storylineCache[key];
+    if (mem) return mem;
+    try {
+        const raw = sessionStorage.getItem(_STORYLINE_SS_PREFIX + key);
+        if (raw) { const obj = JSON.parse(raw); _storylineCache[key] = obj; return obj; }
+    } catch {}
+    return null;
+}
+function _slSet(key, text, cached) {
+    const obj = { text, cached: !!cached };
+    _storylineCache[key] = obj;
+    try { sessionStorage.setItem(_STORYLINE_SS_PREFIX + key, JSON.stringify(obj)); } catch {}
+}
 
 function dismissStoryline(containerId) {
     const el = $(containerId);
@@ -6368,9 +6384,9 @@ async function generateMatchStoryline() {
     if (!m.key || !currentEvent) return;
 
     const cacheKey = `match:${m.key}`;
-    if (_storylineCache[cacheKey]) {
-        const c = _storylineCache[cacheKey];
-        renderStoryline('pbp-storyline', c.text, true);
+    const hit = _slGet(cacheKey);
+    if (hit) {
+        renderStoryline('pbp-storyline', hit.text, true);
         return;
     }
 
@@ -6385,7 +6401,7 @@ async function generateMatchStoryline() {
             event_key: currentEvent,
             match_key: m.key,
         });
-        _storylineCache[cacheKey] = { text: result.storyline };
+        _slSet(cacheKey, result.storyline, result.cached);
         renderStoryline('pbp-storyline', result.storyline, result.cached);
     } catch (err) {
         showStorylineError('pbp-storyline', err.message || 'Failed to generate storyline.', 'generateMatchStoryline()');
@@ -6399,9 +6415,9 @@ async function generateTeamStoryline(teamNum) {
     if (!currentEvent) return;
 
     const cacheKey = `team:${currentEvent}:${teamNum}`;
-    if (_storylineCache[cacheKey]) {
-        const c = _storylineCache[cacheKey];
-        renderStoryline('spotlight-storyline', c.text, true);
+    const hit = _slGet(cacheKey);
+    if (hit) {
+        renderStoryline('spotlight-storyline', hit.text, true);
         return;
     }
 
@@ -6416,7 +6432,7 @@ async function generateTeamStoryline(teamNum) {
             event_key: currentEvent,
             team_number: teamNum,
         });
-        _storylineCache[cacheKey] = { text: result.storyline };
+        _slSet(cacheKey, result.storyline, result.cached);
         renderStoryline('spotlight-storyline', result.storyline, result.cached);
     } catch (err) {
         showStorylineError('spotlight-storyline', err.message || 'Failed to generate storyline.', `generateTeamStoryline(${teamNum})`);
@@ -6440,8 +6456,9 @@ async function generatePbpTeamStoryline(teamNum) {
     const label = nickname ? `${teamNum} ${nickname}` : `Team ${teamNum}`;
 
     const cacheKey = `team:${currentEvent}:${teamNum}`;
-    if (_storylineCache[cacheKey]) {
-        renderStoryline('pbp-storyline', _storylineCache[cacheKey].text, true, label);
+    const hit2 = _slGet(cacheKey);
+    if (hit2) {
+        renderStoryline('pbp-storyline', hit2.text, true, label);
         return;
     }
 
@@ -6453,7 +6470,7 @@ async function generatePbpTeamStoryline(teamNum) {
             event_key: currentEvent,
             team_number: teamNum,
         });
-        _storylineCache[cacheKey] = { text: result.storyline };
+        _slSet(cacheKey, result.storyline, result.cached);
         renderStoryline('pbp-storyline', result.storyline, result.cached, label);
     } catch (err) {
         showStorylineError('pbp-storyline', err.message || 'Failed to generate storyline.', `generatePbpTeamStoryline(${teamNum})`);
