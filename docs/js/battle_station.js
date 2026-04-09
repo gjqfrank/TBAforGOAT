@@ -5,6 +5,8 @@
    Red notes on the left, Blue on the right, system events
    rendered as centred badges on the spine.
 
+   Timeline flows TOP → DOWN (newest at top).
+
    Depends on: app.js (pbpData, pbpIndex, currentEvent,
                pbpPrev, pbpNext),
                notes_service.js, realtime.js, auth.js
@@ -21,6 +23,7 @@ const BattleStation = (() => {
     let _matchKey  = null;
     let _mounted   = false;
     let _realtimeWired = false;
+    let _matchStartTime = null;  // ISO string or null
 
     // ── Lexicon: system event definitions ──────────────────
     const LEXICON = {
@@ -48,10 +51,10 @@ const BattleStation = (() => {
         return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
     }
     function _iconChevLeft() {
-        return '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>';
+        return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>';
     }
     function _iconChevRight() {
-        return '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>';
+        return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>';
     }
 
     // ── Helpers ─────────────────────────────────────────────
@@ -61,11 +64,27 @@ const BattleStation = (() => {
         return d.innerHTML;
     }
 
-    function _ts(iso) {
-        try {
-            const d = new Date(iso);
-            return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        } catch { return ''; }
+    /** Format T+ / T- relative to the first system event (AUTO_START).
+     *  Falls back to T+ 0:00 offset from the earliest note if no
+     *  AUTO_START exists. Returns e.g. "T+ 1:23" or "T- 0:05". */
+    function _formatMatchTime(isoString) {
+        if (!isoString) return '';
+        const ts = new Date(isoString).getTime();
+        if (Number.isNaN(ts)) return '';
+
+        // Determine baseline: first AUTO_START or earliest note in set
+        if (!_matchStartTime) {
+            const auto = _notes.find(n => n.type === 'system' && n.content === 'AUTO_START');
+            _matchStartTime = auto ? auto.created_at
+                            : (_notes.length ? _notes[_notes.length - 1].created_at : isoString);
+        }
+        const base = new Date(_matchStartTime).getTime();
+        const diffSec = Math.round((ts - base) / 1000);
+        const sign = diffSec < 0 ? '−' : '+';
+        const abs  = Math.abs(diffSec);
+        const min  = Math.floor(abs / 60);
+        const sec  = String(abs % 60).padStart(2, '0');
+        return `T${sign} ${min}:${sec}`;
     }
 
     function _getAuthor() {
@@ -74,6 +93,14 @@ const BattleStation = (() => {
             if (u) return u.user_metadata?.name || u.email || 'Caster';
         }
         return 'Caster';
+    }
+
+    /** Return 1- or 2-char initials from a name/email string. */
+    function _initials(name) {
+        if (!name) return '?';
+        const parts = name.trim().split(/[\s.@]+/).filter(Boolean);
+        if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+        return name.slice(0, 2).toUpperCase();
     }
 
     function _getTeamNums(alliance) {
@@ -114,6 +141,7 @@ const BattleStation = (() => {
         _eventKey = (typeof currentEvent !== 'undefined') ? currentEvent : null;
         _matchKey = m.match_key || m.key || null;
         _ctx      = 'match';
+        _matchStartTime = null;  // reset for new match
         _render();
         _loadNotes();
     }
@@ -139,7 +167,7 @@ const BattleStation = (() => {
                 if (_notes.find(n => n.id === note.id)) return;
                 _notes.push(note);
                 _renderTimeline();
-                _scrollToBottom();
+                _scrollToTop();
             });
         }
     }
@@ -150,22 +178,23 @@ const BattleStation = (() => {
         try {
             _notes = await NotesService.fetchNotes(_eventKey, _matchKey, null);
             _notes.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+            _matchStartTime = null;  // recalculate from loaded notes
             _renderTimeline();
-            _scrollToBottom();
+            _scrollToTop();
         } catch (e) {
             console.warn('[BattleStation] Failed to load notes:', e);
         }
     }
 
-    function _scrollToBottom() {
+    function _scrollToTop() {
         requestAnimationFrame(() => {
             const tl = document.getElementById('bs-timeline');
-            if (tl) tl.scrollTop = tl.scrollHeight;
+            if (tl) tl.scrollTop = 0;
         });
     }
 
     // ═══════════════════════════════════════════════════════
-    //  RENDER — Glassmorphic Panel Layout
+    //  RENDER — Clustered Action Bar + Top-Down Timeline
     // ═══════════════════════════════════════════════════════
     function _render() {
         const empty = document.getElementById('bs-empty');
@@ -184,18 +213,14 @@ const BattleStation = (() => {
         root.innerHTML = `
           <div class="bs-shell">
 
-            <!-- ▸ TOP: Glassmorphic Hot-Row ────────────────── -->
+            <!-- ▸ TOP: Clustered Action Bar ────────────────── -->
             <div class="bs-hotrow">
-              <!-- Red team buttons -->
-              <div class="bs-hotrow-side">
-                ${reds.map((n, i) => `
-                  <button class="bs-team-btn bs-team-red${_ctx === 'frc' + n ? ' bs-team-active' : ''}"
-                          data-team="frc${n}" onclick="BattleStation._onHotClick(this)">
-                    ${n}
-                  </button>`).join('')}
-              </div>
+              ${reds.map(n => `
+                <button class="bs-team-btn bs-team-red${_ctx === 'frc' + n ? ' bs-team-active' : ''}"
+                        data-team="frc${n}" onclick="BattleStation._onHotClick(this)">
+                  ${n}
+                </button>`).join('')}
 
-              <!-- Center: match switcher [ < ] [ QUAL 1 ] [ > ] -->
               <div class="bs-match-switcher">
                 <button class="bs-nav-btn${hasPrev ? '' : ' bs-nav-disabled'}"
                         onclick="BattleStation._onMatchPrev()" title="Previous match">
@@ -211,27 +236,24 @@ const BattleStation = (() => {
                 </button>
               </div>
 
-              <!-- Blue team buttons -->
-              <div class="bs-hotrow-side">
-                ${blues.map((n, i) => `
-                  <button class="bs-team-btn bs-team-blue${_ctx === 'frc' + n ? ' bs-team-active' : ''}"
-                          data-team="frc${n}" onclick="BattleStation._onHotClick(this)">
-                    ${n}
-                  </button>`).join('')}
-              </div>
+              ${blues.map(n => `
+                <button class="bs-team-btn bs-team-blue${_ctx === 'frc' + n ? ' bs-team-active' : ''}"
+                        data-team="frc${n}" onclick="BattleStation._onHotClick(this)">
+                  ${n}
+                </button>`).join('')}
             </div>
 
-            <!-- ▸ MIDDLE: Spine + Feed ─────────────────────── -->
+            <!-- ▸ MIDDLE: Spine + Feed (top-down: newest first) ──── -->
             <div class="bs-feed" id="bs-timeline">
               <div class="bs-spine"></div>
               <div class="bs-feed-inner" id="bs-timeline-inner"></div>
             </div>
 
-            <!-- ▸ BOTTOM: Pinned glassy input dock ─────────── -->
+            <!-- ▸ BOTTOM: Pinned macro deck + input ────────── -->
             <div class="bs-dock">
               <div class="bs-dock-macros">
                 ${Object.entries(LEXICON).map(([code, def]) => `
-                  <button class="bs-pill bs-pill-${def.color}"
+                  <button class="bs-macro bs-macro-${def.color}"
                           onclick="BattleStation._onMacro('${code}')" title="${def.label}">
                     ${def.icon()}
                     <span>${_esc(def.label)}</span>
@@ -249,7 +271,7 @@ const BattleStation = (() => {
         _renderTimeline();
     }
 
-    // ── Timeline rendering ─────────────────────────────────
+    // ── Timeline rendering (newest-first) ──────────────────
     function _renderTimeline() {
         const inner = document.getElementById('bs-timeline-inner');
         if (!inner) return;
@@ -265,39 +287,44 @@ const BattleStation = (() => {
             return n.team_key === _ctx;
         });
 
-        inner.innerHTML = visible.map(n => _renderNote(n)).join('');
+        // Newest first — reverse a copy so _notes stays chronological
+        const reversed = [...visible].reverse();
+        inner.innerHTML = reversed.map((n, i) => _renderNote(n, i === 0)).join('');
     }
 
-    function _renderNote(note) {
+    function _renderNote(note, isNewest) {
         const side = _noteSide(note);
-        const time = _ts(note.created_at);
+        const tPlus = _formatMatchTime(note.created_at);
+        const animClass = isNewest ? ' bs-anim-in' : '';
 
         if (note.type === 'system') {
             const def = LEXICON[note.content] || { label: note.content, color: 'slate', icon: _iconWarning };
             return `
-              <div class="bs-row bs-row-center">
+              <div class="bs-row bs-row-center${animClass}">
                 <div class="bs-sys-badge bs-sys-${def.color}">
                   ${def.icon()}
                   <span class="bs-sys-label">${_esc(def.label)}</span>
-                  <span class="bs-sys-time">${time}</span>
+                  <span class="bs-sys-time">${tPlus}</span>
                 </div>
               </div>`;
         }
 
         const teamNum = note.team_key ? note.team_key.replace(/\D/g, '') : '';
-        const meta = `<span class="bs-note-meta">${_esc(note.author)} · ${time}</span>`;
+        const authorName = note.author || 'Caster';
+        const avatar = `<div class="bs-avatar bs-avatar-${side === 'blue' ? 'blue' : (side === 'red' ? 'red' : 'neutral')}">${_esc(_initials(authorName))}</div>`;
 
         if (side === 'red') {
             return `
-              <div class="bs-row">
+              <div class="bs-row${animClass}">
                 <div class="bs-col bs-col-left">
-                  <div class="bs-note bs-note-red">
-                    <div class="bs-note-head bs-note-head-right">
-                      ${meta}
-                      <span class="bs-note-team bs-note-team-red">${teamNum}</span>
+                  <div class="bs-bubble bs-bubble-red">
+                    <div class="bs-bubble-head">
+                      <span class="bs-bubble-team bs-bubble-team-red">${teamNum}</span>
+                      <span class="bs-bubble-meta">${_esc(authorName)} · ${tPlus}</span>
                     </div>
-                    <p class="bs-note-body bs-note-body-right">${_esc(note.content)}</p>
+                    <p class="bs-bubble-body">${_esc(note.content)}</p>
                   </div>
+                  ${avatar}
                 </div>
                 <div class="bs-col bs-col-right"></div>
               </div>`;
@@ -305,25 +332,29 @@ const BattleStation = (() => {
 
         if (side === 'blue') {
             return `
-              <div class="bs-row">
+              <div class="bs-row${animClass}">
                 <div class="bs-col bs-col-left"></div>
                 <div class="bs-col bs-col-right">
-                  <div class="bs-note bs-note-blue">
-                    <div class="bs-note-head">
-                      <span class="bs-note-team bs-note-team-blue">${teamNum}</span>
-                      ${meta}
+                  ${avatar}
+                  <div class="bs-bubble bs-bubble-blue">
+                    <div class="bs-bubble-head">
+                      <span class="bs-bubble-team bs-bubble-team-blue">${teamNum}</span>
+                      <span class="bs-bubble-meta">${_esc(authorName)} · ${tPlus}</span>
                     </div>
-                    <p class="bs-note-body">${_esc(note.content)}</p>
+                    <p class="bs-bubble-body">${_esc(note.content)}</p>
                   </div>
                 </div>
               </div>`;
         }
 
+        // center / neutral
         return `
-          <div class="bs-row bs-row-center">
-            <div class="bs-note bs-note-neutral">
-              <div class="bs-note-head bs-note-head-center">${meta}</div>
-              <p class="bs-note-body bs-note-body-center">${_esc(note.content)}</p>
+          <div class="bs-row bs-row-center${animClass}">
+            <div class="bs-bubble bs-bubble-neutral">
+              <div class="bs-bubble-head bs-bubble-head-center">
+                <span class="bs-bubble-meta">${_esc(authorName)} · ${tPlus}</span>
+              </div>
+              <p class="bs-bubble-body bs-bubble-body-center">${_esc(note.content)}</p>
             </div>
           </div>`;
     }
@@ -353,7 +384,6 @@ const BattleStation = (() => {
 
     async function _onMacro(code) {
         if (!_eventKey) return;
-        // Optimistic local insert
         const optimistic = {
             id: 'opt-' + Date.now(),
             event_key: _eventKey,
@@ -365,7 +395,7 @@ const BattleStation = (() => {
         };
         _notes.push(optimistic);
         _renderTimeline();
-        _scrollToBottom();
+        _scrollToTop();
         try {
             await NotesService.insertNote({
                 event_key: _eventKey,
@@ -388,7 +418,6 @@ const BattleStation = (() => {
         input.value = '';
         const teamKey = (_ctx !== 'match') ? _ctx : null;
         const author = _getAuthor();
-        // Optimistic local insert
         const optimistic = {
             id: 'opt-' + Date.now(),
             event_key: _eventKey,
@@ -401,7 +430,7 @@ const BattleStation = (() => {
         };
         _notes.push(optimistic);
         _renderTimeline();
-        _scrollToBottom();
+        _scrollToTop();
         try {
             await NotesService.insertNote({
                 event_key: _eventKey,
