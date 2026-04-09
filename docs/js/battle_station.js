@@ -214,7 +214,15 @@ const BattleStation = (() => {
         root.innerHTML = `
           <div class="bs-shell">
 
-            <!-- ▸ TOP: Clustered Pill Nav ──────────────────── -->
+            <!-- ▸ TOP TIER: Match navigation ───────────────── -->
+            <div class="bs-match-bar">
+              <select class="bs-match-select" id="bs-match-dd"
+                      onchange="BattleStation._onMatchSelect(this.value)">
+                ${options}
+              </select>
+            </div>
+
+            <!-- ▸ BOTTOM TIER: Context pills ───────────────── -->
             <div class="bs-hotrow">
               ${reds.map(n => `
                 <button class="bs-pill-btn bs-pill-red${_ctx === 'frc' + n ? ' bs-pill-active' : ''}"
@@ -222,10 +230,10 @@ const BattleStation = (() => {
                   ${n}
                 </button>`).join('')}
 
-              <select class="bs-match-select" id="bs-match-dd"
-                      onchange="BattleStation._onMatchSelect(this.value)">
-                ${options}
-              </select>
+              <button class="bs-pill-btn bs-pill-general${_ctx === 'match' ? ' bs-pill-active' : ''}"
+                      data-team="match" onclick="BattleStation._onHotClick(this)">
+                General
+              </button>
 
               ${blues.map(n => `
                 <button class="bs-pill-btn bs-pill-blue${_ctx === 'frc' + n ? ' bs-pill-active' : ''}"
@@ -242,11 +250,11 @@ const BattleStation = (() => {
               <div class="bs-feed-inner" id="bs-timeline-inner"></div>
             </div>
 
-            <!-- ▸ BOTTOM: Macro chips + input ──────────────── -->
+            <!-- ▸ BOTTOM: Stealth macros + input ──────────── -->
             <div class="bs-dock">
               <div class="bs-dock-macros">
                 ${Object.entries(LEXICON).map(([code, def]) => `
-                  <button class="bs-macro bs-macro-${def.color}"
+                  <button class="bs-chip bs-chip-${def.color}"
                           onclick="BattleStation._onMacro('${code}')" title="${def.label}">
                     ${def.icon()}
                     <span>${_esc(def.label)}</span>
@@ -356,7 +364,7 @@ const BattleStation = (() => {
         const team = btn.dataset.team;
         _ctx = team === 'match' ? 'match' : team;
         document.querySelectorAll('.bs-pill-btn').forEach(b => b.classList.remove('bs-pill-active'));
-        if (team !== 'match') btn.classList.add('bs-pill-active');
+        btn.classList.add('bs-pill-active');
         _renderTimeline();
     }
 
