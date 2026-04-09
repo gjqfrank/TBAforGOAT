@@ -224,7 +224,7 @@ const BattleStation = (() => {
 
             <!-- ▸ BOTTOM TIER: Context pills ───────────────── -->
             <div class="bs-hotrow">
-              ${reds.map(n => `
+              ${[...reds].reverse().map(n => `
                 <button class="bs-pill-btn bs-pill-red${_ctx === 'frc' + n ? ' bs-pill-active' : ''}"
                         data-team="frc${n}" onclick="BattleStation._onHotClick(this)">
                   ${n}
@@ -284,12 +284,17 @@ const BattleStation = (() => {
 
         const visible = _notes.filter(n => {
             if (n.type === 'system') return true;
-            if (_ctx === 'match') return true;
-            return n.team_key === _ctx;
+            return true;
         });
 
         const reversed = [...visible].reverse();
-        inner.innerHTML = reversed.map((n, i) => _renderNote(n, i === 0)).join('');
+        inner.innerHTML = reversed.map((n, i) => {
+            const html = _renderNote(n, i === 0);
+            if (_ctx !== 'match' && n.type !== 'system' && n.team_key !== _ctx) {
+                return html.replace(/class="bs-row/, 'class="bs-row bs-note-dimmed');
+            }
+            return html;
+        }).join('');
     }
 
     function _renderNote(note, isNewest) {
@@ -407,7 +412,16 @@ const BattleStation = (() => {
         const text = input.value.trim();
         if (!text || !_eventKey) return;
         input.value = '';
+
+        // Capture team before resetting to GENERAL
         const teamKey = (_ctx !== 'match') ? _ctx : null;
+
+        // Reset to GENERAL after sending
+        _ctx = 'match';
+        document.querySelectorAll('.bs-pill-btn').forEach(b => b.classList.remove('bs-pill-active'));
+        const generalBtn = document.querySelector('.bs-pill-general');
+        if (generalBtn) generalBtn.classList.add('bs-pill-active');
+
         const author = _getAuthor();
         const optimistic = {
             id: 'opt-' + Date.now(),
