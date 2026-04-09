@@ -5,10 +5,10 @@
    Red notes on the left, Blue on the right, system events
    rendered as centred badges on the spine.
 
-   Timeline flows TOP → DOWN (newest at top).
+   Timeline flows TOP → DOWN (newest at top, older pushed down).
 
    Depends on: app.js (pbpData, pbpIndex, currentEvent,
-               pbpPrev, pbpNext),
+               pbpGoTo, pbpPrev, pbpNext),
                notes_service.js, realtime.js, auth.js
    ═══════════════════════════════════════════════════════════ */
 
@@ -23,9 +23,9 @@ const BattleStation = (() => {
     let _matchKey  = null;
     let _mounted   = false;
     let _realtimeWired = false;
-    let _matchStartTime = null;  // ISO string or null
+    let _matchStartTime = null;
 
-    // ── Lexicon: system event definitions ──────────────────
+    // ── Lexicon ────────────────────────────────────────────
     const LEXICON = {
         AUTO_START:   { label: 'Auto',       color: 'emerald', icon: _iconRobot },
         TELEOP_START: { label: 'Teleop',     color: 'sky',     icon: _iconGamepad },
@@ -50,11 +50,11 @@ const BattleStation = (() => {
     function _iconWarning() {
         return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
     }
-    function _iconChevLeft() {
-        return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>';
+    function _iconSun() {
+        return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>';
     }
-    function _iconChevRight() {
-        return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>';
+    function _iconMoon() {
+        return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
     }
 
     // ── Helpers ─────────────────────────────────────────────
@@ -64,15 +64,10 @@ const BattleStation = (() => {
         return d.innerHTML;
     }
 
-    /** Format T+ / T- relative to the first system event (AUTO_START).
-     *  Falls back to T+ 0:00 offset from the earliest note if no
-     *  AUTO_START exists. Returns e.g. "T+ 1:23" or "T- 0:05". */
     function _formatMatchTime(isoString) {
         if (!isoString) return '';
         const ts = new Date(isoString).getTime();
         if (Number.isNaN(ts)) return '';
-
-        // Determine baseline: first AUTO_START or earliest note in set
         if (!_matchStartTime) {
             const auto = _notes.find(n => n.type === 'system' && n.content === 'AUTO_START');
             _matchStartTime = auto ? auto.created_at
@@ -80,11 +75,11 @@ const BattleStation = (() => {
         }
         const base = new Date(_matchStartTime).getTime();
         const diffSec = Math.round((ts - base) / 1000);
-        const sign = diffSec < 0 ? '−' : '+';
+        const sign = diffSec < 0 ? '\u2212' : '+';
         const abs  = Math.abs(diffSec);
         const min  = Math.floor(abs / 60);
         const sec  = String(abs % 60).padStart(2, '0');
-        return `T${sign} ${min}:${sec}`;
+        return `T${sign}\u2009${min}:${sec}`;
     }
 
     function _getAuthor() {
@@ -95,7 +90,6 @@ const BattleStation = (() => {
         return 'Caster';
     }
 
-    /** Return 1- or 2-char initials from a name/email string. */
     function _initials(name) {
         if (!name) return '?';
         const parts = name.trim().split(/[\s.@]+/).filter(Boolean);
@@ -121,6 +115,10 @@ const BattleStation = (() => {
         return 'center';
     }
 
+    function _isDark() {
+        return document.documentElement.getAttribute('data-theme') !== 'light';
+    }
+
     // ── Lifecycle ──────────────────────────────────────────
     function mount() {
         if (_mounted) return;
@@ -136,12 +134,11 @@ const BattleStation = (() => {
         if (typeof pbpIndex === 'undefined') { _showEmpty(); return; }
         const m = pbpData.matches[pbpIndex];
         if (!m) { _showEmpty(); return; }
-
         _match    = m;
         _eventKey = (typeof currentEvent !== 'undefined') ? currentEvent : null;
         _matchKey = m.match_key || m.key || null;
         _ctx      = 'match';
-        _matchStartTime = null;  // reset for new match
+        _matchStartTime = null;
         _render();
         _loadNotes();
     }
@@ -178,7 +175,7 @@ const BattleStation = (() => {
         try {
             _notes = await NotesService.fetchNotes(_eventKey, _matchKey, null);
             _notes.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
-            _matchStartTime = null;  // recalculate from loaded notes
+            _matchStartTime = null;
             _renderTimeline();
             _scrollToTop();
         } catch (e) {
@@ -194,7 +191,7 @@ const BattleStation = (() => {
     }
 
     // ═══════════════════════════════════════════════════════
-    //  RENDER — Clustered Action Bar + Top-Down Timeline
+    //  RENDER
     // ═══════════════════════════════════════════════════════
     function _render() {
         const empty = document.getElementById('bs-empty');
@@ -203,53 +200,51 @@ const BattleStation = (() => {
         if (!root) return;
         root.style.display = '';
 
-        const label = _match.label || _match.match_key || 'Match';
         const reds  = _getTeamNums(_match.red);
         const blues = _getTeamNums(_match.blue);
-        const hasPrev = (typeof pbpIndex !== 'undefined') && pbpIndex > 0;
-        const hasNext = (typeof pbpIndex !== 'undefined' && typeof pbpData !== 'undefined')
-                        && pbpIndex < pbpData.matches.length - 1;
+
+        // Build match dropdown options
+        const matches = (typeof pbpData !== 'undefined' && pbpData?.matches) ? pbpData.matches : [];
+        const options = matches.map((m, i) => {
+            const lbl = m.label || m.match_key || m.key || ('Match ' + (i + 1));
+            return `<option value="${i}"${i === pbpIndex ? ' selected' : ''}>${_esc(lbl)}</option>`;
+        }).join('');
 
         root.innerHTML = `
           <div class="bs-shell">
 
-            <!-- ▸ TOP: Clustered Action Bar ────────────────── -->
+            <!-- ▸ TOP: Clustered Pill Nav ──────────────────── -->
             <div class="bs-hotrow">
               ${reds.map(n => `
-                <button class="bs-team-btn bs-team-red${_ctx === 'frc' + n ? ' bs-team-active' : ''}"
+                <button class="bs-pill-btn bs-pill-red${_ctx === 'frc' + n ? ' bs-pill-active' : ''}"
                         data-team="frc${n}" onclick="BattleStation._onHotClick(this)">
                   ${n}
                 </button>`).join('')}
 
-              <div class="bs-match-switcher">
-                <button class="bs-nav-btn${hasPrev ? '' : ' bs-nav-disabled'}"
-                        onclick="BattleStation._onMatchPrev()" title="Previous match">
-                  ${_iconChevLeft()}
-                </button>
-                <button class="bs-match-label${_ctx === 'match' ? ' bs-match-label-active' : ''}"
-                        data-team="match" onclick="BattleStation._onHotClick(this)">
-                  ${_esc(label)}
-                </button>
-                <button class="bs-nav-btn${hasNext ? '' : ' bs-nav-disabled'}"
-                        onclick="BattleStation._onMatchNext()" title="Next match">
-                  ${_iconChevRight()}
-                </button>
-              </div>
+              <select class="bs-match-select" id="bs-match-dd"
+                      onchange="BattleStation._onMatchSelect(this.value)">
+                ${options}
+              </select>
 
               ${blues.map(n => `
-                <button class="bs-team-btn bs-team-blue${_ctx === 'frc' + n ? ' bs-team-active' : ''}"
+                <button class="bs-pill-btn bs-pill-blue${_ctx === 'frc' + n ? ' bs-pill-active' : ''}"
                         data-team="frc${n}" onclick="BattleStation._onHotClick(this)">
                   ${n}
                 </button>`).join('')}
+
+              <button class="bs-theme-toggle" onclick="BattleStation._onThemeToggle()"
+                      title="Toggle light/dark mode">
+                <span class="bs-theme-icon">${_isDark() ? _iconSun() : _iconMoon()}</span>
+              </button>
             </div>
 
-            <!-- ▸ MIDDLE: Spine + Feed (top-down: newest first) ──── -->
+            <!-- ▸ MIDDLE: Spine + Feed (newest at top) ─────── -->
             <div class="bs-feed" id="bs-timeline">
               <div class="bs-spine"></div>
               <div class="bs-feed-inner" id="bs-timeline-inner"></div>
             </div>
 
-            <!-- ▸ BOTTOM: Pinned macro deck + input ────────── -->
+            <!-- ▸ BOTTOM: Macro pills + input ──────────────── -->
             <div class="bs-dock">
               <div class="bs-dock-macros">
                 ${Object.entries(LEXICON).map(([code, def]) => `
@@ -261,7 +256,7 @@ const BattleStation = (() => {
               </div>
               <form class="bs-dock-form" onsubmit="BattleStation._onSubmit(event)">
                 <input type="text" id="bs-input" class="bs-input"
-                       placeholder="Add a note…" autocomplete="off" />
+                       placeholder="Add a note\u2026" autocomplete="off" />
                 <button type="submit" class="bs-send-btn">Send</button>
               </form>
             </div>
@@ -277,7 +272,7 @@ const BattleStation = (() => {
         if (!inner) return;
 
         if (!_notes.length) {
-            inner.innerHTML = '<div class="bs-empty-feed"><span>No notes yet — use the macro deck or type below.</span></div>';
+            inner.innerHTML = '<div class="bs-empty-feed"><span>No notes yet \u2014 use the macro deck or type below.</span></div>';
             return;
         }
 
@@ -287,7 +282,6 @@ const BattleStation = (() => {
             return n.team_key === _ctx;
         });
 
-        // Newest first — reverse a copy so _notes stays chronological
         const reversed = [...visible].reverse();
         inner.innerHTML = reversed.map((n, i) => _renderNote(n, i === 0)).join('');
     }
@@ -318,11 +312,9 @@ const BattleStation = (() => {
               <div class="bs-row${animClass}">
                 <div class="bs-col bs-col-left">
                   <div class="bs-bubble bs-bubble-red">
-                    <div class="bs-bubble-head">
-                      <span class="bs-bubble-team bs-bubble-team-red">${teamNum}</span>
-                      <span class="bs-bubble-meta">${_esc(authorName)} · ${tPlus}</span>
-                    </div>
+                    <span class="bs-bubble-team bs-bubble-team-red">${teamNum}</span>
                     <p class="bs-bubble-body">${_esc(note.content)}</p>
+                    <span class="bs-bubble-time">${tPlus}</span>
                   </div>
                   ${avatar}
                 </div>
@@ -337,24 +329,21 @@ const BattleStation = (() => {
                 <div class="bs-col bs-col-right">
                   ${avatar}
                   <div class="bs-bubble bs-bubble-blue">
-                    <div class="bs-bubble-head">
-                      <span class="bs-bubble-team bs-bubble-team-blue">${teamNum}</span>
-                      <span class="bs-bubble-meta">${_esc(authorName)} · ${tPlus}</span>
-                    </div>
+                    <span class="bs-bubble-team bs-bubble-team-blue">${teamNum}</span>
                     <p class="bs-bubble-body">${_esc(note.content)}</p>
+                    <span class="bs-bubble-time">${tPlus}</span>
                   </div>
                 </div>
               </div>`;
         }
 
-        // center / neutral
+        // center / neutral — keep author name for general match notes
         return `
           <div class="bs-row bs-row-center${animClass}">
             <div class="bs-bubble bs-bubble-neutral">
-              <div class="bs-bubble-head bs-bubble-head-center">
-                <span class="bs-bubble-meta">${_esc(authorName)} · ${tPlus}</span>
-              </div>
+              <span class="bs-bubble-author">${_esc(authorName)}</span>
               <p class="bs-bubble-body bs-bubble-body-center">${_esc(note.content)}</p>
+              <span class="bs-bubble-time">${tPlus}</span>
             </div>
           </div>`;
     }
@@ -363,23 +352,26 @@ const BattleStation = (() => {
     function _onHotClick(btn) {
         const team = btn.dataset.team;
         _ctx = team === 'match' ? 'match' : team;
-        // Update active states
-        document.querySelectorAll('.bs-team-btn').forEach(b => b.classList.remove('bs-team-active'));
-        document.querySelector('.bs-match-label')?.classList.remove('bs-match-label-active');
-        if (team === 'match') {
-            document.querySelector('.bs-match-label')?.classList.add('bs-match-label-active');
-        } else {
-            btn.classList.add('bs-team-active');
-        }
+        document.querySelectorAll('.bs-pill-btn').forEach(b => b.classList.remove('bs-pill-active'));
+        if (team !== 'match') btn.classList.add('bs-pill-active');
         _renderTimeline();
     }
 
-    function _onMatchPrev() {
-        if (typeof pbpPrev === 'function') pbpPrev();
+    function _onMatchSelect(val) {
+        const idx = parseInt(val, 10);
+        if (!Number.isNaN(idx) && typeof pbpGoTo === 'function') pbpGoTo(idx);
     }
 
-    function _onMatchNext() {
-        if (typeof pbpNext === 'function') pbpNext();
+    function _onThemeToggle() {
+        const isCurrentlyDark = _isDark();
+        document.documentElement.setAttribute('data-theme', isCurrentlyDark ? 'light' : 'dark');
+        localStorage.setItem('theme', isCurrentlyDark ? 'light' : 'dark');
+        // Sync the global settings checkbox
+        const cb = document.getElementById('toggle-theme');
+        if (cb) cb.checked = isCurrentlyDark;
+        // Re-render icon
+        const icon = document.querySelector('.bs-theme-icon');
+        if (icon) icon.innerHTML = isCurrentlyDark ? _iconMoon() : _iconSun();
     }
 
     async function _onMacro(code) {
@@ -452,9 +444,9 @@ const BattleStation = (() => {
         unmount,
         refresh,
         _onHotClick,
+        _onMatchSelect,
+        _onThemeToggle,
         _onMacro,
         _onSubmit,
-        _onMatchPrev,
-        _onMatchNext,
     };
 })();
