@@ -297,8 +297,9 @@ const BattleStation = (() => {
 
         const reversed = [...visible].reverse();
         inner.innerHTML = reversed.map((n, i) => {
-            const html = _renderNote(n, i === 0);
-            if (_ctx !== 'match' && n.type !== 'system' && n.team_key !== _ctx) {
+            const isDimmed = _ctx !== 'match' && n.type !== 'system' && n.team_key !== _ctx;
+            const html = _renderNote(n, i === 0 && !isDimmed);
+            if (isDimmed) {
                 return html.replace(/class="bs-row/, 'class="bs-row bs-note-dimmed');
             }
             return html;
