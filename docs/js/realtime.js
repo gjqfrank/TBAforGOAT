@@ -45,6 +45,7 @@ const Realtime = (() => {
 
     const _teamListeners      = [];
     const _matchListeners     = [];
+    const _notesListeners     = [];
     const _reconnectListeners = [];
 
     // ── Lazy Supabase client init ──────────────────────────
@@ -117,6 +118,21 @@ const Realtime = (() => {
                     }
                 }
             )
+            .on(
+                'postgres_changes',
+                {
+                    event: 'INSERT',
+                    schema: 'public',
+                    table: 'caster_notes',
+                    filter: `event_key=eq.${eventKey}`,
+                },
+                (payload) => {
+                    console.debug('[Realtime] caster_notes INSERT:', payload.new?.id);
+                    for (const cb of _notesListeners) {
+                        try { cb(payload); } catch (e) { console.warn('[Realtime] notes listener error', e); }
+                    }
+                }
+            )
             .subscribe((status, err) => {
                 if (status === 'SUBSCRIBED') {
                     if (_wasConnected) {
@@ -182,6 +198,7 @@ const Realtime = (() => {
     // ── Listener registration ──────────────────────────────
     function onTeamChange(cb)  { _teamListeners.push(cb); }
     function onMatchChange(cb) { _matchListeners.push(cb); }
+    function onNoteInsert(cb)  { _notesListeners.push(cb); }
     function onReconnect(cb)   { _reconnectListeners.push(cb); }
 
     // ── Public API ─────────────────────────────────────────
@@ -191,6 +208,7 @@ const Realtime = (() => {
         isConnected,
         onTeamChange,
         onMatchChange,
+        onNoteInsert,
         onReconnect,
     };
 })();
