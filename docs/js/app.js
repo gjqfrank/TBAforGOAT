@@ -1710,7 +1710,7 @@ function renderSeasonHighScoresPanel(data, overlay) {
     const toggleChecked = _shsIncludeFoul ? ' checked' : '';
 
     let html = '<div class="shs-panel">';
-    html += '<div class="shs-header"><span class="shs-title">Season High Scores</span><button class="shs-close" onclick="document.getElementById(\'season-high-scores-overlay\')?.remove()">&times;</button></div>';
+    html += '<div class="shs-header"><span class="shs-title">Season High Scores</span></div>';
 
     // Section 1: Top Match Scores
     html += `<div class="shs-section"><div class="shs-section-title-row"><span class="shs-section-title">Top Match Scores (${foulLabel})</span><label class="shs-toggle"><input type="checkbox" id="shs-foul-toggle"${toggleChecked}><span>${toggleLabel}</span></label></div>`;
@@ -8877,10 +8877,17 @@ function renderMatchHistoryPanel(perf, teamNum, nick) {
         let rows = '';
         for (const pm of perf.matches) {
             const desc = (pm.description || '').replace(/Qualification\s*/gi, 'Qual ');
-            const score = pm.allianceScore != null ? `<span class="mh-score-bold">${pm.allianceScore}</span>-${pm.opponentScore}` : '–';
             const colorCls = pm.allianceColor === 'Red' ? 'mh-color-red' : 'mh-color-blue';
             const allyCls = pm.allianceColor === 'Red' ? 'mh-ally-red' : 'mh-ally-blue';
             const oppCls = pm.allianceColor === 'Red' ? 'mh-ally-blue' : 'mh-ally-red';
+            const allyWon = pm.result === 'Won';
+            const oppWon = pm.result === 'Lost';
+            let score = '–';
+            if (pm.allianceScore != null) {
+                const aCls = 'mh-sc-ally' + (allyWon ? ' mh-sc-win' : '');
+                const oCls = oppWon ? ' mh-sc-win' : '';
+                score = `<span class="${aCls}">${pm.allianceScore}</span> – <span class="${oCls}">${pm.opponentScore}</span>`;
+            }
             const allies = (pm.allianceTeams || []).map(n =>
                 `<span class="mh-team-link ${allyCls}" title="${nickLookup[n] || ''}" onclick="lookupTeamFromMatchHistory(${n})">${n}</span>`
             ).join(', ');
@@ -8891,7 +8898,7 @@ function renderMatchHistoryPanel(perf, teamNum, nick) {
                 <td>${desc}</td>
                 <td><span class="mh-alliance-dot ${colorCls}"></span></td>
                 <td><span class="result-badge result-${pm.result}">${pm.result}</span></td>
-                <td>${score}</td>
+                <td class="mh-score-cell">${score}</td>
                 <td class="mh-teams-cell">${allies}</td>
                 <td class="mh-teams-cell">${opps}</td>
             </tr>`;

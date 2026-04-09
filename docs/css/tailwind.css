@@ -5183,6 +5183,35 @@ body.hide-stats .pbp-team-stats {
   padding: 0;
 }
 
+.pbp-sponsors {
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+  padding: .2rem .55rem;
+  background: color-mix(in srgb, var(--text-muted, #94a3b8) 10%, transparent);
+  border-radius: 999px;
+  font-size: .68rem;
+  color: var(--text-muted, #94a3b8);
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.pbp-sponsors-icon,
+.pbp-sponsors svg {
+  width: 11px;
+  height: 11px;
+  flex-shrink: 0;
+  color: var(--text-muted, #94a3b8);
+  opacity: .6;
+}
+
+.pbp-sponsors-text {
+  font-size: .68rem;
+  color: var(--text-muted, #94a3b8);
+  line-height: 1.35;
+  word-break: break-word;
+}
+
 /* ── Unified attribute tags (sponsors, robot name, strategy, hardware) ── */
 
 .pbp-attr-tag {
@@ -5222,6 +5251,31 @@ body.show-team-attrs .pbp-robot-name,
 body.show-team-attrs .pbp-strategy-tag,
 body.show-team-attrs .pbp-hardware-tag {
   display: inline-flex;
+}
+
+/* ── Robot name pill ── */
+.pbp-robot-name {
+  align-items: center;
+  gap: .3rem;
+  padding: .2rem .55rem;
+  background: color-mix(in srgb, var(--text-muted, #94a3b8) 10%, transparent);
+  border-radius: 999px;
+  font-size: .68rem;
+  color: var(--text-muted, #94a3b8);
+  line-height: 1.35;
+}
+
+.pbp-robot-name svg {
+  width: 11px;
+  height: 11px;
+  flex-shrink: 0;
+  opacity: .6;
+}
+
+.pbp-robot-name-text {
+  font-size: .68rem;
+  color: var(--text-muted, #94a3b8);
+  line-height: 1.35;
 }
 
 /* ── PBP bottom row (sponsors + attributes inline) ──────── */
@@ -13480,6 +13534,25 @@ body.epa-breakdown-active .stat-opr {
   cursor: not-allowed;
 }
 
+/* Mobile: hide redundant Reset button, keep only Reset to FIRST Defaults */
+@media (max-width: 768px) {
+  .editor-footer {
+    flex-wrap: wrap;
+    gap: .35rem;
+    padding: .5rem .75rem;
+  }
+  .editor-footer-left .editor-btn-reset {
+    display: none;
+  }
+  .editor-footer-left .editor-btn-danger {
+    font-size: .68rem;
+  }
+  .editor-btn {
+    padding: .38rem .6rem;
+    font-size: .72rem;
+  }
+}
+
 .editor-audit-trail {
   padding: .35rem .8rem;
   font-size: .72rem;
@@ -16336,4 +16409,62 @@ body.epa-breakdown-active .stat-opr {
 
 .\[stroke-width\:2\]{
   stroke-width: 2;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Custom overrides (appended after Tailwind utility layer)
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── Match history: score styling ──────────────────────── */
+.mh-sc-win {
+  font-weight: 800;
+}
+.mh-sc-ally {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.mh-score-cell {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Mobile match history: alliance-colored scores ─────── */
+.mob-mh-sc {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.mob-mh-sc.mh-ally-red { color: var(--red); }
+.mob-mh-sc.mh-ally-blue { color: var(--blue); }
+.mob-mh-sc-win {
+  font-weight: 800;
+}
+.mob-mh-sc-ally {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.mob-mh-sc-dash {
+  color: var(--text-muted);
+  margin: 0 .15rem;
+}
+.mob-mh-vs {
+  color: var(--text-muted);
+  margin: 0 .15rem;
+  font-size: .58rem;
+}
+.mob-mh-team.mh-ally-red { color: color-mix(in srgb, var(--red) 70%, var(--text-muted)); }
+.mob-mh-team.mh-ally-blue { color: color-mix(in srgb, var(--blue) 70%, var(--text-muted)); }
+
+/* ── Season High Scores: colored stat numbers ──────────── */
+.shs-score {
+  color: var(--primary);
+  font-weight: 700;
+}
+
+/* ── Mobile event summary: bold team numbers ───────────── */
+@media (max-width: 768px) {
+  .adv-team-num {
+    font-weight: 800;
+  }
+  .summary-hof-num {
+    font-weight: 800;
+  }
 }
