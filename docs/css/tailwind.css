@@ -16486,10 +16486,11 @@ body.epa-breakdown-active .stat-opr {
 /* ═══ BATTLE STATION ═══════════════════════════════════════ */
 
 /*
- * Uses app-level --font / --mono CSS vars for consistency.
- * Dark: slate-950 feed, slate-800 bubbles with visible borders.
- * Light: slate-50 feed, white bubbles with shadow + border.
- * Theme toggle removed — inherits the app's data-theme setting.
+ * Uses the app's CSS variable system (--bg, --surface, --card,
+ *   --border, --primary-glow, --red, --blue, etc.) so dark/light
+ *   modes "just work" with minimal overrides.
+ * Alliance gradient washes on left (red) and right (blue).
+ * Pill buttons match the tab-bar glow aesthetic.
  */
 #tab-battlestation { min-height: 0; }
 
@@ -16498,10 +16499,10 @@ body.epa-breakdown-active .stat-opr {
   flex-direction: column;
   height: calc(100vh - 10rem);
   min-height: 360px;
-  background: #020617;
-  border-radius: 0.75rem;
+  background: var(--bg);
+  border-radius: var(--radius-lg);
   overflow: hidden;
-  border: 1px solid rgb(255 255 255 / 0.06);
+  border: 1px solid var(--border);
   font-family: var(--font, 'Inter', system-ui, sans-serif);
 }
 
@@ -16514,13 +16515,13 @@ body.epa-breakdown-active .stat-opr {
   flex-wrap: wrap;
   gap: 0.375rem;
   padding: 0.625rem 0.75rem;
-  background-color: #1e293b;
-  border-bottom: 1px solid rgb(255 255 255 / 0.06);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border-subtle);
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
 
-/* Team pills */
+/* Team pills — match tab-bar glow aesthetic */
 .bs-pill-btn {
   padding: 0.5rem 1.25rem;
   font-family: var(--mono, 'JetBrains Mono', monospace);
@@ -16528,28 +16529,34 @@ body.epa-breakdown-active .stat-opr {
   font-weight: 800;
   line-height: 1;
   border-radius: 9999px;
-  border: 2px solid transparent;
-  background-color: #334155;
+  border: 1px solid transparent;
+  background: none;
   cursor: pointer;
-  transition: all 0.15s ease;
-  color: #94a3b8;
+  transition: var(--transition, all 0.15s ease);
+  color: var(--text-muted);
   white-space: nowrap;
 }
-.bs-pill-btn:hover { background-color: #475569; }
-.bs-pill-red { color: #f87171; }
-.bs-pill-blue { color: #60a5fa; }
+.bs-pill-btn:hover {
+  background: var(--primary-soft);
+  border-color: var(--border);
+  color: var(--text-secondary);
+}
+.bs-pill-red { color: var(--red); }
+.bs-pill-blue { color: var(--blue); }
 .bs-pill-active.bs-pill-red {
-  background-color: rgb(239 68 68 / 0.20);
-  border-color: #ef4444;
-  color: #fca5a5;
+  background: var(--red-bg);
+  border-color: var(--red-border);
+  color: var(--red);
+  box-shadow: 0 0 12px var(--red-border);
 }
 .bs-pill-active.bs-pill-blue {
-  background-color: rgb(59 130 246 / 0.20);
-  border-color: #3b82f6;
-  color: #93c5fd;
+  background: var(--blue-bg);
+  border-color: var(--blue-border);
+  color: var(--blue);
+  box-shadow: 0 0 12px var(--blue-border);
 }
 
-/* Match dropdown — clean, no tiling background */
+/* Match dropdown */
 .bs-match-select {
   padding: 0.5rem 2rem 0.5rem 1rem;
   font-family: var(--mono, 'JetBrains Mono', monospace);
@@ -16557,25 +16564,25 @@ body.epa-breakdown-active .stat-opr {
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: #e2e8f0;
-  background-color: #334155;
-  border: 1px solid rgb(255 255 255 / 0.08);
+  color: var(--text);
+  background-color: var(--card);
+  border: 1px solid var(--border);
   border-radius: 0.5rem;
   cursor: pointer;
   transition: background-color 0.15s ease, border-color 0.15s ease;
   -webkit-appearance: none;
   -moz-appearance: none;
   appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7394' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 0.625rem center;
   background-size: 12px 12px;
 }
-.bs-match-select:hover { background-color: #475569; }
-.bs-match-select:focus { outline: none; border-color: rgb(148 163 184 / 0.4); }
+.bs-match-select:hover { background-color: var(--card-hover); }
+.bs-match-select:focus { outline: none; border-color: var(--primary-glow); }
 .bs-match-select option {
-  background-color: #1e293b;
-  color: #e2e8f0;
+  background-color: var(--surface);
+  color: var(--text);
   font-family: var(--mono, 'JetBrains Mono', monospace);
 }
 
@@ -16586,7 +16593,7 @@ body.epa-breakdown-active .stat-opr {
   overflow-y: auto;
   overflow-x: hidden;
   position: relative;
-  background-color: #020617;
+  background: var(--bg);
 }
 
 .bs-spine {
@@ -16595,9 +16602,27 @@ body.epa-breakdown-active .stat-opr {
   bottom: 0;
   left: 50%;
   width: 1px;
-  background-color: rgb(255 255 255 / 0.06);
+  background: var(--border-subtle);
   transform: translateX(-0.5px);
   pointer-events: none;
+  z-index: 0;
+}
+
+/* Alliance gradient washes */
+.bs-gradient-red {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 50%;
+  pointer-events: none;
+  background: linear-gradient(to right, rgb(127 29 29 / 0.20), transparent);
+  z-index: 0;
+}
+.bs-gradient-blue {
+  position: absolute;
+  right: 0; top: 0; bottom: 0;
+  width: 50%;
+  pointer-events: none;
+  background: linear-gradient(to left, rgb(30 58 138 / 0.20), transparent);
   z-index: 0;
 }
 
@@ -16616,7 +16641,7 @@ body.epa-breakdown-active .stat-opr {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #64748b;
+  color: var(--text-muted);
   font-size: 0.8125rem;
   font-style: italic;
 }
@@ -16662,38 +16687,40 @@ body.epa-breakdown-active .stat-opr {
   font-family: var(--mono, 'JetBrains Mono', monospace);
 }
 .bs-avatar-red {
-  background-color: #7f1d1d;
-  color: #fca5a5;
+  background: var(--red-bg);
+  color: var(--red);
+  border: 1px solid var(--red-border);
 }
 .bs-avatar-blue {
-  background-color: #1e3a8a;
-  color: #93c5fd;
+  background: var(--blue-bg);
+  color: var(--blue);
+  border: 1px solid var(--blue-border);
 }
 .bs-avatar-neutral {
-  background-color: #334155;
-  color: #94a3b8;
+  background: var(--card);
+  color: var(--text-muted);
+  border: 1px solid var(--border-subtle);
 }
 
-/* ── Chat Bubbles — Opaque, Elevated, with word-wrap ───── */
+/* ── Chat Bubbles ──────────────────────────────────────── */
 .bs-bubble {
   border-radius: 1.25rem;
   padding: 0.75rem 1rem;
   max-width: 22rem;
   min-width: 0;
-  border: 1px solid rgb(71 85 105 / 0.5);
+  background: var(--card);
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-sm);
 }
 .bs-bubble-red {
-  background-color: #1e293b;
   text-align: right;
-  border-bottom-right-radius: 0.375rem;
-}
-.bs-bubble-blue {
-  background-color: #1e293b;
-  text-align: left;
   border-bottom-left-radius: 0.375rem;
 }
+.bs-bubble-blue {
+  text-align: left;
+  border-bottom-right-radius: 0.375rem;
+}
 .bs-bubble-neutral {
-  background-color: #1e293b;
   max-width: 20rem;
   position: relative;
   z-index: 1;
@@ -16715,12 +16742,12 @@ body.epa-breakdown-active .stat-opr {
   font-weight: 900;
   line-height: 1;
 }
-.bs-bubble-team-red { color: #f87171; }
-.bs-bubble-team-blue { color: #60a5fa; }
+.bs-bubble-team-red { color: var(--red); }
+.bs-bubble-team-blue { color: var(--blue); }
 .bs-bubble-body {
   font-size: 0.9375rem;
   line-height: 1.5;
-  color: #e2e8f0;
+  color: var(--text);
   margin: 0;
   overflow-wrap: break-word;
   word-break: break-word;
@@ -16732,13 +16759,13 @@ body.epa-breakdown-active .stat-opr {
   display: block;
   font-size: 0.6875rem;
   font-weight: 600;
-  color: #94a3b8;
+  color: var(--text-secondary);
   margin-bottom: 0.25rem;
 }
 .bs-bubble-time {
   font-size: 0.625rem;
   font-family: var(--mono, 'JetBrains Mono', monospace);
-  color: #64748b;
+  color: var(--text-muted);
   white-space: nowrap;
 }
 
@@ -16788,8 +16815,8 @@ body.epa-breakdown-active .stat-opr {
   flex-direction: column;
   gap: 0.25rem;
   padding: 0.5rem 0.75rem 0.75rem;
-  background-color: #0f172a;
-  border-top: 1px solid rgb(255 255 255 / 0.06);
+  background: var(--surface);
+  border-top: 1px solid var(--border-subtle);
 }
 .bs-dock-macros {
   display: flex;
@@ -16803,14 +16830,14 @@ body.epa-breakdown-active .stat-opr {
   gap: 0.5rem;
 }
 
-/* Macro chips — tethered to input, generous click targets */
+/* Macro chips */
 .bs-macro {
   display: inline-flex;
   align-items: center;
   gap: 0.375rem;
   padding: 0.5rem 1rem;
   border-radius: 9999px;
-  border: 1px solid rgb(255 255 255 / 0.06);
+  border: 1px solid var(--border-subtle);
   font-size: 0.75rem;
   font-weight: 700;
   font-family: var(--font, 'Inter', system-ui, sans-serif);
@@ -16833,113 +16860,66 @@ body.epa-breakdown-active .stat-opr {
 /* Input bar */
 .bs-input {
   flex: 1 1 0%;
-  background-color: #1e293b;
-  border: 1px solid #475569;
+  background: var(--card);
+  border: 1px solid var(--border);
   border-radius: 9999px;
   padding: 0.625rem 1rem;
   font-size: 0.875rem;
   font-family: var(--font, 'Inter', system-ui, sans-serif);
-  color: #f1f5f9;
+  color: var(--text);
   transition: border-color 0.15s ease;
 }
-.bs-input::placeholder { color: #64748b; }
-.bs-input:focus { outline: none; border-color: #94a3b8; }
+.bs-input::placeholder { color: var(--text-muted); }
+.bs-input:focus { outline: none; border-color: var(--primary-glow); }
 
 .bs-send-btn {
   padding: 0.625rem 1.25rem;
-  background-color: #334155;
-  border: none;
+  background: var(--card);
+  border: 1px solid var(--border);
   border-radius: 9999px;
   font-size: 0.8125rem;
   font-weight: 600;
   font-family: var(--font, 'Inter', system-ui, sans-serif);
-  color: #e2e8f0;
+  color: var(--text-secondary);
   cursor: pointer;
-  transition: background-color 0.15s ease;
+  transition: var(--transition, all 0.15s ease);
 }
-.bs-send-btn:hover { background-color: #475569; }
+.bs-send-btn:hover {
+  background: var(--primary-soft);
+  border-color: var(--primary-glow);
+  color: var(--primary-hover);
+  box-shadow: 0 0 12px var(--primary-glow);
+}
 
 
 /* ═══════════════════════════════════════════════════════════
- *  LIGHT MODE — [data-theme="light"] overrides
+ *  LIGHT MODE — only overrides that can't use CSS vars
  * ═══════════════════════════════════════════════════════════ */
 
-[data-theme="light"] .bs-shell {
-  background-color: #ffffff;
-  border-color: #e2e8f0;
+/* Alliance gradient — fainter in light (5%) vs dark (20%) */
+[data-theme="light"] .bs-gradient-red {
+  background: linear-gradient(to right, rgb(239 68 68 / 0.05), transparent);
+}
+[data-theme="light"] .bs-gradient-blue {
+  background: linear-gradient(to left, rgb(59 130 246 / 0.05), transparent);
 }
 
-/* Header */
-[data-theme="light"] .bs-hotrow {
-  background-color: #f8fafc;
-  border-bottom-color: #e2e8f0;
-}
-[data-theme="light"] .bs-pill-btn {
-  background-color: #e2e8f0;
-  color: #475569;
-}
-[data-theme="light"] .bs-pill-btn:hover { background-color: #cbd5e1; }
-[data-theme="light"] .bs-pill-red { color: #dc2626; }
-[data-theme="light"] .bs-pill-blue { color: #2563eb; }
-[data-theme="light"] .bs-pill-active.bs-pill-red {
-  background-color: rgb(239 68 68 / 0.12);
-  border-color: #ef4444;
-  color: #dc2626;
-}
-[data-theme="light"] .bs-pill-active.bs-pill-blue {
-  background-color: rgb(59 130 246 / 0.12);
-  border-color: #3b82f6;
-  color: #2563eb;
-}
+/* Dropdown arrow for light */
 [data-theme="light"] .bs-match-select {
-  background-color: #e2e8f0;
-  border-color: #cbd5e1;
-  color: #1e293b;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23475569' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%234a4a6a' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 0.625rem center;
   background-size: 12px 12px;
 }
-[data-theme="light"] .bs-match-select:hover { background-color: #cbd5e1; }
-[data-theme="light"] .bs-match-select option { background-color: #f8fafc; color: #1e293b; }
 
-/* Feed */
-[data-theme="light"] .bs-feed { background-color: #f8fafc; }
-[data-theme="light"] .bs-spine { background-color: #e2e8f0; }
-[data-theme="light"] .bs-empty-feed { color: #94a3b8; }
-
-/* Avatars */
-[data-theme="light"] .bs-avatar-red { background-color: #fee2e2; color: #dc2626; }
-[data-theme="light"] .bs-avatar-blue { background-color: #dbeafe; color: #2563eb; }
-[data-theme="light"] .bs-avatar-neutral { background-color: #f1f5f9; color: #64748b; }
-
-/* Bubbles — white, elevated with shadow + border */
-[data-theme="light"] .bs-bubble {
-  border-color: #e2e8f0;
-  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.08), 0 2px 4px -2px rgb(0 0 0 / 0.05);
-}
-[data-theme="light"] .bs-bubble-red,
-[data-theme="light"] .bs-bubble-blue,
-[data-theme="light"] .bs-bubble-neutral { background-color: #ffffff; }
-[data-theme="light"] .bs-bubble-team-red { color: #dc2626; }
-[data-theme="light"] .bs-bubble-team-blue { color: #2563eb; }
-[data-theme="light"] .bs-bubble-body { color: #1e293b; }
-[data-theme="light"] .bs-bubble-author { color: #64748b; }
-[data-theme="light"] .bs-bubble-time { color: #94a3b8; }
-
-/* System badges */
+/* System badges — pastel in light */
 [data-theme="light"] .bs-sys-emerald { background-color: #ecfdf5; border-color: #6ee7b7; color: #059669; }
 [data-theme="light"] .bs-sys-sky     { background-color: #f0f9ff; border-color: #7dd3fc; color: #0284c7; }
 [data-theme="light"] .bs-sys-amber   { background-color: #fffbeb; border-color: #fcd34d; color: #d97706; }
 [data-theme="light"] .bs-sys-slate   { background-color: #f8fafc; border-color: #cbd5e1; color: #64748b; }
 [data-theme="light"] .bs-sys-red     { background-color: #fef2f2; border-color: #fca5a5; color: #dc2626; }
 
-/* Dock */
-[data-theme="light"] .bs-dock {
-  background-color: #ffffff;
-  border-top-color: #e2e8f0;
-}
-[data-theme="light"] .bs-macro { border-color: #e2e8f0; }
+/* Macro chips — pastel in light */
 [data-theme="light"] .bs-macro-emerald { background-color: #ecfdf5; color: #059669; }
 [data-theme="light"] .bs-macro-emerald:hover { background-color: #d1fae5; }
 [data-theme="light"] .bs-macro-sky     { background-color: #f0f9ff; color: #0284c7; }
@@ -16950,15 +16930,3 @@ body.epa-breakdown-active .stat-opr {
 [data-theme="light"] .bs-macro-slate:hover { background-color: #e2e8f0; }
 [data-theme="light"] .bs-macro-red     { background-color: #fef2f2; color: #dc2626; }
 [data-theme="light"] .bs-macro-red:hover { background-color: #fee2e2; }
-[data-theme="light"] .bs-input {
-  background-color: #ffffff;
-  border-color: #e2e8f0;
-  color: #1e293b;
-}
-[data-theme="light"] .bs-input::placeholder { color: #94a3b8; }
-[data-theme="light"] .bs-input:focus { border-color: #94a3b8; }
-[data-theme="light"] .bs-send-btn {
-  background-color: #e2e8f0;
-  color: #1e293b;
-}
-[data-theme="light"] .bs-send-btn:hover { background-color: #cbd5e1; }

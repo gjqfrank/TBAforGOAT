@@ -236,6 +236,8 @@ const BattleStation = (() => {
 
             <!-- ▸ MIDDLE: Spine + Feed (newest at top) ─────── -->
             <div class="bs-feed" id="bs-timeline">
+              <div class="bs-gradient-red"></div>
+              <div class="bs-gradient-blue"></div>
               <div class="bs-spine"></div>
               <div class="bs-feed-inner" id="bs-timeline-inner"></div>
             </div>
