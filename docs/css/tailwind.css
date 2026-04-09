@@ -11335,10 +11335,14 @@ tr:hover .compare-cb,
 }
 
 .chip-team {
-  color: #fff;
+  color: var(--text);
   font-weight: 700;
   font-family: var(--mono);
 }
+.hof-chip .chip-team { color: #f59e0b; }
+.einstein-win-chip .chip-team { color: #fbbf24; }
+.impact-chip .chip-team { color: #8b5cf6; }
+.visitor-chip .chip-team { color: #06b6d4; }
 
 .chip-years {
   font-size: .68rem;
