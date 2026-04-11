@@ -1,0 +1,208 @@
+{
+  "timestamp": "2026-04-11T12:45:50",
+  "server": "http://127.0.0.1:8000",
+  "events": {
+    "frc": [
+      "2026tuak",
+      "2026tuis2",
+      "2026tuis5",
+      "2026pncmp"
+    ],
+    "ftc": [
+      "2024ftcftccmp1edis",
+      "2025ftctrcmp"
+    ]
+  },
+  "total_users": 12,
+  "total_requests": 219,
+  "successful": 219,
+  "failed": 0,
+  "wall_clock_ms": 33185,
+  "throughput_rps": 6.6,
+  "latency": {
+    "mean_ms": 995,
+    "median_ms": 85,
+    "p95_ms": 7454,
+    "p99_ms": 7820,
+    "min_ms": 2,
+    "max_ms": 11022
+  },
+  "phases": {
+    "load": {
+      "total": 36,
+      "ok": 36,
+      "mean_ms": 1918,
+      "p95_ms": 11017
+    },
+    "matches": {
+      "total": 24,
+      "ok": 24,
+      "mean_ms": 2861,
+      "p95_ms": 7797
+    },
+    "summary": {
+      "total": 40,
+      "ok": 40,
+      "mean_ms": 30,
+      "p95_ms": 180
+    },
+    "team-dive": {
+      "total": 24,
+      "ok": 24,
+      "mean_ms": 1649,
+      "p95_ms": 7508
+    },
+    "notes": {
+      "total": 16,
+      "ok": 16,
+      "mean_ms": 45,
+      "p95_ms": 56
+    },
+    "gatool": {
+      "total": 12,
+      "ok": 12,
+      "mean_ms": 1267,
+      "p95_ms": 5031
+    },
+    "warm-cache": {
+      "total": 48,
+      "ok": 48,
+      "mean_ms": 460,
+      "p95_ms": 4681
+    },
+    "tims-persistence": {
+      "total": 7,
+      "ok": 7,
+      "mean_ms": 63,
+      "p95_ms": 114
+    },
+    "cross-cache": {
+      "total": 12,
+      "ok": 12,
+      "mean_ms": 80,
+      "p95_ms": 168
+    }
+  },
+  "users": [
+    {
+      "user_id": "frc-caster-0",
+      "event": "2026tuak",
+      "program": "frc",
+      "requests": 17,
+      "ok": 17,
+      "failed": 0,
+      "total_ms": 11891,
+      "mean_ms": 699
+    },
+    {
+      "user_id": "frc-caster-1",
+      "event": "2026tuak",
+      "program": "frc",
+      "requests": 17,
+      "ok": 17,
+      "failed": 0,
+      "total_ms": 12114,
+      "mean_ms": 713
+    },
+    {
+      "user_id": "frc-caster-2",
+      "event": "2026tuis2",
+      "program": "frc",
+      "requests": 17,
+      "ok": 17,
+      "failed": 0,
+      "total_ms": 25715,
+      "mean_ms": 1513
+    },
+    {
+      "user_id": "frc-caster-3",
+      "event": "2026tuis2",
+      "program": "frc",
+      "requests": 17,
+      "ok": 17,
+      "failed": 0,
+      "total_ms": 26307,
+      "mean_ms": 1547
+    },
+    {
+      "user_id": "frc-caster-4",
+      "event": "2026tuis5",
+      "program": "frc",
+      "requests": 17,
+      "ok": 17,
+      "failed": 0,
+      "total_ms": 26727,
+      "mean_ms": 1572
+    },
+    {
+      "user_id": "frc-caster-5",
+      "event": "2026tuis5",
+      "program": "frc",
+      "requests": 17,
+      "ok": 17,
+      "failed": 0,
+      "total_ms": 33070,
+      "mean_ms": 1945
+    },
+    {
+      "user_id": "frc-caster-6",
+      "event": "2026pncmp",
+      "program": "frc",
+      "requests": 17,
+      "ok": 17,
+      "failed": 0,
+      "total_ms": 18258,
+      "mean_ms": 1074
+    },
+    {
+      "user_id": "frc-caster-7",
+      "event": "2026pncmp",
+      "program": "frc",
+      "requests": 17,
+      "ok": 17,
+      "failed": 0,
+      "total_ms": 26117,
+      "mean_ms": 1536
+    },
+    {
+      "user_id": "ftc-caster-8",
+      "event": "2024ftcftccmp1edis",
+      "program": "ftc",
+      "requests": 16,
+      "ok": 16,
+      "failed": 0,
+      "total_ms": 10269,
+      "mean_ms": 642
+    },
+    {
+      "user_id": "ftc-caster-9",
+      "event": "2024ftcftccmp1edis",
+      "program": "ftc",
+      "requests": 16,
+      "ok": 16,
+      "failed": 0,
+      "total_ms": 8479,
+      "mean_ms": 530
+    },
+    {
+      "user_id": "ftc-caster-10",
+      "event": "2025ftctrcmp",
+      "program": "ftc",
+      "requests": 16,
+      "ok": 16,
+      "failed": 0,
+      "total_ms": 9187,
+      "mean_ms": 574
+    },
+    {
+      "user_id": "ftc-caster-11",
+      "event": "2025ftctrcmp",
+      "program": "ftc",
+      "requests": 16,
+      "ok": 16,
+      "failed": 0,
+      "total_ms": 8366,
+      "mean_ms": 523
+    }
+  ]
+}

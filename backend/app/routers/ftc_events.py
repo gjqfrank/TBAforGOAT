@@ -4,8 +4,13 @@ from ..services import ftc_event_service
 from ..services.ftc_client import get_ftc_client
 from ..services.gatool_client import get_gatool_client
 from ..services.error_utils import raise_api_error
+import httpx
 
 router = APIRouter()
+
+# ── FTC Avatar CSS proxy (FIRST scoring server has no CORS headers) ──
+_AVATAR_CSS_URL = "https://ftc-scoring.firstinspires.org/avatars/composed/{year}.css"
+_avatar_css_cache: dict[int, str] = {}
 
 
 @router.get("/teams/awards-summary")
@@ -147,20 +152,27 @@ async def ftc_world_record(season: int):
 
 @router.get("/avatar-css/{year}")
 async def ftc_avatar_css(year: int):
-    """Proxy the FTC Scoring Server avatar CSS so the frontend can parse it.
-    The FIRST scoring server requires authentication, so this endpoint
-    attempts to fetch and falls back to an empty stylesheet."""
-    import httpx
-    url = f"https://ftc-scoring.firstinspires.org/avatars/css/{year}.css"
+    """Proxy the FTC scoring server's avatar CSS (no CORS headers on origin)."""
+    if year < 2019 or year > 2030:
+        raise HTTPException(status_code=400, detail="Invalid year")
+    if year in _avatar_css_cache:
+        return Response(
+            content=_avatar_css_cache[year],
+            media_type="text/css",
+            headers={"Cache-Control": "public, max-age=86400"},
+        )
     try:
-        async with httpx.AsyncClient(timeout=10, follow_redirects=False) as client:
-            resp = await client.get(url)
-        if resp.status_code == 200:
-            return Response(content=resp.content, media_type="text/css")
-    except httpx.HTTPError:
-        pass
-    # Return empty CSS — avatar map will be empty, frontend degrades gracefully
-    return Response(content=b"/* no FTC avatar CSS available */", media_type="text/css")
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.get(_AVATAR_CSS_URL.format(year=year))
+            resp.raise_for_status()
+        _avatar_css_cache[year] = resp.text
+        return Response(
+            content=resp.text,
+            media_type="text/css",
+            headers={"Cache-Control": "public, max-age=86400"},
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Could not fetch FTC avatar CSS: {e}")
 
 
 @router.get("/{event_key}/season-awards")
