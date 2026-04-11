@@ -255,20 +255,20 @@
     }
     
     /* ── FTC button category 1: default — neutral base (no gradient) ── */
-    [data-mode="ftc"] button {
+    [data-mode="ftc"] button:not(.tab):not(.ctx-menu-item):not(.pbp-compare-btn):not(.pbp-breakdown-btn):not(.gn-tab):not(.gn-sub-btn):not(.bs-pill-btn) {
         background: rgba(249,115,22,.08);
         color: #f97316;
         border: 1px solid rgba(249,115,22,.18);
         box-shadow: none;
     }
-    [data-mode="ftc"] button:hover {
+    [data-mode="ftc"] button:not(.tab):not(.ctx-menu-item):not(.pbp-compare-btn):not(.pbp-breakdown-btn):not(.gn-tab):not(.gn-sub-btn):not(.bs-pill-btn):hover {
         background: rgba(249,115,22,.15);
         border-color: rgba(249,115,22,.35);
         color: #fb923c;
         box-shadow: none;
         transform: translateY(-1px);
     }
-    [data-mode="ftc"] button:active {
+    [data-mode="ftc"] button:not(.tab):not(.ctx-menu-item):not(.pbp-compare-btn):not(.pbp-breakdown-btn):not(.gn-tab):not(.gn-sub-btn):not(.bs-pill-btn):active {
         transform: translateY(0);
         box-shadow: none;
     }
@@ -474,6 +474,19 @@
         box-shadow: 0 4px 16px rgba(16,185,129,.35);
     }
     
+    /* ── FTC keep compare button indigo/purple ── */
+    [data-mode="ftc"] .pbp-compare-btn {
+        background: linear-gradient(135deg, #6366f1 0%, #7c7ff7 100%);
+        border: none;
+        color: #fff;
+        box-shadow: 0 2px 10px rgba(99,102,241,.25);
+    }
+    [data-mode="ftc"] .pbp-compare-btn:hover {
+        background: linear-gradient(135deg, #6366f1 0%, #7c7ff7 100%);
+        color: #fff;
+        box-shadow: 0 4px 16px rgba(99,102,241,.35);
+    }
+    
     /* FTC orange-tinted section cards — match FRC card styling */
     [data-mode="ftc"] .event-section-card {
         background: rgba(24, 18, 32, .85);
@@ -590,13 +603,13 @@
         background: #ffffff;
         box-shadow: var(--shadow-sm);
     }
-    [data-mode="ftc"][data-theme="light"] button:not(.tab):not(.bs-pill-btn):not(.pbp-breakdown-btn):not(.pbp-compare-btn):not(.gn-tab):not(.gn-sub-btn) {
+    [data-mode="ftc"][data-theme="light"] button:not(.tab):not(.bs-pill-btn):not(.pbp-breakdown-btn):not(.pbp-compare-btn):not(.gn-tab):not(.gn-sub-btn):not(.ctx-menu-item) {
         background: rgba(234,88,12,.06);
         color: #ea580c;
         border: 1px solid rgba(234,88,12,.18);
         box-shadow: none;
     }
-    [data-mode="ftc"][data-theme="light"] button:not(.tab):not(.bs-pill-btn):not(.pbp-breakdown-btn):not(.pbp-compare-btn):not(.gn-tab):not(.gn-sub-btn):hover {
+    [data-mode="ftc"][data-theme="light"] button:not(.tab):not(.bs-pill-btn):not(.pbp-breakdown-btn):not(.pbp-compare-btn):not(.gn-tab):not(.gn-sub-btn):not(.ctx-menu-item):hover {
         background: rgba(234,88,12,.12);
         border-color: rgba(234,88,12,.3);
         color: #ea580c;
@@ -764,6 +777,10 @@
         box-shadow: 0 2px 12px var(--primary-glow);
         animation: badge-in .4s ease-out;
         transition: background .6s ease, box-shadow .6s ease, opacity .4s ease, transform .4s ease;
+        max-width: 200px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
     #event-badge.status-ongoing {
         background: linear-gradient(135deg, #10b981 0%, #34d399 100%);
@@ -7103,8 +7120,8 @@
         color: var(--primary);
     }
     .spotlight-collapse-body {
-        max-height: 500px;
-        overflow: hidden;
+        max-height: 1200px;
+        overflow-y: auto;
         transition: max-height .3s ease, opacity .2s;
         opacity: 1;
     }

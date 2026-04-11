@@ -7789,8 +7789,8 @@ tr:hover .compare-cb,
     color: var(--primary);
 }
 .spotlight-collapse-body {
-    max-height: 500px;
-    overflow: hidden;
+    max-height: 1200px;
+    overflow-y: auto;
     transition: max-height .3s ease, opacity .2s;
     opacity: 1;
 }

@@ -489,7 +489,7 @@ function toggleCompetitionMode() {
 
     // Update UI text
     const sub = document.getElementById('brand-sub');
-    if (sub) sub.textContent = competitionMode === 'ftc' ? 'Public Beta' : 'Events at a glance!';
+    if (sub) sub.textContent = 'Events at a glance!';
 
     const toggleBtn = document.getElementById('mode-toggle-btn');
     if (toggleBtn) toggleBtn.title = competitionMode === 'ftc' ? 'Switch to FRC Mode' : 'Switch to FTC Mode';
@@ -519,11 +519,6 @@ function toggleCompetitionMode() {
     // Hide Regional Pool in FTC mode, show in FRC
     const rpCard = $('regional-pool-card');
     if (rpCard) rpCard.classList.toggle('hidden', competitionMode === 'ftc');
-
-    // Re-load regional pool on FRC return (may not have been loaded yet)
-    if (competitionMode === 'frc') {
-        if (typeof loadRegionalPool === 'function') loadRegionalPool();
-    }
 
     // ── Update event code placeholder for mode ──
     const ecInput = $('event-code');
@@ -574,6 +569,12 @@ function toggleCompetitionMode() {
     // ── Clear current event + all tab data fully ──
     if (typeof clearActiveEvent === 'function') clearActiveEvent();
     resetEventData();
+
+    // Re-load regional pool on FRC return (after clearing event so year defaults to 2026)
+    if (competitionMode === 'frc') {
+        if (typeof loadRegionalPool === 'function') loadRegionalPool();
+    }
+
     // Also hide all tab content/skeletons so stale data doesn't show
     ['pbp-container','bd-container','summary-container','history-container'].forEach(id => {
         const el = $(id); if (el) el.classList.add('hidden');
@@ -660,7 +661,7 @@ function toggleCompetitionMode() {
         document.documentElement.setAttribute('data-mode', 'ftc');
         document.addEventListener('DOMContentLoaded', () => {
             const sub = document.getElementById('brand-sub');
-            if (sub) sub.textContent = 'Public Beta';
+            if (sub) sub.textContent = 'Events at a glance!';
             const toggleBtn = document.getElementById('mode-toggle-btn');
             if (toggleBtn) toggleBtn.title = 'Switch to FRC Mode';
             document.title = "Caster's Tool: FTC DECODE";
@@ -5587,15 +5588,15 @@ function renderTeamStats(d) {
     // ── HoF, Impact Finalist & Einstein Winner badges ──
     let prestigeBadges = '';
     if (d.is_hof) {
-        const hofYears = d.hof_awards.map(a => a.year).join(', ');
+        const hofYears = (d.hof_awards || []).map(a => a.year).join(', ');
         prestigeBadges += `<span class="team-badge hof-badge has-tooltip">🏛️ Hall of Fame<span class="custom-tooltip">Chairman's / FIRST Impact Award Winner at Championship (${hofYears})</span></span>`;
     }
     if (d.is_impact_finalist) {
-        const impactYears = d.impact_finalist_awards.map(a => a.year).join(', ');
+        const impactYears = (d.impact_finalist_awards || []).map(a => a.year).join(', ');
         prestigeBadges += `<span class="team-badge impact-badge has-tooltip">🏆 Impact Finalist<span class="custom-tooltip">FIRST Impact Award Finalist at Championship (${impactYears})</span></span>`;
     }
     if (d.is_einstein_winner) {
-        const einsteinYears = d.einstein_wins.map(a => a.year).join(', ');
+        const einsteinYears = (d.einstein_wins || []).map(a => a.year).join(', ');
         prestigeBadges += `<span class="team-badge einstein-badge has-tooltip">⭐ Einstein Winner<span class="custom-tooltip">FIRST Championship Winner (${einsteinYears})</span></span>`;
     }
     const badgesRow = prestigeBadges
@@ -6580,19 +6581,19 @@ function renderPbpMatch() {
 
     // If awards toggle is on, fetch and inject awards asynchronously
     if (pbpShowAwards) {
-        const allTeams = [...m.red.teams, ...m.blue.teams];
+        const allTeams = [...(m.red?.teams || []), ...(m.blue?.teams || [])];
         _injectPbpAwards(allTeams, pbpIndex);
     }
 
     // If GATool sponsors toggle is on, fetch and inject sponsors asynchronously
     if (showGatoolSponsors) {
-        const allTeams = [...m.red.teams, ...m.blue.teams];
+        const allTeams = [...(m.red?.teams || []), ...(m.blue?.teams || [])];
         _injectGatoolSponsors(allTeams, pbpIndex);
     }
 
     // Inject playoff-firsts badges for playoff matches
     if (m.comp_level && m.comp_level !== 'qm') {
-        const allTeams = [...m.red.teams, ...m.blue.teams];
+        const allTeams = [...(m.red?.teams || []), ...(m.blue?.teams || [])];
         _injectPlayoffFirsts(allTeams, pbpIndex, m.comp_level);
     }
 
@@ -6651,8 +6652,8 @@ async function fetchMatchConnections(teamNums, forceAllTime) {
 
 async function renderPbpConnections(match) {
     // Collect team numbers on each side
-    const redNums = new Set(match.red.teams.map(t => t.team_number));
-    const blueNums = new Set(match.blue.teams.map(t => t.team_number));
+    const redNums = new Set((match.red?.teams || []).map(t => t.team_number));
+    const blueNums = new Set((match.blue?.teams || []).map(t => t.team_number));
     const allTeamNums = [...redNums, ...blueNums];
 
     // Show loading spinner while connections are being fetched
@@ -6705,12 +6706,12 @@ async function renderPbpConnections(match) {
             : 'pbp-conn-cross';
 
         // Build summary of prior history — pick the most notable entry
-        const allEvents = [...c.partnered_at, ...c.opponents_at];
+        const allEvents = [...(c.partnered_at || []), ...(c.opponents_at || [])];
         allEvents.sort((a, b) => b.year - a.year);
 
         const highlights = [];
         for (const e of allEvents) {
-            const isPartner = c.partnered_at.includes(e);
+            const isPartner = (c.partnered_at || []).includes(e);
             const icon = isPartner ? svgPartner : svgOpponent;
             const typeLabel = isPartner ? 'Partners' : 'Opponents';
             const resultTag = e.result === 'winner' ? ' <span class="pbp-conn-winner">Winner</span>'
@@ -9658,8 +9659,8 @@ function renderRegionFacts(data) {
     const teamCount = data.official_team_count || data.current_season_teams || data.team_count;
     const teamSrc = data.official_team_count ? 'FIRST official' : 'TBA registrations';
     html += _statCard('Active Teams', `${teamCount}`, `${data.active_year || new Date().getFullYear()} season`, `${teamCount} teams (${teamSrc})`);
-    html += _statCard('Hall of Fame', `${data.hof_count}`, data.hof_count ? data.hof_teams.map(t => t.team_number).join(', ') : 'none yet');
-    html += _statCard('Einstein Teams', `${data.einstein_count}`, data.einstein_count ? `top: ${data.einstein_teams.slice(0,3).map(t => t.team_number).join(', ')}` : 'none yet');
+    html += _statCard('Hall of Fame', `${data.hof_count}`, data.hof_count && data.hof_teams ? data.hof_teams.map(t => t.team_number).join(', ') : 'none yet');
+    html += _statCard('Einstein Teams', `${data.einstein_count}`, data.einstein_count && data.einstein_teams ? `top: ${data.einstein_teams.slice(0,3).map(t => t.team_number).join(', ')}` : 'none yet');
     html += '</div>';
 
     // HoF teams detail
