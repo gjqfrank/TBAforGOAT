@@ -1,6 +1,6 @@
 {
   "name": "casters-tool",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "A read-only **FIRST Robotics Competition (FRC)** and **FIRST Tech Challenge (FTC)** event dashboard, built for broadcasters, commentators and FIRST Community. Displays team stats, alliance breakdowns, playoff brackets, play-by-play data, AI-generated broadcast storylines, and historical context. All a caster needs at a glance!",
   "main": "index.js",
   "directories": {

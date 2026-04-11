@@ -198,7 +198,7 @@
         <div class="about-hero">
             <h1>Caster's Tool</h1>
             <div class="about-tagline">Events at a glance!</div>
-            <span class="about-version">v1.3</span>
+            <span class="about-version">v2.0</span>
         </div>
 
         <!-- ── What is it ──────────────────────────────── -->
@@ -206,8 +206,32 @@
             <h2>What is Caster's Tool?</h2>
             <p>
                 A real-time companion app for <strong>FIRST Robotics Competition</strong> and <strong>FIRST Tech Challenge</strong> broadcasters and commentators.
-                It surfaces team stats, alliance breakdowns, playoff brackets, play-by-play data, AI-generated storylines, and historical context.
-                Everything a caster needs at a glance!
+                It surfaces team stats, alliance breakdowns, playoff brackets, play-by-play data, AI-generated storylines, live caster notes, and historical context — 
+                everything a caster needs at a glance!
+            </p>
+        </div>
+
+        <!-- ── What's New in v2.0 ─────────────────────── -->
+        <div class="about-section">
+            <h2>What's New in v2.0</h2>
+            <p>
+                v2.0 is a ground-up architectural rebuild. The app moves from polling-only REST caches to an <strong>offline-first Supabase backbone</strong> with background workers, Realtime WebSocket push, and persistent caster collaboration tools.
+            </p>
+            <ul>
+                <li><strong>Supabase-backed persistence</strong> — 14 tables with delta-sync triggers, JSONB merge functions, and partial indexes</li>
+                <li><strong>Background workers</strong> — event_sync (120s) and match_poller (5s) for both FRC and FTC</li>
+                <li><strong>Realtime WebSocket</strong> — live push updates for event_teams and matches (no polling)</li>
+                <li><strong>Circuit breaker + deadlock retry</strong> — resilient to 5xx outages and concurrent write conflicts</li>
+                <li><strong>Email OTP login</strong> — magic-link auth via Supabase GoTrue with glassmorphic account popover</li>
+                <li><strong>TIMS Override Editor</strong> — context menu for robot names, tags, playstyle, and hardware notes</li>
+                <li><strong>Caster Notes</strong> — persistent per-event notes synced via Realtime</li>
+                <li><strong>Battle Station</strong> — live broadcast note timeline with macro deck and alliance-colored bubbles</li>
+                <li><strong>Global Notes Panel</strong> — floating glassmorphic panel with search and team auto-complete</li>
+                <li><strong>AI Storyline caching</strong> — persisted in Supabase with event-aware invalidation</li>
+                <li><strong>Row-Level Security</strong> — all tables locked down with RLS policies</li>
+                <li><strong>Full FTC mode</strong> — workers, season awards, team avatars, and proper styling</li>
+            </ul>
+        </div>
             </p>
         </div>
 
@@ -272,6 +296,22 @@
                     <p>View all award winners from the current season for any loaded event's teams. Filter by season and toggle between FRC and FTC award data.</p>
                 </div>
                 <div class="feature-card">
+                    <h3>Battle Station</h3>
+                    <p>Live broadcast note timeline with macro deck, alliance-colored bubbles, pill navigation, and mobile responsive layout. Your on-air companion.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Global Notes Panel</h3>
+                    <p>Floating glassmorphic panel with search, team auto-complete, and categorized tabs. Persistent notes synced via Supabase Realtime.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>TIMS Override Editor</h3>
+                    <p>Right-click any team to edit robot names, tags, playstyle, and hardware notes. Changes are saved to Supabase with full audit history.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Email Login</h3>
+                    <p>Optional OTP-first authentication with magic-link fallback. Glassmorphic account popover shows your display name and initials.</p>
+                </div>
+                <div class="feature-card">
                     <h3>Collapsible Sections</h3>
                     <p>All data panels in Summary and Events can be collapsed or expanded with visible Show/Hide toggle pills. Keeps the view clean when focusing on specific information.</p>
                 </div>
@@ -293,6 +333,9 @@
                 <li><strong>Advancement panel</strong>: On the Summary tab for completed events, see which teams directly qualified for the Championship, their point breakdowns, and qualifying awards.</li>
                 <li><strong>Collapse sections</strong>: Click any section header with a Show/Hide pill to collapse or expand it. Works on Summary cards, Events sections, and connections.</li>
                 <li><strong>Save events</strong>: Click the save icon on the event bar to cache data for instant reloading.</li>
+                <li><strong>Battle Station</strong>: Switch to the Battle Station tab for a live broadcast note timeline. Use the macro deck for quick inserts, pill navigation to filter by team.</li>
+                <li><strong>TIMS Editor</strong>: Right-click any team number to open the TIMS Override Editor (or press <kbd>E</kbd>). Edit robot names, tags, playstyle, and hardware notes.</li>
+                <li><strong>Global Notes</strong>: Press <kbd>N</kbd> to open the floating Global Notes panel. Add notes, search by team, and categorize with tabs.</li>
                 <li><strong>Toggle settings</strong>: Use the gear icon to switch themes, highlight international teams, or include offseason events in data.</li>
             </ul>
         </div>
@@ -360,6 +403,9 @@
                     <tr><td>Single-click</td><td>Generate team storyline</td><td>Team number in Play by Play</td></tr>
                     <tr><td><kbd>Esc</kbd></td><td>Close overlay / deselect</td><td>Any overlay open</td></tr>
                     <tr><td><kbd>←</kbd> <kbd>→</kbd></td><td>Previous / Next match</td><td>Play by Play or Breakdown tab</td></tr>
+                    <tr><td><kbd>E</kbd></td><td>Open TIMS Override Editor</td><td>Any team context</td></tr>
+                    <tr><td><kbd>N</kbd></td><td>Toggle Global Notes panel</td><td>Anywhere (not in a text field)</td></tr>
+                    <tr><td>Right-click</td><td>TIMS context menu</td><td>Any team number</td></tr>
                     <tr><td>Double-click</td><td>Look up a team number</td><td>Any team number in the app</td></tr>
                 </tbody>
             </table>
@@ -427,7 +473,7 @@
         <div class="footer-top">
             <span>Caster's Tool</span>
             <span class="footer-sep">·</span>
-            <span class="footer-version">v1.3</span>
+            <span class="footer-version">v2.0</span>
         </div>
     </footer>
 </body>
