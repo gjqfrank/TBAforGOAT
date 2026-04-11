@@ -54,3 +54,41 @@ def invalidate(prefix: str, key: str) -> None:
     """Delete a cached payload."""
     p = _path(prefix, key)
     p.unlink(missing_ok=True)
+
+
+def cleanup_expired(max_age: float = 7200) -> int:
+    """Delete payload cache files older than *max_age* seconds (default 2h).
+
+    Returns the number of files removed.
+    """
+    if not CACHE_DIR.exists():
+        return 0
+    now = time.time()
+    removed = 0
+    for p in CACHE_DIR.glob("summary_*.json"):
+        try:
+            data = json.loads(p.read_text(encoding="utf-8"))
+            if now - data.get("_ts", 0) > max_age:
+                p.unlink(missing_ok=True)
+                removed += 1
+        except Exception:
+            pass
+    for p in CACHE_DIR.glob("awards_*.json"):
+        try:
+            data = json.loads(p.read_text(encoding="utf-8"))
+            if now - data.get("_ts", 0) > max_age:
+                p.unlink(missing_ok=True)
+                removed += 1
+        except Exception:
+            pass
+    for p in CACHE_DIR.glob("highscores_*.json"):
+        try:
+            data = json.loads(p.read_text(encoding="utf-8"))
+            if now - data.get("_ts", 0) > max_age:
+                p.unlink(missing_ok=True)
+                removed += 1
+        except Exception:
+            pass
+    if removed:
+        log.info("Payload cache cleanup: removed %d expired files", removed)
+    return removed

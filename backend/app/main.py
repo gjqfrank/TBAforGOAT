@@ -20,6 +20,19 @@ from .routers import sync, snapshot
 
 log = logging.getLogger(__name__)
 
+_CACHE_CLEANUP_INTERVAL = 3600  # 1 hour
+
+
+async def _run_cache_cleanup() -> None:
+    """Periodically purge expired disk-cached payloads."""
+    from .services.payload_cache import cleanup_expired
+    while True:
+        await asyncio.sleep(_CACHE_CLEANUP_INTERVAL)
+        try:
+            cleanup_expired()
+        except Exception as e:
+            log.warning("Cache cleanup error: %s", e)
+
 
 # ── Lifespan: start/stop background ingestion workers ──────
 @asynccontextmanager
@@ -40,6 +53,7 @@ async def lifespan(app: FastAPI):
         tasks.append(asyncio.create_task(run_match_poller(), name="match-poller"))
         tasks.append(asyncio.create_task(run_ftc_event_sync(), name="ftc-event-sync"))
         tasks.append(asyncio.create_task(run_ftc_match_poller(), name="ftc-match-poller"))
+        tasks.append(asyncio.create_task(_run_cache_cleanup(), name="cache-cleanup"))
         log.info("Ingestion workers started (%d tasks)", len(tasks))
     else:
         log.info("SUPABASE_URL not set — ingestion workers disabled")
@@ -139,7 +153,13 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         _rate_buckets_general[key] = [t for t in _rate_buckets_general[key] if t > cutoff]
         _rate_buckets_heavy[key] = [t for t in _rate_buckets_heavy[key] if t > cutoff]
 
-        bucket = _rate_buckets_heavy[key] if heavy else _rate_buckets_general[key]
+        # Remove empty keys to prevent dict growth over 72h
+        if not _rate_buckets_general[key]:
+            del _rate_buckets_general[key]
+        if not _rate_buckets_heavy[key]:
+            del _rate_buckets_heavy[key]
+
+        bucket = _rate_buckets_heavy.setdefault(key, []) if heavy else _rate_buckets_general.setdefault(key, [])
         limit = limit_heavy if heavy else limit_general
         bucket_name = "heavy" if heavy else "general"
 

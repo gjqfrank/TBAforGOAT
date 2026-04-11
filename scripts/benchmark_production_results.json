@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-04-11T12:45:50",
+  "timestamp": "2026-04-11T15:18:17",
   "server": "http://127.0.0.1:8000",
   "events": {
     "frc": [
@@ -14,73 +14,73 @@
     ]
   },
   "total_users": 12,
-  "total_requests": 219,
-  "successful": 219,
-  "failed": 0,
-  "wall_clock_ms": 33185,
-  "throughput_rps": 6.6,
+  "total_requests": 214,
+  "successful": 185,
+  "failed": 29,
+  "wall_clock_ms": 10934,
+  "throughput_rps": 16.9,
   "latency": {
-    "mean_ms": 995,
-    "median_ms": 85,
-    "p95_ms": 7454,
-    "p99_ms": 7820,
+    "mean_ms": 660,
+    "median_ms": 175,
+    "p95_ms": 3104,
+    "p99_ms": 4306,
     "min_ms": 2,
-    "max_ms": 11022
+    "max_ms": 5919
   },
   "phases": {
     "load": {
       "total": 36,
       "ok": 36,
-      "mean_ms": 1918,
-      "p95_ms": 11017
+      "mean_ms": 898,
+      "p95_ms": 4306
     },
     "matches": {
       "total": 24,
       "ok": 24,
-      "mean_ms": 2861,
-      "p95_ms": 7797
+      "mean_ms": 1022,
+      "p95_ms": 2101
     },
     "summary": {
       "total": 40,
       "ok": 40,
-      "mean_ms": 30,
-      "p95_ms": 180
+      "mean_ms": 100,
+      "p95_ms": 478
     },
     "team-dive": {
       "total": 24,
       "ok": 24,
-      "mean_ms": 1649,
-      "p95_ms": 7508
+      "mean_ms": 841,
+      "p95_ms": 1497
     },
     "notes": {
       "total": 16,
       "ok": 16,
-      "mean_ms": 45,
-      "p95_ms": 56
+      "mean_ms": 68,
+      "p95_ms": 131
     },
     "gatool": {
       "total": 12,
       "ok": 12,
-      "mean_ms": 1267,
-      "p95_ms": 5031
+      "mean_ms": 2889,
+      "p95_ms": 3881
     },
     "warm-cache": {
       "total": 48,
-      "ok": 48,
-      "mean_ms": 460,
-      "p95_ms": 4681
+      "ok": 33,
+      "mean_ms": 157,
+      "p95_ms": 407
     },
     "tims-persistence": {
-      "total": 7,
-      "ok": 7,
-      "mean_ms": 63,
-      "p95_ms": 114
+      "total": 2,
+      "ok": 0,
+      "mean_ms": 0,
+      "p95_ms": 0
     },
     "cross-cache": {
       "total": 12,
-      "ok": 12,
-      "mean_ms": 80,
-      "p95_ms": 168
+      "ok": 0,
+      "mean_ms": 0,
+      "p95_ms": 0
     }
   },
   "users": [
@@ -91,8 +91,8 @@
       "requests": 17,
       "ok": 17,
       "failed": 0,
-      "total_ms": 11891,
-      "mean_ms": 699
+      "total_ms": 9727,
+      "mean_ms": 572
     },
     {
       "user_id": "frc-caster-1",
@@ -101,18 +101,18 @@
       "requests": 17,
       "ok": 17,
       "failed": 0,
-      "total_ms": 12114,
-      "mean_ms": 713
+      "total_ms": 9819,
+      "mean_ms": 578
     },
     {
       "user_id": "frc-caster-2",
       "event": "2026tuis2",
       "program": "frc",
       "requests": 17,
-      "ok": 17,
-      "failed": 0,
-      "total_ms": 25715,
-      "mean_ms": 1513
+      "ok": 14,
+      "failed": 3,
+      "total_ms": 10252,
+      "mean_ms": 729
     },
     {
       "user_id": "frc-caster-3",
@@ -121,8 +121,8 @@
       "requests": 17,
       "ok": 17,
       "failed": 0,
-      "total_ms": 26307,
-      "mean_ms": 1547
+      "total_ms": 10526,
+      "mean_ms": 619
     },
     {
       "user_id": "frc-caster-4",
@@ -131,8 +131,8 @@
       "requests": 17,
       "ok": 17,
       "failed": 0,
-      "total_ms": 26727,
-      "mean_ms": 1572
+      "total_ms": 10155,
+      "mean_ms": 597
     },
     {
       "user_id": "frc-caster-5",
@@ -141,8 +141,8 @@
       "requests": 17,
       "ok": 17,
       "failed": 0,
-      "total_ms": 33070,
-      "mean_ms": 1945
+      "total_ms": 10007,
+      "mean_ms": 589
     },
     {
       "user_id": "frc-caster-6",
@@ -151,8 +151,8 @@
       "requests": 17,
       "ok": 17,
       "failed": 0,
-      "total_ms": 18258,
-      "mean_ms": 1074
+      "total_ms": 9769,
+      "mean_ms": 575
     },
     {
       "user_id": "frc-caster-7",
@@ -161,28 +161,28 @@
       "requests": 17,
       "ok": 17,
       "failed": 0,
-      "total_ms": 26117,
-      "mean_ms": 1536
+      "total_ms": 9771,
+      "mean_ms": 575
     },
     {
       "user_id": "ftc-caster-8",
       "event": "2024ftcftccmp1edis",
       "program": "ftc",
       "requests": 16,
-      "ok": 16,
-      "failed": 0,
-      "total_ms": 10269,
-      "mean_ms": 642
+      "ok": 12,
+      "failed": 4,
+      "total_ms": 10551,
+      "mean_ms": 869
     },
     {
       "user_id": "ftc-caster-9",
       "event": "2024ftcftccmp1edis",
       "program": "ftc",
       "requests": 16,
-      "ok": 16,
-      "failed": 0,
-      "total_ms": 8479,
-      "mean_ms": 530
+      "ok": 12,
+      "failed": 4,
+      "total_ms": 10655,
+      "mean_ms": 877
     },
     {
       "user_id": "ftc-caster-10",
@@ -191,18 +191,18 @@
       "requests": 16,
       "ok": 16,
       "failed": 0,
-      "total_ms": 9187,
-      "mean_ms": 574
+      "total_ms": 10555,
+      "mean_ms": 660
     },
     {
       "user_id": "ftc-caster-11",
       "event": "2025ftctrcmp",
       "program": "ftc",
       "requests": 16,
-      "ok": 16,
-      "failed": 0,
-      "total_ms": 8366,
-      "mean_ms": 523
+      "ok": 12,
+      "failed": 4,
+      "total_ms": 10582,
+      "mean_ms": 878
     }
   ]
 }

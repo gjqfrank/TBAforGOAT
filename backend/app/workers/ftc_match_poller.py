@@ -47,18 +47,25 @@ def _parse_ftc_key(event_key: str) -> tuple[int, str]:
 
 # ── State ───────────────────────────────────────────────────
 _last_rankings_poll: float = 0
-_watched_ftc_events: set[str] = set()
+_watched_ftc_events: dict[str, float] = {}
+_WATCHED_TTL = 7200  # 2 hours
 
 
 def add_watched_ftc_event(event_key: str) -> None:
     """Register a user-loaded FTC event for ongoing polling."""
-    _watched_ftc_events.add(event_key)
+    import time as _time
+    _watched_ftc_events[event_key] = _time.time()
 
 
 def get_ftc_poll_events() -> set[str]:
     """Return events that should be polled (active + user-watched)."""
+    import time as _time
+    now = _time.time()
+    expired = [k for k, ts in _watched_ftc_events.items() if now - ts > _WATCHED_TTL]
+    for k in expired:
+        del _watched_ftc_events[k]
     from .ftc_event_sync import get_ftc_active_events
-    return get_ftc_active_events() | _watched_ftc_events
+    return get_ftc_active_events() | set(_watched_ftc_events)
 
 
 # ── Match polling ───────────────────────────────────────────

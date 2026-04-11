@@ -7,12 +7,17 @@ from typing import Any
 
 import httpx
 
+from .circuit_breaker import get_breaker, CircuitOpenError
+
 log = logging.getLogger(__name__)
 
 FTCSCOUT_URL = "https://api.ftcscout.org/graphql"
 CACHE_TTL = 300        # 5 min for team-level stats
 EVENT_CACHE_TTL = 120  # 2 min for event queries
 WR_CACHE_TTL = 600     # 10 min for world record
+_MAX_CACHE_ENTRIES = 500  # cap to prevent unbounded growth
+
+ftcscout_breaker = get_breaker("FTC Scout", failure_threshold=5, recovery_timeout=60)
 
 
 class FTCScoutClient:
@@ -36,19 +41,35 @@ class FTCScoutClient:
     def _set_cache(self, key: str, value: Any) -> None:
         self._cache[key] = (time.monotonic(), value)
 
+    def _evict_cache(self) -> None:
+        """Remove expired entries; if still over cap, drop oldest."""
+        now = time.monotonic()
+        expired = [k for k, (ts, _) in self._cache.items() if now - ts >= max(CACHE_TTL, WR_CACHE_TTL)]
+        for k in expired:
+            del self._cache[k]
+        if len(self._cache) > _MAX_CACHE_ENTRIES:
+            by_age = sorted(self._cache, key=lambda k: self._cache[k][0])
+            for k in by_age[: len(self._cache) - _MAX_CACHE_ENTRIES]:
+                del self._cache[k]
+
     async def _query(self, query: str, variables: dict | None = None) -> dict:
-        """Execute a GraphQL query and return the 'data' portion."""
+        """Execute a GraphQL query through the circuit breaker."""
+        self._evict_cache()
         http = self._get_http()
         payload: dict[str, Any] = {"query": query}
         if variables:
             payload["variables"] = variables
-        resp = await http.post(
-            FTCSCOUT_URL,
-            json=payload,
-            headers={"content-type": "application/json"},
-        )
-        resp.raise_for_status()
-        body = resp.json()
+
+        async def _do_request():
+            resp = await http.post(
+                FTCSCOUT_URL,
+                json=payload,
+                headers={"content-type": "application/json"},
+            )
+            resp.raise_for_status()
+            return resp.json()
+
+        body = await ftcscout_breaker.call(_do_request)
         if "errors" in body and body["errors"]:
             log.warning("FTC Scout GraphQL errors: %s", body["errors"])
         return body.get("data", {})

@@ -11,6 +11,7 @@ from .circuit_breaker import tba_breaker
 
 TBA_BASE = "https://www.thebluealliance.com/api/v3"
 CACHE_TTL = 120  # seconds – reduced for faster updates during live events
+_MAX_CACHE_ENTRIES = 500  # cap to prevent unbounded growth over 72h
 
 
 class TBAClient:
@@ -30,12 +31,25 @@ class TBAClient:
             )
         return self._http
 
+    def _evict_cache(self) -> None:
+        """Remove expired entries; if still over cap, drop oldest."""
+        now = time.time()
+        expired = [k for k, (ts, _) in self._cache.items() if now - ts >= CACHE_TTL]
+        for k in expired:
+            del self._cache[k]
+        if len(self._cache) > _MAX_CACHE_ENTRIES:
+            by_age = sorted(self._cache, key=lambda k: self._cache[k][0])
+            for k in by_age[: len(self._cache) - _MAX_CACHE_ENTRIES]:
+                del self._cache[k]
+
     async def get(self, endpoint: str, *, bypass_cache: bool = False) -> Any:
         now = time.time()
         if not bypass_cache and endpoint in self._cache:
             ts, data = self._cache[endpoint]
             if now - ts < CACHE_TTL:
                 return data
+
+        self._evict_cache()
 
         async def _do_request():
             resp = await self._client().get(endpoint)

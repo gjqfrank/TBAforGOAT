@@ -41,7 +41,8 @@ def _invalidate_snapshot(event_key: str) -> None:
 
 # ── State ───────────────────────────────────────────────────
 _active_event_keys: set[str] = set()
-_watched_event_keys: set[str] = set()   # user-triggered events
+_watched_event_keys: dict[str, float] = {}   # user-triggered events → last-access timestamp
+_WATCHED_TTL = 7200  # 2 hours — prune events not re-requested
 _last_rankings_poll: float = 0
 
 
@@ -53,11 +54,17 @@ def set_active_events(keys: set[str]) -> None:
 
 def add_watched_event(event_key: str) -> None:
     """Register a user-loaded event for ongoing polling."""
-    _watched_event_keys.add(event_key)
+    import time as _time
+    _watched_event_keys[event_key] = _time.time()
 
 
 def get_active_events() -> set[str]:
-    return _active_event_keys | _watched_event_keys
+    import time as _time
+    now = _time.time()
+    expired = [k for k, ts in _watched_event_keys.items() if now - ts > _WATCHED_TTL]
+    for k in expired:
+        del _watched_event_keys[k]
+    return _active_event_keys | set(_watched_event_keys)
 
 
 async def _poll_matches(event_key: str) -> None:
