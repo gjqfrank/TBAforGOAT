@@ -8554,14 +8554,10 @@ function closeCompare() {
     }
 }
 
-// Close on Escape or Q
+// Close on Escape (Q handled by its own dedicated handler below)
 document.addEventListener('keydown', e => {
     const isEsc = e.key === 'Escape';
-    const isQ = (e.key === 'q' || e.key === 'Q') && !e.ctrlKey && !e.metaKey && !e.altKey;
-    // Q should not fire when the user is typing in an input/textarea/select
-    const inInput = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName);
-    const dismiss = isEsc || (isQ && !inInput);
-    if (!dismiss) return;
+    if (!isEsc) return;
 
     if (compareSelection.size > 0) {
         // Also close the lookup overlay if it's open (from ranking selection)
@@ -9205,6 +9201,8 @@ function floatLookupQuick(teamNumber) {
 document.addEventListener('keydown', e => {
     const tag = document.activeElement?.tagName;
     const isInput = tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA';
+    const inLookup = document.activeElement?.closest('#float-lookup');
+    const inNotes  = document.activeElement?.closest('#gn-panel');
 
     // Q toggles the floating lookup even when its own input is focused
     if ((e.key === 'q' || e.key === 'Q') && !e.ctrlKey && !e.metaKey && !e.altKey) {
@@ -9214,7 +9212,8 @@ document.addEventListener('keydown', e => {
             closeFloatingLookup();
             return;
         }
-        if (!isInput) {
+        // Allow opening even when notes input is focused (Q is not a notes char)
+        if (!isInput || inNotes) {
             e.preventDefault();
             openFloatingLookup();
             return;

@@ -370,16 +370,20 @@ function updateAuthUI() {
     const authed = Auth.isAuthenticated();
     window.isGuest = !authed;
 
-    const btn = document.getElementById('auth-trigger-btn');
-    const icon = document.getElementById('auth-trigger-icon');
+    // Swap gear ↔ user icon on the merged settings button
+    const btn = document.getElementById('settings-trigger-btn');
+    const gearIcon = document.getElementById('settings-gear-icon');
+    const userIcon = document.getElementById('settings-user-icon');
     if (btn) {
         const user = Auth.getUser();
-        btn.title = authed ? (user?.email || 'Logged in') : "Caster's Login";
+        btn.title = authed ? (user?.email || 'Logged in') : 'Settings';
         btn.classList.toggle('auth-active', authed);
 
         if (authed && user) {
+            if (gearIcon) gearIcon.classList.add('hidden');
+            if (userIcon) userIcon.classList.remove('hidden');
+            // Show initials badge
             const initials = _getInitials(user);
-            if (icon) icon.classList.add('hidden');
             let badge = btn.querySelector('.auth-initials');
             if (!badge) {
                 badge = document.createElement('span');
@@ -388,14 +392,16 @@ function updateAuthUI() {
             }
             badge.textContent = initials;
             badge.classList.remove('hidden');
+            if (userIcon) userIcon.classList.add('hidden'); // prefer initials over generic icon
         } else {
-            if (icon) icon.classList.remove('hidden');
+            if (gearIcon) gearIcon.classList.remove('hidden');
+            if (userIcon) userIcon.classList.add('hidden');
             const badge = btn.querySelector('.auth-initials');
             if (badge) badge.classList.add('hidden');
         }
     }
 
-    // Update mobile settings auth button
+    // Update settings auth section
     const settingsAuthLabel = document.getElementById('settings-auth-label');
     const settingsAuthSub = document.getElementById('settings-auth-sub');
     const settingsAuthBtn = document.getElementById('settings-auth-btn');
@@ -406,20 +412,22 @@ function updateAuthUI() {
             settingsAuthLabel.textContent = 'Hey, ' + displayName + '!';
             if (settingsAuthSub) settingsAuthSub.textContent = user.email || '';
             if (settingsAuthBtn) {
-                settingsAuthBtn.onclick = function() { toggleSettings(); showLoginModal(); };
+                settingsAuthBtn.style.cursor = 'default';
+                settingsAuthBtn.onclick = null;
             }
         } else {
             settingsAuthLabel.textContent = 'Sign In';
             if (settingsAuthSub) settingsAuthSub.textContent = '';
             if (settingsAuthBtn) {
+                settingsAuthBtn.style.cursor = 'pointer';
                 settingsAuthBtn.onclick = function() { showLoginModal(); toggleSettings(); };
             }
         }
     }
 
-    // Show/hide mobile sign-out button
-    const mobileLogout = document.getElementById('settings-logout-btn');
-    if (mobileLogout) mobileLogout.classList.toggle('hidden', !authed);
+    // Show/hide sign-out button
+    const logoutBtn = document.getElementById('settings-logout-btn');
+    if (logoutBtn) logoutBtn.classList.toggle('hidden', !authed);
 
     // Toggle visibility of auth-only elements
     document.querySelectorAll('[data-auth-only]').forEach(el => {
@@ -432,48 +440,14 @@ function updateAuthUI() {
 
 // ── Modal state management ─────────────────────────────────
 function showLoginModal() {
-    if (Auth.isAuthenticated()) {
-        toggleAuthPopover();
-        return;
-    }
+    if (Auth.isAuthenticated()) return;
     showLoginState();
     document.getElementById('login-overlay').classList.remove('hidden');
     document.getElementById('login-email')?.focus();
 }
 
-function toggleAuthPopover() {
-    const pop = document.getElementById('auth-popover');
-    if (!pop) return;
-    const showing = !pop.classList.contains('hidden');
-    if (showing) {
-        pop.classList.add('hidden');
-        return;
-    }
-    // Populate user info
-    const user = Auth.getUser();
-    const name = user?.user_metadata?.name || '';
-    const email = user?.email || '';
-    const initials = _getInitials(user);
-    const nameEl = document.getElementById('auth-popover-name');
-    const emailEl = document.getElementById('auth-popover-email');
-    const avatarEl = document.getElementById('auth-popover-initials');
-    if (nameEl) nameEl.textContent = 'Hey, ' + (name || email.split('@')[0]) + '!';
-    if (emailEl) emailEl.textContent = email;
-    if (avatarEl) avatarEl.textContent = initials;
-    pop.classList.remove('hidden');
-
-    // Close on outside click
-    function closeOnOutside(e) {
-        if (!pop.contains(e.target) && !e.target.closest('#auth-trigger-btn')) {
-            pop.classList.add('hidden');
-            document.removeEventListener('click', closeOnOutside, true);
-        }
-    }
-    setTimeout(() => document.addEventListener('click', closeOnOutside, true), 0);
-}
-
 function handleLogout() {
-    document.getElementById('auth-popover')?.classList.add('hidden');
+    document.getElementById('settings-menu')?.classList.add('hidden');
     Auth.logout().then(() => { updateAuthUI(); });
 }
 
