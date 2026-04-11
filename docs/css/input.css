@@ -205,6 +205,18 @@
     [data-mode="ftc"] .tab:hover {
         color: #fb923c;
     }
+
+    /* FTC overrides for GlobalNotes nav */
+    [data-mode="ftc"] .gn-tab-active {
+        color: #f97316;
+        background: rgba(249,115,22,.1);
+        border-color: rgba(249,115,22,.2);
+    }
+    [data-mode="ftc"] .gn-sub-active {
+        color: #f97316;
+        background: rgba(249,115,22,.08);
+        border-color: rgba(249,115,22,.15);
+    }
     
     [data-mode="ftc"] ::-webkit-scrollbar-thumb {
         background: rgba(249,115,22,.35);
@@ -578,13 +590,13 @@
         background: #ffffff;
         box-shadow: var(--shadow-sm);
     }
-    [data-mode="ftc"][data-theme="light"] button {
+    [data-mode="ftc"][data-theme="light"] button:not(.tab):not(.bs-pill-btn):not(.pbp-breakdown-btn):not(.pbp-compare-btn):not(.gn-tab):not(.gn-sub-btn) {
         background: rgba(234,88,12,.06);
         color: #ea580c;
         border: 1px solid rgba(234,88,12,.18);
         box-shadow: none;
     }
-    [data-mode="ftc"][data-theme="light"] button:hover {
+    [data-mode="ftc"][data-theme="light"] button:not(.tab):not(.bs-pill-btn):not(.pbp-breakdown-btn):not(.pbp-compare-btn):not(.gn-tab):not(.gn-sub-btn):hover {
         background: rgba(234,88,12,.12);
         border-color: rgba(234,88,12,.3);
         color: #ea580c;

@@ -442,6 +442,7 @@ const GlobalNotes = (() => {
 
     async function _submitTeamNote(e) {
         e.preventDefault();
+        if (window.isGuest) return;
         const input = document.getElementById('gn-team-note-input');
         const text = input?.value?.trim();
         if (!text || !_teamFilter) return;
@@ -569,6 +570,7 @@ const GlobalNotes = (() => {
 
     async function _submitEventNote(e) {
         e.preventDefault();
+        if (window.isGuest) return;
         const input = document.getElementById('gn-event-input');
         const text = input?.value?.trim();
         if (!text) return;

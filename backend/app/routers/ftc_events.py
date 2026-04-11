@@ -1,5 +1,5 @@
 """FTC Event endpoints — info, teams, summary, season list."""
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Response
 from ..services import ftc_event_service
 from ..services.ftc_client import get_ftc_client
 from ..services.gatool_client import get_gatool_client
@@ -143,6 +143,35 @@ async def ftc_world_record(season: int):
         raise
     except Exception as e:
         raise_api_error(e, fallback_detail=f"Could not load FTC world record for season {season}.")
+
+
+@router.get("/avatar-css/{year}")
+async def ftc_avatar_css(year: int):
+    """Proxy the FTC Scoring Server avatar CSS so the frontend can parse it.
+    The FIRST scoring server requires authentication, so this endpoint
+    attempts to fetch and falls back to an empty stylesheet."""
+    import httpx
+    url = f"https://ftc-scoring.firstinspires.org/avatars/css/{year}.css"
+    try:
+        async with httpx.AsyncClient(timeout=10, follow_redirects=False) as client:
+            resp = await client.get(url)
+        if resp.status_code == 200:
+            return Response(content=resp.content, media_type="text/css")
+    except httpx.HTTPError:
+        pass
+    # Return empty CSS — avatar map will be empty, frontend degrades gracefully
+    return Response(content=b"/* no FTC avatar CSS available */", media_type="text/css")
+
+
+@router.get("/{event_key}/season-awards")
+async def ftc_season_awards(event_key: str):
+    """Current-season Inspire/Winner/Finalist awards for FTC teams at an event."""
+    try:
+        return await ftc_event_service.get_ftc_current_season_awards(event_key)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise_api_error(e, fallback_detail=f"Could not load FTC season awards for event '{event_key}'.")
 
 
 @router.get("/team/{team_number}")

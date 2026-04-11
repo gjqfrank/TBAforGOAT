@@ -25,6 +25,9 @@ const BattleStation = (() => {
     let _realtimeWired = false;
     let _matchStartTime = null;
 
+    // ── Helpers ────────────────────────────────────────────
+    function _teamPrefix() { return (typeof isFTCMode === 'function' && isFTCMode()) ? 'ftc' : 'frc'; }
+
     // ── Lexicon ────────────────────────────────────────────
     const LEXICON = {
         AUTO_START:   { label: 'Auto',       color: 'emerald', icon: _iconRobot },
@@ -173,6 +176,15 @@ const BattleStation = (() => {
                 _scrollToTop();
             });
         }
+        // Catch-up after Wi-Fi drop: re-fetch notes we may have missed
+        if (typeof Realtime !== 'undefined' && Realtime.onReconnect) {
+            Realtime.onReconnect(() => {
+                if (_mounted && _eventKey) {
+                    console.info('[BattleStation] Reconnected — re-fetching notes');
+                    _loadNotes();
+                }
+            });
+        }
     }
 
     // ── Data loading ───────────────────────────────────────
@@ -231,8 +243,8 @@ const BattleStation = (() => {
             <!-- ▸ BOTTOM TIER: Context pills ───────────────── -->
             <div class="bs-hotrow">
               ${reds.map(n => `
-                <button class="bs-pill-btn bs-pill-red${_ctx === 'frc' + n ? ' bs-pill-active' : ''}"
-                        data-team="frc${n}" onclick="BattleStation._onHotClick(this)">
+                <button class="bs-pill-btn bs-pill-red${_ctx === _teamPrefix() + n ? ' bs-pill-active' : ''}"
+                        data-team="${_teamPrefix()}${n}" onclick="BattleStation._onHotClick(this)">
                   ${n}
                 </button>`).join('')}
 
@@ -242,8 +254,8 @@ const BattleStation = (() => {
               </button>
 
               ${blues.map(n => `
-                <button class="bs-pill-btn bs-pill-blue${_ctx === 'frc' + n ? ' bs-pill-active' : ''}"
-                        data-team="frc${n}" onclick="BattleStation._onHotClick(this)">
+                <button class="bs-pill-btn bs-pill-blue${_ctx === _teamPrefix() + n ? ' bs-pill-active' : ''}"
+                        data-team="${_teamPrefix()}${n}" onclick="BattleStation._onHotClick(this)">
                   ${n}
                 </button>`).join('')}
             </div>

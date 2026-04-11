@@ -42,6 +42,7 @@ const FTC_API = {
     eventTeams:         (ek) => FTC_API.get(`/events/${ek}/teams`),
     eventAwards:        (ek) => FTC_API.get(`/events/${ek}/awards`),
     eventPastAwards:    (ek) => FTC_API.get(`/events/${ek}/past-awards`),
+    eventSeasonAwards:  (ek) => FTC_API.get(`/events/${ek}/season-awards`),
     clearCache:         (ek) => FTC_API.get(`/events/${ek}/clear-cache`),
     refreshRankings:    (ek) => FTC_API.get(`/events/${ek}/refresh-rankings`),
     fastRankings:       (ek) => FTC_API.get(`/events/${ek}/fast-rankings`),

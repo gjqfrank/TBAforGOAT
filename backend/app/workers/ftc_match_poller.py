@@ -235,14 +235,15 @@ async def run_ftc_match_poller() -> None:
                     return_exceptions=True,
                 )
 
-                # Poll rankings less frequently
+                # Poll rankings less frequently (serialised to avoid deadlocks)
                 now = time.time()
                 if now - _last_rankings_poll >= RANKINGS_INTERVAL:
                     _last_rankings_poll = now
-                    await asyncio.gather(
-                        *[_poll_ftc_rankings(ek) for ek in events],
-                        return_exceptions=True,
-                    )
+                    for ek in events:
+                        try:
+                            await _poll_ftc_rankings(ek)
+                        except Exception as e:
+                            log.warning("FTC rankings poll failed for %s: %s", ek, e)
         except Exception as e:
             log.error("FTC match poller sweep error: %s", e)
 

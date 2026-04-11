@@ -442,16 +442,26 @@ async def run_event_sync(year: int | None = None) -> None:
                 log.debug("No active events found")
 
             # 2) For ongoing events, sync teams/OPRs, alliances, EPA, FRC data, avatars
-            tasks = []
+            #    Split into phases:
+            #    a) Seed upserts + read-only fetches (safe to parallelise)
+            #    b) Merge-heavy writes (serialised by _merge_lock, but run
+            #       sequentially per-event to minimise lock contention)
+            seed_tasks = []
             for ek in ongoing:
-                tasks.append(_sync_teams_and_oprs(ek))
-                tasks.append(_sync_alliances(ek))
-                tasks.append(_sync_epa(ek))
-                tasks.append(_sync_frc_team_data(ek))
-                tasks.append(_sync_avatars(ek))
+                seed_tasks.append(_sync_teams_and_oprs(ek))
+                seed_tasks.append(_sync_alliances(ek))
+                seed_tasks.append(_sync_frc_team_data(ek))
+                seed_tasks.append(_sync_avatars(ek))
 
-            if tasks:
-                await asyncio.gather(*tasks, return_exceptions=True)
+            if seed_tasks:
+                await asyncio.gather(*seed_tasks, return_exceptions=True)
+
+            # EPA merges into raw_data — run one event at a time
+            for ek in ongoing:
+                try:
+                    await _sync_epa(ek)
+                except Exception as e:
+                    log.warning("EPA sync failed for %s: %s", ek, e)
 
             # 3) Regional pool (v3.2) — once per sweep, not per event
             await _sync_regional_pool(year, ongoing)

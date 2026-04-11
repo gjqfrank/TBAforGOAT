@@ -5,9 +5,13 @@ server-side.  Never expose the service key to browsers or native apps.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
+import random
+import time
 from typing import Any, Optional
 
+from postgrest.exceptions import APIError
 from supabase import acreate_client, AsyncClient
 
 from ..config import SUPABASE_URL, SUPABASE_SERVICE_KEY
@@ -16,6 +20,61 @@ log = logging.getLogger(__name__)
 
 # ── Singleton ───────────────────────────────────────────────
 _client: Optional[AsyncClient] = None
+
+# ── Circuit breaker for Supabase outages (5xx) ──────────────
+_cb_failures: int = 0
+_cb_open_until: float = 0.0
+_CB_THRESHOLD = 3       # consecutive 5xx failures before opening
+_CB_COOLDOWN  = 30.0    # seconds to pause after circuit opens
+
+# ── Serialisation lock for merge_event_teams ────────────────
+_merge_lock = asyncio.Lock()
+
+
+def _is_circuit_open() -> bool:
+    """Return True if the Supabase circuit breaker is open."""
+    if _cb_failures < _CB_THRESHOLD:
+        return False
+    return time.monotonic() < _cb_open_until
+
+
+def _record_success() -> None:
+    global _cb_failures
+    _cb_failures = 0
+
+
+def _record_5xx() -> None:
+    global _cb_failures, _cb_open_until
+    _cb_failures += 1
+    if _cb_failures >= _CB_THRESHOLD:
+        _cb_open_until = time.monotonic() + _CB_COOLDOWN
+        log.warning(
+            "Supabase circuit breaker OPEN — pausing writes for %.0fs "
+            "after %d consecutive 5xx failures",
+            _CB_COOLDOWN, _cb_failures,
+        )
+
+
+def _is_server_error(exc: Exception) -> bool:
+    """Detect Supabase 5xx / HTML error pages (e.g. Cloudflare 521)."""
+    if isinstance(exc, APIError):
+        code = exc.code
+        # code can be str ("40P01") or int-like (521)
+        try:
+            numeric = int(code) if code is not None else 0
+        except (ValueError, TypeError):
+            return False
+        return 500 <= numeric < 600
+    # httpx or other transport-level errors
+    msg = str(exc).lower()
+    return "web server is down" in msg or "521" in msg
+
+
+def _is_deadlock(exc: Exception) -> bool:
+    """Detect Postgres deadlock error (40P01)."""
+    if isinstance(exc, APIError):
+        return str(exc.code) == "40P01"
+    return "40P01" in str(exc)
 
 
 async def get_supabase() -> AsyncClient:
@@ -48,12 +107,63 @@ async def close_supabase() -> None:
 # ── Convenience helpers ─────────────────────────────────────
 # Thin wrappers so callers don't need to import the table builder API.
 
+_RETRY_MAX = 3
+_RETRY_BASE = 0.2  # 200ms base for exponential backoff
+
+
+async def _retry_on_deadlock(label: str, coro_factory):
+    """Execute *coro_factory()* with retry-on-deadlock and circuit breaker.
+
+    *coro_factory* is a zero-arg callable that returns a fresh awaitable
+    each time (since a consumed coroutine can't be re-awaited).
+    """
+    if _is_circuit_open():
+        log.debug("Supabase circuit open — skipping %s", label)
+        return
+
+    for attempt in range(1, _RETRY_MAX + 1):
+        try:
+            await coro_factory()
+            _record_success()
+            return
+        except Exception as exc:
+            if _is_server_error(exc):
+                _record_5xx()
+                log.warning("Supabase 5xx during %s: %s", label, _friendly_error(exc))
+                return  # don't retry on server outage
+            if _is_deadlock(exc) and attempt < _RETRY_MAX:
+                wait = _RETRY_BASE * (2 ** (attempt - 1)) + random.uniform(0, 0.1)
+                log.info("Deadlock on %s (attempt %d/%d) — retrying in %.2fs",
+                         label, attempt, _RETRY_MAX, wait)
+                await asyncio.sleep(wait)
+                continue
+            raise  # non-retryable or final attempt
+
+
+def _friendly_error(exc: Exception) -> str:
+    """Return a concise error string, stripping HTML from 521 responses."""
+    s = str(exc)
+    if len(s) > 200 or "<html" in s.lower():
+        if isinstance(exc, APIError) and exc.code:
+            return f"HTTP {exc.code}: {exc.message or 'server error'}"
+        return s[:120] + "… (truncated)"
+    return s
+
+
 async def upsert_rows(table: str, rows: list[dict[str, Any]]) -> None:
-    """Bulk upsert rows into a Supabase table (on conflict = PK)."""
+    """Bulk upsert rows into a Supabase table (on conflict = PK).
+
+    Retries on Postgres deadlock (40P01) up to 3 times.
+    Respects the circuit breaker for 5xx outages.
+    """
     if not rows:
         return
-    sb = await get_supabase()
-    await sb.table(table).upsert(rows).execute()
+
+    async def _do():
+        sb = await get_supabase()
+        await sb.table(table).upsert(rows).execute()
+
+    await _retry_on_deadlock(f"upsert:{table}({len(rows)} rows)", _do)
 
 
 async def fetch_changed(
@@ -89,7 +199,7 @@ async def get_cached_summary(event_key: str) -> Optional[dict[str, Any]]:
             .maybe_single()
             .execute()
         )
-        return result.data if result.data else None
+        return result.data if result and result.data else None
     except Exception as exc:
         log.warning("Supabase summary cache read failed for %s: %s", event_key, exc)
         return None
@@ -120,11 +230,20 @@ async def merge_event_teams(rows: list[dict[str, Any]]) -> None:
 
     Each row should have: ``{event_key, team_key, data: {...fields to merge...}}``.
     Uses the ``merge_event_teams_batch`` Postgres function from migration 05.
+
+    Serialised via an asyncio.Lock to prevent deadlocks when multiple
+    workers merge overlapping team sets concurrently.  Retries on 40P01
+    if a deadlock still occurs (e.g. from external concurrent writes).
     """
     if not rows:
         return
-    sb = await get_supabase()
-    await sb.rpc("merge_event_teams_batch", {"p_rows": rows}).execute()
+
+    async def _do():
+        sb = await get_supabase()
+        await sb.rpc("merge_event_teams_batch", {"p_rows": rows}).execute()
+
+    async with _merge_lock:
+        await _retry_on_deadlock(f"merge_event_teams({len(rows)} rows)", _do)
 
 
 # ── Supabase-first read helpers ─────────────────────────────

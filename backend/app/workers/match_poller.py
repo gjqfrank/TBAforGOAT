@@ -246,14 +246,15 @@ async def run_match_poller() -> None:
                     return_exceptions=True,
                 )
 
-                # Poll rankings less frequently
+                # Poll rankings less frequently (serialised to avoid deadlocks)
                 now = time.time()
                 if now - _last_rankings_poll >= RANKINGS_INTERVAL:
                     _last_rankings_poll = now
-                    await asyncio.gather(
-                        *[_poll_rankings(ek) for ek in events],
-                        return_exceptions=True,
-                    )
+                    for ek in events:
+                        try:
+                            await _poll_rankings(ek)
+                        except Exception as e:
+                            log.warning("Rankings poll failed for %s: %s", ek, e)
         except Exception as e:
             log.error("Match poller sweep error: %s", e)
 

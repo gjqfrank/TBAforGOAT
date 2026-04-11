@@ -370,16 +370,26 @@ async def run_ftc_event_sync(year: int | None = None) -> None:
             else:
                 log.debug("No active FTC events found")
 
-            # 2) For ongoing events, sync teams, stats, rankings, alliances
-            tasks: list = []
+            # 2) For ongoing events, sync teams, alliances first (upsert-only),
+            #    then stats + rankings (merge-heavy, serialised by _merge_lock)
+            seed_tasks: list = []
             for ek in ongoing:
-                tasks.append(_sync_ftc_teams(ek))
-                tasks.append(_sync_ftc_stats(ek))
-                tasks.append(_sync_ftc_rankings(ek))
-                tasks.append(_sync_ftc_alliances(ek))
+                seed_tasks.append(_sync_ftc_teams(ek))
+                seed_tasks.append(_sync_ftc_alliances(ek))
 
-            if tasks:
-                await asyncio.gather(*tasks, return_exceptions=True)
+            if seed_tasks:
+                await asyncio.gather(*seed_tasks, return_exceptions=True)
+
+            # Merge-heavy stats + rankings — one event at a time
+            for ek in ongoing:
+                try:
+                    await _sync_ftc_stats(ek)
+                except Exception as e:
+                    log.warning("FTC stats sync failed for %s: %s", ek, e)
+                try:
+                    await _sync_ftc_rankings(ek)
+                except Exception as e:
+                    log.warning("FTC rankings sync failed for %s: %s", ek, e)
 
         except Exception as e:
             log.error("FTC event sync sweep error: %s", e)

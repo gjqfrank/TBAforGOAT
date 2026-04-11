@@ -1500,14 +1500,14 @@ function loading(on) {
 }
 
 // ── FTC Avatar Map (from FIRST FTC Scoring Server CSS, proxied via backend) ──
-const _FTC_AVATAR_CSS_URL = '/api/ftc/events/avatar-css/2026';
+const _FTC_AVATAR_CSS_URL = () => `/api/ftc/events/avatar-css/${currentEventYear || new Date().getFullYear()}`;
 const _FTC_AVATAR_BASE = 'https://ftc-scoring.firstinspires.org';
 let _ftcAvatarMap = null;  // Map<teamNumber, fullUrl> — null = not loaded yet
 
 async function loadFtcAvatarMap() {
     if (_ftcAvatarMap) return _ftcAvatarMap;
     try {
-        const resp = await fetch(_FTC_AVATAR_CSS_URL);
+        const resp = await fetch(_FTC_AVATAR_CSS_URL());
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const css = await resp.text();
         const map = new Map();
