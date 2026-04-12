@@ -851,6 +851,23 @@ If the channel status becomes `.closed` or errors out:
 
 ## 7. View Implementation Guide (Tab by Tab)
 
+### Toolbar Layout (both CockpitLayout + CompactLayout)
+
+The top-right toolbar must contain two items in this order:
+1. `ConnectionStatusBadge()` — green/red dot
+2. `AccountMenuButton()` — person icon or initials circle (see §8a)
+
+```swift
+.toolbar {
+    ToolbarItem(placement: .topBarTrailing) {
+        HStack(spacing: 12) {
+            ConnectionStatusBadge()
+            AccountMenuButton()
+        }
+    }
+}
+```
+
 ### 7a. EventSidebarView (iPad sidebar / Event Picker)
 
 **Data**: Call `APIService.shared.fetchSeasonEvents(year: currentYear)` on appear.
@@ -995,43 +1012,505 @@ This creates a local `CachedNote` with `pendingSync = true`, inserts into `store
 
 ---
 
-## 8. Authentication Flow (Sign In)
+## 8. Account Panel & Authentication
 
-Use `supabase-swift` Auth module:
+The account panel is the ONLY entry point for sign-in, account requests, and app settings. It is a slide-over drawer triggered from a toolbar icon in the top-right corner.
+
+### 8a. Toolbar Icon — `AccountMenuButton`
+
+Add this to the `.toolbar` in **both** `CockpitLayout` and `CompactLayout`:
 
 ```swift
-// Step 1: Send OTP
-try await supabase.auth.signInWithOTP(email: "caster@example.com")
-// User receives 6-digit code via email
-
-// Step 2: Verify
-try await supabase.auth.verifyOTP(
-    email: "caster@example.com",
-    token: "123456",
-    type: .email
-)
-// Session is now stored automatically by supabase-swift
-
-// Step 3: Get current session
-let session = try await supabase.auth.session
-let jwt = session.accessToken
-// Use this JWT in Authorization header for note writes
-
-// Step 4: Check auth state
-let user = try await supabase.auth.user()
-// user.email → display in UI
-
-// Step 5: Sign out
-try await supabase.auth.signOut()
+ToolbarItem(placement: .topBarTrailing) {
+    AccountMenuButton()
+}
 ```
 
-**UI**: Create `AuthView.swift`:
-- If not authenticated: show email input + "Send Code" button
-- After OTP sent: show 6-digit code input + "Verify" button
-- If authenticated: show user email + "Sign Out" button
-- Display auth state in settings/profile area
+```swift
+struct AccountMenuButton: View {
+    @Environment(BroadcastStore.self) private var store
+    @State private var showPanel = false
 
-**Why it matters**: Anonymous users can read everything. Only authenticated users can create notes. The auth state should be visible but not blocking — the app works fully in read-only mode without signing in.
+    var body: some View {
+        Button {
+            showPanel = true
+        } label: {
+            if let user = store.currentUser {
+                // Signed in — show initials circle
+                Text(initials(for: user))
+                    .font(.caption.bold())
+                    .foregroundStyle(.white)
+                    .frame(width: 30, height: 30)
+                    .background(Circle().fill(.blue))
+            } else {
+                // Guest — show person icon
+                Image(systemName: "person.crop.circle")
+                    .font(.title3)
+            }
+        }
+        .sheet(isPresented: $showPanel) {
+            AccountPanelView()
+                .environment(store)
+        }
+    }
+
+    private func initials(for user: AppUser) -> String {
+        if let name = user.displayName, !name.isEmpty {
+            let parts = name.split(separator: " ")
+            if parts.count >= 2 {
+                return "\(parts[0].prefix(1))\(parts[parts.count - 1].prefix(1))".uppercased()
+            }
+            return String(name.prefix(1)).uppercased()
+        }
+        return String(user.email.prefix(1)).uppercased()
+    }
+}
+```
+
+### 8b. `AppUser` Model
+
+Add to `Models.swift`:
+
+```swift
+struct AppUser: Codable {
+    let id: String
+    let email: String
+    var displayName: String?   // from user_metadata.name
+    let role: String           // "authenticated"
+}
+```
+
+Add to `BroadcastStore`:
+
+```swift
+@Observable class BroadcastStore {
+    // ... existing properties ...
+    var currentUser: AppUser? = nil          // nil = guest
+    var authState: AuthState = .signedOut    // drives panel UI
+}
+
+enum AuthState {
+    case signedOut
+    case otpSent(email: String)
+    case signedIn
+}
+```
+
+### 8c. `AccountPanelView` — The Drawer
+
+Create `Sources/Views/AccountPanelView.swift`. This is preseted as a `.sheet`.
+
+```swift
+struct AccountPanelView: View {
+    @Environment(BroadcastStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                // ── Content area ──
+                ScrollView {
+                    VStack(spacing: 24) {
+                        if let user = store.currentUser {
+                            signedInCard(user)
+                        } else {
+                            signInSection
+                            requestAccountSection
+                        }
+
+                        settingsSection
+                    }
+                    .padding()
+                }
+
+                // ── Footer ──
+                panelFooter
+            }
+            .navigationTitle("Account")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { dismiss() } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                            .font(.title3)
+                    }
+                }
+            }
+        }
+    }
+}
+```
+
+### 8d. Signed-In User Card
+
+When `store.currentUser != nil`, show a card with initials avatar, name, and email:
+
+```swift
+@ViewBuilder
+private func signedInCard(_ user: AppUser) -> some View {
+    VStack(spacing: 16) {
+        // Initials circle
+        Text(initials(for: user))
+            .font(.title.bold())
+            .foregroundStyle(.white)
+            .frame(width: 64, height: 64)
+            .background(Circle().fill(.blue.gradient))
+
+        // Name + email
+        VStack(spacing: 4) {
+            if let name = user.displayName, !name.isEmpty {
+                Text(name)
+                    .font(.headline)
+            }
+            Text(user.email)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+
+        // Sign out button
+        Button("Sign Out", role: .destructive) {
+            Task { await signOut() }
+        }
+        .buttonStyle(.bordered)
+    }
+    .frame(maxWidth: .infinity)
+    .padding()
+    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+}
+```
+
+### 8e. Sign In Section (Guest State)
+
+When `store.currentUser == nil`, show the OTP flow:
+
+```swift
+@State private var email = ""
+@State private var otpCode = ""
+@State private var isLoading = false
+@State private var errorMessage: String?
+@State private var otpSent = false
+
+@ViewBuilder
+private var signInSection: some View {
+    VStack(alignment: .leading, spacing: 12) {
+        Label("Sign In", systemImage: "person.badge.key")
+            .font(.headline)
+
+        if !otpSent {
+            // Step 1: Email input
+            TextField("Email address", text: $email)
+                .textContentType(.emailAddress)
+                .keyboardType(.emailAddress)
+                .autocapitalization(.none)
+                .textFieldStyle(.roundedBorder)
+
+            Button {
+                Task { await sendOtp() }
+            } label: {
+                HStack {
+                    if isLoading { ProgressView().tint(.white) }
+                    Text("Send Code")
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(email.isEmpty || isLoading)
+        } else {
+            // Step 2: OTP verification
+            Text("Code sent to \(email)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            TextField("6-digit code", text: $otpCode)
+                .textContentType(.oneTimeCode)
+                .keyboardType(.numberPad)
+                .textFieldStyle(.roundedBorder)
+
+            Button {
+                Task { await verifyOtp() }
+            } label: {
+                HStack {
+                    if isLoading { ProgressView().tint(.white) }
+                    Text("Verify")
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(otpCode.count < 6 || isLoading)
+
+            Button("Use a different email") {
+                otpSent = false
+                otpCode = ""
+            }
+            .font(.caption)
+        }
+
+        if let error = errorMessage {
+            Text(error)
+                .font(.caption)
+                .foregroundStyle(.red)
+        }
+    }
+    .padding()
+    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+}
+```
+
+### 8f. Request Account Section
+
+Below sign-in, show an expand-able "Request Access" card for new users:
+
+```swift
+@State private var reqName = ""
+@State private var reqEmail = ""
+@State private var reqRole = "caster"
+@State private var reqEvent = ""
+@State private var reqSubmitted = false
+
+@ViewBuilder
+private var requestAccountSection: some View {
+    DisclosureGroup {
+        VStack(alignment: .leading, spacing: 10) {
+            TextField("Full name", text: $reqName)
+                .textContentType(.name)
+                .textFieldStyle(.roundedBorder)
+
+            TextField("Email", text: $reqEmail)
+                .textContentType(.emailAddress)
+                .keyboardType(.emailAddress)
+                .autocapitalization(.none)
+                .textFieldStyle(.roundedBorder)
+
+            Picker("Role", selection: $reqRole) {
+                Text("Caster").tag("caster")
+                Text("Volunteer").tag("volunteer")
+            }
+            .pickerStyle(.segmented)
+
+            if reqRole == "volunteer" {
+                TextField("Event name", text: $reqEvent)
+                    .textFieldStyle(.roundedBorder)
+            }
+
+            Button {
+                Task { await submitAccountRequest() }
+            } label: {
+                Text(reqSubmitted ? "Request Sent ✓" : "Submit Request")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(reqSubmitted ? .green : .blue)
+            .disabled(reqName.isEmpty || reqEmail.isEmpty || reqSubmitted)
+        }
+    } label: {
+        Label("Request Access", systemImage: "person.badge.plus")
+            .font(.headline)
+    }
+    .padding()
+    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+}
+```
+
+### 8g. App Settings Section
+
+```swift
+@ViewBuilder
+private var settingsSection: some View {
+    VStack(alignment: .leading, spacing: 12) {
+        Label("App Settings", systemImage: "gearshape")
+            .font(.headline)
+
+        // Add settings controls here as needed.
+        // Placeholder examples:
+        NavigationLink {
+            Text("Settings detail placeholder")
+        } label: {
+            HStack {
+                Text("Preferences")
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+    .padding()
+    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+}
+```
+
+### 8h. Panel Footer
+
+Pinned to the bottom of the drawer, always visible:
+
+```swift
+@ViewBuilder
+private var panelFooter: some View {
+    VStack(spacing: 4) {
+        Divider()
+        Text("Caster's Tool 2.0 Swift Dev Build")
+            .font(.caption2.bold())
+            .foregroundStyle(.secondary)
+        Text("Contact Kleium through Discord for any bug reports and issues.")
+            .font(.caption2)
+            .foregroundStyle(.tertiary)
+            .multilineTextAlignment(.center)
+    }
+    .padding(.vertical, 10)
+    .padding(.horizontal)
+}
+```
+
+### 8i. Auth API Implementation
+
+All auth methods go in `AccountPanelView` extension or in a dedicated `AuthManager` actor. Here are the exact Supabase calls:
+
+**Send OTP** — uses `supabase-swift` Auth SDK:
+```swift
+private func sendOtp() async {
+    isLoading = true
+    errorMessage = nil
+    do {
+        try await supabase.auth.signInWithOTP(email: email)
+        otpSent = true
+    } catch {
+        errorMessage = error.localizedDescription
+    }
+    isLoading = false
+}
+```
+
+**Verify OTP**:
+```swift
+private func verifyOtp() async {
+    isLoading = true
+    errorMessage = nil
+    do {
+        let session = try await supabase.auth.verifyOTP(
+            email: email,
+            token: otpCode,
+            type: .email
+        )
+        // Build AppUser from session
+        let user = session.user
+        store.currentUser = AppUser(
+            id: user.id.uuidString,
+            email: user.email ?? email,
+            displayName: user.userMetadata["name"]?.stringValue,
+            role: user.role ?? "authenticated"
+        )
+        store.authState = .signedIn
+
+        // Backfill name from account_requests if missing
+        if store.currentUser?.displayName == nil {
+            await backfillName(accessToken: session.accessToken)
+        }
+
+        dismiss()
+    } catch {
+        errorMessage = error.localizedDescription
+    }
+    isLoading = false
+}
+```
+
+**Backfill display name** (mirrors web app behavior):
+```swift
+private func backfillName(accessToken: String) async {
+    guard let email = store.currentUser?.email else { return }
+    let url = URL(string: "\(SUPABASE_URL)/rest/v1/account_requests?select=name&email=eq.\(email)&limit=1")!
+    var req = URLRequest(url: url)
+    req.setValue(SUPABASE_ANON, forHTTPHeaderField: "apikey")
+    req.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+
+    guard let (data, _) = try? await URLSession.shared.data(for: req),
+          let rows = try? JSONDecoder().decode([[String: String]].self, from: data),
+          let name = rows.first?["name"], !name.isEmpty else { return }
+
+    // Patch user_metadata
+    var patchReq = URLRequest(url: URL(string: "\(SUPABASE_URL)/auth/v1/user")!)
+    patchReq.httpMethod = "PUT"
+    patchReq.setValue(SUPABASE_ANON, forHTTPHeaderField: "apikey")
+    patchReq.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+    patchReq.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    patchReq.httpBody = try? JSONEncoder().encode(["data": ["name": name]])
+    _ = try? await URLSession.shared.data(for: patchReq)
+
+    store.currentUser?.displayName = name
+}
+```
+
+**Submit account request** (anonymous insert into `account_requests` table):
+```swift
+private func submitAccountRequest() async {
+    var payload: [String: String] = [
+        "name": reqName,
+        "email": reqEmail,
+        "role": reqRole
+    ]
+    if reqRole == "volunteer" && !reqEvent.isEmpty {
+        payload["event_name"] = reqEvent
+    }
+
+    let url = URL(string: "\(SUPABASE_URL)/rest/v1/account_requests")!
+    var req = URLRequest(url: url)
+    req.httpMethod = "POST"
+    req.setValue(SUPABASE_ANON, forHTTPHeaderField: "apikey")
+    req.setValue("Bearer \(SUPABASE_ANON)", forHTTPHeaderField: "Authorization")
+    req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    req.setValue("return=minimal", forHTTPHeaderField: "Prefer")
+    req.httpBody = try? JSONEncoder().encode(payload)
+
+    if let (_, resp) = try? await URLSession.shared.data(for: req),
+       let http = resp as? HTTPURLResponse, http.statusCode == 201 {
+        reqSubmitted = true
+    }
+}
+```
+
+**Sign out**:
+```swift
+private func signOut() async {
+    try? await supabase.auth.signOut()
+    store.currentUser = nil
+    store.authState = .signedOut
+}
+```
+
+**Silent session restore on app launch** — call this in `BroadcastStore.bootstrap()`:
+```swift
+func restoreSession() async {
+    guard let session = try? await supabase.auth.session else { return }
+    let user = session.user
+    currentUser = AppUser(
+        id: user.id.uuidString,
+        email: user.email ?? "",
+        displayName: user.userMetadata["name"]?.stringValue,
+        role: user.role ?? "authenticated"
+    )
+    authState = .signedIn
+}
+```
+
+### 8j. `account_requests` Table Schema
+
+This Supabase table accepts anonymous inserts (RLS allows unauthenticated POST):
+
+```
+account_requests
+├── id          uuid     (PK, auto)
+├── name        text     (required)
+├── email       text     (required)
+├── role        text     (required — "caster" or "volunteer")
+├── event_name  text     (optional — only for volunteers)
+├── created_at  timestamptz (auto)
+```
+
+### 8k. Why Auth Matters
+
+- **Guest mode**: All GET endpoints work without auth. Rankings, matches, breakdowns, team lookups — everything reads fine without a JWT.
+- **Authenticated mode**: Required only for **creating notes** (Supabase RLS enforces `INSERT` on `caster_notes` requires `auth.role() = 'authenticated'`). The `Authorization: Bearer {jwt}` header must be present on note POSTs.
+- The app should NEVER block on auth. Users can browse everything immediately. Auth is only prompted when they try to write a note or choose to sign in from the account panel.
 
 ---
 
