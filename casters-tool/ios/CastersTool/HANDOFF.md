@@ -883,26 +883,1416 @@ The top-right toolbar must contain two items in this order:
 **Auto-refresh**: Every 15 seconds, call `fetchFastRankings(eventKey:)` and merge updated ranks/records into `store.rankings`. Only update changed fields to avoid UI flicker.
 **Action**: Tap a team row → set `store.selectedTeam`, on iPad this populates the detail column with `TeamDetailView`.
 
-### 7c. PlayByPlayView
+### 7c. PlayByPlayView — COMPLETE IMPLEMENTATION GUIDE
 
-**Data source**: `store.matches` (populated by Phase 2).
-**Display**: Match selector (Picker or segmented control) showing all matches labeled "Qual 1", "Qual 2", etc. Auto-advances to the latest scored match.
-**For each match, render**:
-- Red Alliance card: 3 team rows with number, name, OPR, EPA. Background: red-tinted.
-- Blue Alliance card: same, blue-tinted.
-- Scores: large score display for each alliance.
-- Winning alliance highlighted.
-- "Prior Connections on the Field" section (see below).
+This is the most complex view in the app. It shows the current match with full alliance cards, team stats, prior connections, AI storylines, predictions, awards, sponsors, and comparison tools. **Read every subsection — skip nothing.**
 
-**Prior Connections**: After rendering a match, extract the 6 team numbers and call:
+---
+
+#### 7c.1 Responsive Layout Strategy
+
+PbP is **orientation-aware** and **size-class-aware**:
+
+| Platform | Orientation | Stat Cards | Sponsors/Tags | Alliance Layout |
+|----------|------------|------------|---------------|-----------------|
+| iPad | Any | ✅ Full stat row | ✅ All | Side-by-side (Red left, Blue right) |
+| iPhone | **Portrait** | ❌ Hidden | ✅ Sponsors, badges, tags only | **Stacked** (Red on top, Blue below) |
+| iPhone | **Landscape** | ✅ Visible | ✅ All | Side-by-side |
+
+Detect with:
+```swift
+@Environment(\.horizontalSizeClass) private var hSize
+@Environment(\.verticalSizeClass) private var vSize
+
+var isCompact: Bool { hSize == .compact && vSize == .regular } // iPhone portrait
 ```
-GET /api/events/{eventKey}/summary/connections?teams=254,1678,971,118,148,2056
+
+Use `ViewThatFits` or `GeometryReader` to switch layouts:
+```swift
+ViewThatFits(in: .horizontal) {
+    HStack(spacing: 12) { redAlliance; blueAlliance }    // landscape/iPad
+    VStack(spacing: 12) { redAlliance; blueAlliance }     // portrait fallback
+}
 ```
-Cache the result by team-set so you don't re-fetch for the same combination. Display connections as pills: "254 & 1678: Partners at 2025casj (Winners)" etc.
 
-**Auto-refresh**: Every 15 seconds, re-fetch matches. If the currently displayed match's score changed, update it. Auto-advance the index to the latest scored match.
+---
 
-**Compare button**: Selecting two teams from opposite alliances opens the H2H view.
+#### 7c.2 Data Sources
+
+```swift
+// Primary data — from store (Phase 2 load)
+store.matches         // [CachedMatch] — all qual + playoff matches
+store.rankings        // [CachedTeam] — for enriching team stats
+
+// Lazy-loaded per match (on-demand)
+connections           // [Connection] — prior playoff partnerships/rivalries
+storyline             // String? — AI-generated match narrative
+predictions           // MatchPrediction? — Statbotics win probability
+awards                // [TeamNumber: AwardsSummary] — blue banners + recent awards
+gatoolSponsors        // [TeamNumber: String] — community-sourced sponsor strings
+playoffFirsts         // [TeamNumber: PlayoffFirst] — "First Playoffs" / "First Finals" badges
+```
+
+---
+
+#### 7c.3 Match Selector & Navigation
+
+**Top bar** — always visible, contains:
+
+```swift
+struct PbPTopBar: View {
+    @Binding var matchIndex: Int
+    let matches: [CachedMatch]
+    let isLive: Bool
+
+    var body: some View {
+        HStack {
+            Button { if matchIndex > 0 { matchIndex -= 1 } } label: {
+                Label("Previous", systemImage: "chevron.left")
+            }
+            .disabled(matchIndex == 0)
+
+            VStack(spacing: 2) {
+                Text(matchLabel(matches[matchIndex]))
+                    .font(.headline)
+
+                HStack(spacing: 6) {
+                    // Match picker (dropdown)
+                    Picker("Match", selection: $matchIndex) {
+                        ForEach(Array(matches.enumerated()), id: \.offset) { i, m in
+                            Text(matchLabel(m)).tag(i)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .labelsHidden()
+
+                    if isLive {
+                        Text("● LIVE")
+                            .font(.caption2.bold())
+                            .foregroundStyle(.red)
+                    }
+                }
+            }
+
+            Button { if matchIndex < matches.count - 1 { matchIndex += 1 } } label: {
+                Label("Next", systemImage: "chevron.right")
+            }
+            .disabled(matchIndex >= matches.count - 1)
+        }
+    }
+}
+```
+
+**Match label logic**:
+```swift
+func matchLabel(_ m: CachedMatch) -> String {
+    switch m.compLevel {
+    case "qm": "Qual \(m.matchNumber)"
+    case "sf": "Semifinal \(m.setNumber)-\(m.matchNumber)"
+    case "f":  "Final \(m.matchNumber)"
+    default:   "Match \(m.matchNumber)"
+    }
+}
+```
+
+**Swipe navigation**: `.gesture(DragGesture().onEnded { ... })` — left swipe = next, right swipe = prev (threshold: 60pt).
+
+**Auto-advance**: When new match scores arrive (via Realtime or polling), if the user is viewing the latest scored match, auto-advance to the next match.
+
+---
+
+#### 7c.4 Alliance Card
+
+Each alliance (Red/Blue) is a card containing the score header + 3 team rows.
+
+**Red vs Blue mirroring**: Red shows title on leading edge, score trailing. Blue is mirrored — score on leading, title trailing. This creates visual symmetry.
+
+```swift
+struct AllianceCard: View {
+    let color: AllianceColor       // .red or .blue
+    let teams: [EnrichedTeam]      // 3 teams, enriched with stats
+    let score: Int?
+    let isWinner: Bool
+    let isCompact: Bool            // iPhone portrait mode
+    let playoffPick: [Int: String]? // team_number → "C"/"P1"/"P2"/"BU" (playoffs only)
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header: Alliance label + Score
+            HStack {
+                if color == .red {
+                    allianceLabel
+                    Spacer()
+                    scoreView
+                } else {
+                    scoreView
+                    Spacer()
+                    allianceLabel
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(color == .red ? Color.red.opacity(0.15) : Color.blue.opacity(0.15))
+
+            // Team rows
+            ForEach(teams) { team in
+                PbPTeamRow(
+                    team: team,
+                    allianceColor: color,
+                    showStats: !isCompact, // hide stat cards in iPhone portrait
+                    pickRole: playoffPick?[team.teamNumber]
+                )
+                if team.id != teams.last?.id { Divider() }
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(isWinner ? (color == .red ? Color.red : Color.blue) : .clear, lineWidth: 3)
+        )
+    }
+
+    @ViewBuilder var allianceLabel: some View {
+        Text(color == .red ? "Red Alliance" : "Blue Alliance")
+            .font(.subheadline.bold())
+            .foregroundStyle(color == .red ? .red : .blue)
+    }
+
+    @ViewBuilder var scoreView: some View {
+        VStack(spacing: 2) {
+            if isWinner {
+                Text("WINNER")
+                    .font(.caption2.bold())
+                    .foregroundStyle(color == .red ? .red : .blue)
+            }
+            Text(score.map(String.init) ?? "–")
+                .font(.title.bold().monospacedDigit())
+                .foregroundStyle(color == .red ? .red : .blue)
+        }
+    }
+}
+```
+
+---
+
+#### 7c.5 Team Row — Full Anatomy
+
+Each team row is the richest element in the app. It contains identity, stats, badges, awards, and sponsors.
+
+```swift
+struct PbPTeamRow: View {
+    let team: EnrichedTeam
+    let allianceColor: AllianceColor
+    let showStats: Bool             // false in iPhone portrait
+    let pickRole: String?           // "C", "P1", "P2", "BU" for playoffs
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            // ── Row 1: Team number + Identity ──
+            HStack(alignment: .top) {
+                // Team number pill (tappable — opens Spotlight)
+                teamNumberBadge
+
+                VStack(alignment: .leading, spacing: 2) {
+                    // Name + playoff-first badges
+                    HStack {
+                        Text(team.nickname)
+                            .font(.subheadline.bold())
+                            .lineLimit(1)
+                        if let firsts = team.playoffFirsts {
+                            PlayoffFirstBadge(firsts: firsts)
+                        }
+                    }
+
+                    // Location
+                    Text(team.locationString)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+                Spacer()
+
+                // Rank badge (always visible, even in compact)
+                if let rank = team.rank {
+                    RankBadge(rank: rank, isTop8: rank <= 8)
+                }
+            }
+
+            // ── Row 2: Stat cards (HIDDEN in iPhone portrait) ──
+            if showStats {
+                statCardsRow
+            }
+
+            // ── Row 3: Awards slot (always visible) ──
+            if let awards = team.awardsSummary {
+                AwardsRow(awards: awards)
+            }
+
+            // ── Row 4: Sponsors (always visible) ──
+            if let sponsors = team.sponsorsText {
+                SponsorsRow(text: sponsors)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(allianceColor == .red ? Color.red.opacity(0.05) : Color.blue.opacity(0.05))
+    }
+
+    @ViewBuilder var teamNumberBadge: some View {
+        Button {
+            // Double-tap equivalent: open Team Spotlight
+            // Set store.selectedTeam or navigate to TeamDetailView
+        } label: {
+            HStack(spacing: 3) {
+                Text("\(team.teamNumber)")
+                    .font(.headline.bold().monospacedDigit())
+                if let pick = pickRole {
+                    Text(pick)
+                        .font(.caption2.bold())
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(.quaternary, in: Capsule())
+                }
+            }
+        }
+        .buttonStyle(.plain) // keep it interactive but unstyled
+    }
+
+    @ViewBuilder var statCardsRow: some View {
+        HStack(spacing: 8) {
+            StatCard(label: "Record", value: "\(team.wins)-\(team.losses)-\(team.ties)",
+                     streak: team.streak)
+            StatCard(label: "OPR", value: team.opr.map { String(format: "%.1f", $0) } ?? "–",
+                     tier: team.oprTier)
+            StatCard(label: "EPA", value: team.epa.map { String(format: "%.1f", $0) } ?? "–",
+                     tier: team.epaTier,
+                     delta: team.delta) // Only for FRC
+            StatCard(label: "Avg RP", value: team.avgRP.map { String(format: "%.2f", $0) } ?? "–")
+        }
+    }
+}
+```
+
+---
+
+#### 7c.6 `EnrichedTeam` Model
+
+Create this as a **computed view-model** — NOT a stored model. Build it on-the-fly from `CachedMatch` + `store.rankings`:
+
+```swift
+struct EnrichedTeam: Identifiable {
+    var id: String { teamKey }
+    let teamKey: String
+    let teamNumber: Int
+    let nickname: String
+    let city: String?
+    let stateProv: String?
+    let country: String?
+    let rookieYear: Int?
+
+    // Stats from rankings
+    let rank: Int?
+    let wins: Int
+    let losses: Int
+    let ties: Int
+    let opr: Double?
+    let epa: Double?
+    let avgRP: Double?
+
+    // Computed enrichments
+    let oprTier: StatTier       // .top25, .aboveAvg, .normal
+    let epaTier: StatTier
+    let delta: Double?          // (OPR - EPA) / avgOPR × 100, nil if < 15%
+    let streak: Streak?         // .winning(5) or .losing(3)
+    let isForeign: Bool         // country != event country
+    let isRookie: Bool          // rookieYear >= currentYear
+
+    // Async-loaded (optional, nil until fetched)
+    var awardsSummary: AwardsSummary?
+    var sponsorsText: String?
+    var playoffFirsts: PlayoffFirstData?
+
+    var locationString: String {
+        [city, stateProv, country].compactMap { $0 }.joined(separator: ", ")
+    }
+}
+
+enum StatTier { case top25, aboveAvg, normal }
+
+enum Streak {
+    case winning(Int)
+    case losing(Int)
+}
+```
+
+**Enrichment function** — call once per match render:
+
+```swift
+func enrichTeams(
+    for match: CachedMatch,
+    from rankings: [CachedTeam],
+    allMatches: [CachedMatch]
+) -> (red: [EnrichedTeam], blue: [EnrichedTeam]) {
+    let allOPR = rankings.compactMap(\.oprTotalPoints)
+    let meanOPR = allOPR.isEmpty ? 0 : allOPR.reduce(0, +) / Double(allOPR.count)
+    let sortedOPR = allOPR.sorted()
+    let p75OPR = sortedOPR.isEmpty ? 0 : sortedOPR[sortedOPR.count * 3 / 4]
+
+    let allEPA = rankings.compactMap(\.epaTotal)
+    let meanEPA = allEPA.isEmpty ? 0 : allEPA.reduce(0, +) / Double(allEPA.count)
+    let sortedEPA = allEPA.sorted()
+    let p75EPA = sortedEPA.isEmpty ? 0 : sortedEPA[sortedEPA.count * 3 / 4]
+
+    func enrich(_ teamKey: String) -> EnrichedTeam {
+        let cached = rankings.first { $0.teamKey == teamKey }
+        let opr = cached?.oprTotalPoints
+        let epa = cached?.epaTotal
+
+        // Compute streak (walk backward through completed matches)
+        let streak = computeStreak(teamKey: teamKey, beforeMatch: match, allMatches: allMatches)
+
+        // Compute delta
+        var delta: Double? = nil
+        if let o = opr, let e = epa, meanOPR > 0 {
+            let d = (o - e) / meanOPR * 100
+            if abs(d) > 15 { delta = d }
+        }
+
+        return EnrichedTeam(
+            teamKey: teamKey,
+            teamNumber: cached?.teamNumber ?? Int(teamKey.replacingOccurrences(of: "frc", with: "")) ?? 0,
+            nickname: cached?.nickname ?? "Team \(teamKey)",
+            city: cached?.city,
+            stateProv: cached?.stateProv,
+            country: cached?.country,
+            rookieYear: cached?.rookieYear,
+            rank: cached?.rank,
+            wins: cached?.wins ?? 0,
+            losses: cached?.losses ?? 0,
+            ties: cached?.ties ?? 0,
+            opr: opr,
+            epa: epa,
+            avgRP: cached?.avgRP,
+            oprTier: tierFor(opr, mean: meanOPR, p75: p75OPR),
+            epaTier: tierFor(epa, mean: meanEPA, p75: p75EPA),
+            delta: delta,
+            streak: streak,
+            isForeign: false, // set from eventInfo.country comparison
+            isRookie: (cached?.rookieYear ?? 0) >= Calendar.current.component(.year, from: .now)
+        )
+    }
+
+    let red = match.redTeamKeys.map(enrich)
+    let blue = match.blueTeamKeys.map(enrich)
+    return (red, blue)
+}
+
+func tierFor(_ val: Double?, mean: Double, p75: Double) -> StatTier {
+    guard let v = val else { return .normal }
+    if v >= p75 { return .top25 }
+    if v >= mean { return .aboveAvg }
+    return .normal
+}
+```
+
+---
+
+#### 7c.7 Stat Card Sub-View
+
+```swift
+struct StatCard: View {
+    let label: String
+    let value: String
+    var tier: StatTier = .normal
+    var delta: Double? = nil
+    var streak: Streak? = nil
+
+    var body: some View {
+        VStack(spacing: 2) {
+            Text(label)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.callout.bold().monospacedDigit())
+                .foregroundStyle(tierColor)
+            // Streak badge (on Record card)
+            if let streak {
+                streakBadge(streak)
+            }
+            // Delta arrow (on EPA card)
+            if let d = delta {
+                HStack(spacing: 2) {
+                    Image(systemName: d > 0 ? "arrow.up.right" : "arrow.down.right")
+                        .font(.caption2)
+                    Text("\(Int(abs(d)))%")
+                        .font(.caption2)
+                }
+                .foregroundStyle(d > 0 ? .green : .orange)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 6)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    var tierColor: Color {
+        switch tier {
+        case .top25: .orange
+        case .aboveAvg: .green
+        case .normal: .primary
+        }
+    }
+
+    @ViewBuilder func streakBadge(_ s: Streak) -> some View {
+        switch s {
+        case .winning(let n):
+            Text("W\(n)")
+                .font(.caption2.bold())
+                .foregroundStyle(.white)
+                .padding(.horizontal, 5)
+                .padding(.vertical, 1)
+                .background(.green, in: Capsule())
+        case .losing(let n):
+            Text("L\(n)")
+                .font(.caption2.bold())
+                .foregroundStyle(.white)
+                .padding(.horizontal, 5)
+                .padding(.vertical, 1)
+                .background(.red, in: Capsule())
+        }
+    }
+}
+```
+
+---
+
+#### 7c.8 Prior Connections Overlay
+
+This is the "matchup history" feature. It shows which of the 6 on-field teams have played together/against each other in past playoffs.
+
+**API call** — fires after each match render:
+```swift
+// Extract 6 team numbers from the current match
+let teamNums = (match.redTeamKeys + match.blueTeamKeys)
+    .compactMap { Int($0.replacingOccurrences(of: "frc", with: "")) }
+let teamsParam = teamNums.map(String.init).joined(separator: ",")
+
+// GET /api/events/{eventKey}/summary/connections?teams=254,1678,971,118,148,2056&all_time=false
+let connections = try await APIService.shared.fetchConnections(
+    eventKey: eventKey,
+    allTime: connectionsAllTime,
+    teams: teamNums
+)
+```
+
+**Caching**: Cache by `Set(teamNums).sorted().description + allTime`. Same team combination → reuse.
+
+**Toggle**: "Past 3 Seasons" ↔ "All Time" — a segmented picker below the header:
+```swift
+@State private var connectionsAllTime = false
+
+Picker("Range", selection: $connectionsAllTime) {
+    Text("Past 3 Seasons").tag(false)
+    Text("All Time").tag(true)
+}
+.pickerStyle(.segmented)
+.onChange(of: connectionsAllTime) { _, _ in
+    Task { await loadConnections() }
+}
+```
+
+**Display**:
+```swift
+struct ConnectionsSection: View {
+    let connections: [Connection]
+    let redTeamKeys: Set<String>
+    let blueTeamKeys: Set<String>
+    @State private var isExpanded = true
+
+    var body: some View {
+        DisclosureGroup(isExpanded: $isExpanded) {
+            ForEach(sortedConnections, id: \.id) { conn in
+                ConnectionRow(
+                    conn: conn,
+                    category: category(for: conn)
+                )
+            }
+        } label: {
+            HStack {
+                Image(systemName: "arrow.triangle.2.circlepath")
+                Text("Prior Connections")
+                    .font(.subheadline.bold())
+                Text("\(connections.count)")
+                    .font(.caption.bold())
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(.quaternary, in: Capsule())
+            }
+        }
+    }
+
+    // Sort: red-red first, blue-blue second, cross-alliance last
+    var sortedConnections: [Connection] {
+        connections.sorted { a, b in
+            category(for: a).sortOrder < category(for: b).sortOrder
+        }
+    }
+
+    func category(for conn: Connection) -> ConnectionCategory {
+        let aRed = redTeamKeys.contains("frc\(conn.teamA)")
+        let bRed = redTeamKeys.contains("frc\(conn.teamB)")
+        if aRed && bRed { return .red }
+        if !aRed && !bRed { return .blue }
+        return .cross
+    }
+}
+
+enum ConnectionCategory: Int {
+    case red = 0, blue = 1, cross = 2
+    var sortOrder: Int { rawValue }
+    var tint: Color {
+        switch self {
+        case .red: .red
+        case .blue: .blue
+        case .cross: .purple
+        }
+    }
+}
+```
+
+**Connection row rendering** — each row shows team pair + event history:
+```swift
+struct ConnectionRow: View {
+    let conn: Connection
+    let category: ConnectionCategory
+    @State private var expanded = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            // Header: "254 & 1678"
+            HStack {
+                Text("\(conn.teamA) & \(conn.teamB)")
+                    .font(.subheadline.bold())
+                    .foregroundStyle(category.tint)
+                Spacer()
+                // Counts
+                if !conn.partneredAt.isEmpty {
+                    Label("\(conn.partneredAt.count)", systemImage: "handshake")
+                        .font(.caption2)
+                }
+                if !conn.opponentsAt.isEmpty {
+                    Label("\(conn.opponentsAt.count)", systemImage: "figure.fencing")
+                        .font(.caption2)
+                }
+            }
+
+            // Show top 2 inline, expand for more
+            let items = buildHighlights(conn)
+            ForEach(items.prefix(expanded ? items.count : 2), id: \.id) { item in
+                HStack(spacing: 4) {
+                    Image(systemName: item.isPartner ? "handshake" : "figure.fencing")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    Text(item.text)  // "Partners at Silicon Valley '25 (Finals) — Winner"
+                        .font(.caption)
+                    if let result = item.result {
+                        Text(result)
+                            .font(.caption2.bold())
+                            .foregroundStyle(result == "Winner" ? .green : .orange)
+                    }
+                }
+            }
+            if items.count > 2 {
+                Button(expanded ? "Show less" : "+\(items.count - 2) more") {
+                    withAnimation { expanded.toggle() }
+                }
+                .font(.caption2)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+}
+```
+
+**Connection Codable struct**:
+```swift
+struct Connection: Codable, Identifiable {
+    var id: String { "\(teamA)-\(teamB)" }
+    let teamA: Int
+    let teamAName: String
+    let teamB: Int
+    let teamBName: String
+    let partneredAt: [ConnectionEvent]
+    let opponentsAt: [ConnectionEvent]
+
+    enum CodingKeys: String, CodingKey {
+        case teamA = "team_a"
+        case teamAName = "team_a_name"
+        case teamB = "team_b"
+        case teamBName = "team_b_name"
+        case partneredAt = "partnered_at"
+        case opponentsAt = "opponents_at"
+    }
+}
+
+struct ConnectionEvent: Codable, Identifiable {
+    var id: String { "\(eventKey)-\(year)-\(stage)" }
+    let eventKey: String
+    let eventName: String
+    let year: Int
+    let stage: String        // "Finals", "Semi-Finals", "Quarters" etc.
+    let result: String?      // "winner", "finalist", or nil (opponents have no result)
+
+    enum CodingKeys: String, CodingKey {
+        case eventKey = "event_key"
+        case eventName = "event_name"
+        case year, stage, result
+    }
+}
+```
+
+---
+
+#### 7c.9 AI Storylines
+
+Storylines are Claude-generated broadcast narratives. Two modes: **match** (all 6 teams) and **team** (single team deep-dive).
+
+**Availability check** — call once on app launch:
+```swift
+// GET /api/storylines/status → { "available": true }
+let available = try await APIService.shared.checkStorylinesAvailable()
+```
+
+If unavailable (no API key configured), hide storyline buttons entirely.
+
+**Match storyline** — fires when viewing a match:
+```swift
+// POST /api/storylines/generate
+// Body: { "mode": "match", "event_key": "2026tuak", "match_key": "2026tuak_qm15" }
+// Response: { "storyline": "2-3 sentence text", "content": {"storyline": "..."}, "cached": true }
+let result = try await APIService.shared.generateStoryline(
+    mode: .match,
+    eventKey: eventKey,
+    matchKey: match.matchKey
+)
+```
+
+**Team storyline** — fires when tapping team number in PbP, or in Spotlight:
+```swift
+// POST /api/storylines/generate
+// Body: { "mode": "team", "event_key": "2026tuak", "team_number": 254 }
+let result = try await APIService.shared.generateStoryline(
+    mode: .team,
+    eventKey: eventKey,
+    teamNumber: 254
+)
+```
+
+**Streaming support** (optional, better UX):
+```swift
+// POST /api/storylines/generate/stream → SSE
+// Events: "start" → "token" (repeated) → "done"
+// For streaming, use URLSession bytes:
+func streamStoryline(...) -> AsyncStream<String> { ... }
+```
+
+**Display**: Show below the alliance cards as a collapsible card:
+```swift
+struct StorylineCard: View {
+    let text: String?
+    let isLoading: Bool
+    let onTapTeam: (Int) -> Void  // tap a team number within storyline
+
+    var body: some View {
+        if isLoading {
+            HStack {
+                ProgressView()
+                Text("Generating storyline…")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding()
+            .frame(maxWidth: .infinity)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+        } else if let text {
+            VStack(alignment: .leading, spacing: 6) {
+                Label("Match Storyline", systemImage: "sparkles")
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+                Text(text)
+                    .font(.subheadline)
+            }
+            .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+        }
+    }
+}
+```
+
+**Caching**: Cache storylines in-memory by `matchKey` (match mode) or `teamNumber+eventKey` (team mode). Storylines rarely change mid-event.
+
+**Storylines API struct**:
+```swift
+struct StorylineRequest: Codable {
+    let mode: String        // "match" or "team"
+    let eventKey: String
+    let matchKey: String?   // for match mode
+    let teamNumber: Int?    // for team mode
+
+    enum CodingKeys: String, CodingKey {
+        case mode
+        case eventKey = "event_key"
+        case matchKey = "match_key"
+        case teamNumber = "team_number"
+    }
+}
+
+struct StorylineResponse: Codable {
+    let storyline: String
+    let cached: Bool
+    let meta: StorylineMeta?
+}
+
+struct StorylineMeta: Codable {
+    let generatedAt: String?
+    let model: String?
+    let inputTokens: Int?
+    let outputTokens: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case generatedAt = "generated_at"
+        case model
+        case inputTokens = "input_tokens"
+        case outputTokens = "output_tokens"
+    }
+}
+```
+
+---
+
+#### 7c.10 Statbotics Predictions
+
+Predictions are included in the match data from `GET /api/matches/{event_key}/all`. Each match object may contain a `pred` field.
+
+**Response shape** (inside each match in `MatchesResponse`):
+```json
+{
+  "key": "2026tuak_qm15",
+  "pred": {
+    "red_win_prob": 0.62,
+    "red_score": 145,
+    "blue_score": 130
+  }
+}
+```
+
+**Display** — a probability bar below the score area:
+```swift
+struct PredictionBar: View {
+    let redWinProb: Double   // 0.0 – 1.0
+    let redScore: Int
+    let blueScore: Int
+
+    var body: some View {
+        VStack(spacing: 4) {
+            Text("Statbotics Win Prediction")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            Text("Predicted: \(redScore) · \(blueScore)")
+                .font(.caption.monospacedDigit())
+
+            // Probability bar
+            GeometryReader { geo in
+                HStack(spacing: 0) {
+                    // Red portion
+                    ZStack {
+                        Rectangle().fill(.red.opacity(redWinProb > 0.5 ? 0.6 : 0.3))
+                        if redWinProb >= 0.15 {
+                            Text("\(Int(redWinProb * 100))%")
+                                .font(.caption2.bold())
+                                .foregroundStyle(.white)
+                        }
+                    }
+                    .frame(width: geo.size.width * redWinProb)
+
+                    // Blue portion
+                    ZStack {
+                        Rectangle().fill(.blue.opacity(redWinProb < 0.5 ? 0.6 : 0.3))
+                        if (1 - redWinProb) >= 0.15 {
+                            Text("\(Int((1 - redWinProb) * 100))%")
+                                .font(.caption2.bold())
+                                .foregroundStyle(.white)
+                        }
+                    }
+                }
+            }
+            .frame(height: 24)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+        }
+        .padding()
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+    }
+}
+```
+
+Only render when `showPredictions == true` (user toggle) AND `match.pred != nil`.
+
+---
+
+#### 7c.11 Awards Overlay
+
+Shows blue banners + recent awards for each team on the field.
+
+**API call** — batch fetch for all 6 teams after match render:
+```swift
+// GET /api/teams/awards-summary?teams=254,1678,971,118,148,2056
+let summaries = try await APIService.shared.fetchAwardsSummary(teams: teamNumbers)
+```
+
+**Response shape**:
+```json
+{
+  "254": {
+    "blue_banner_count": 42,
+    "recent_awards": [
+      { "name": "Impact Award", "year": 2024, "event_name": "Houston" },
+      { "name": "Event Winner", "year": 2023, "event_name": "SVR" }
+    ]
+  }
+}
+```
+
+**Display** — inline within each team row:
+```swift
+struct AwardsRow: View {
+    let awards: AwardsSummary
+    @State private var showAll = false
+
+    var body: some View {
+        HStack(spacing: 6) {
+            // Blue banner count
+            if awards.blueBannerCount > 0 {
+                Label("\(awards.blueBannerCount)", systemImage: "flag.fill")
+                    .font(.caption2.bold())
+                    .foregroundStyle(.blue)
+            }
+            // Recent awards (show 4, expand for more)
+            let visible = showAll ? awards.recentAwards : Array(awards.recentAwards.prefix(4))
+            ForEach(visible, id: \.name) { award in
+                Text("\(award.name) '\(String(award.year).suffix(2))")
+                    .font(.caption2)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(.quaternary, in: Capsule())
+            }
+            if awards.recentAwards.count > 4 && !showAll {
+                Button("+\(awards.recentAwards.count - 4) more") {
+                    showAll = true
+                }
+                .font(.caption2)
+            }
+        }
+    }
+}
+```
+
+Toggle: `showAwards` boolean in PbP settings (persisted to `@AppStorage`).
+
+---
+
+#### 7c.12 GATool Sponsors
+
+Community-sourced sponsor text per team from `api.gatool.org`.
+
+**API call** (once per event, cached):
+```swift
+// GET /api/events/{event_key}/gatool-updates
+// Response: { "254": { "topSponsorsLocal": "NASA, Google, Qualcomm" }, ... }
+let sponsors = try await APIService.shared.fetchGatoolSponsors(eventKey: eventKey)
+```
+
+**Display** — inline in each team row:
+```swift
+struct SponsorsRow: View {
+    let text: String
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "heart.fill")
+                .font(.caption2)
+                .foregroundStyle(.pink)
+            Text(text)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+    }
+}
+```
+
+Toggle: `showSponsors` boolean (persisted to `@AppStorage`).
+
+---
+
+#### 7c.13 Playoff-First Badges
+
+For playoff matches, shows "First Playoffs" or "First Finals" badges on teams making their debut.
+
+**API call** (once per event, cached):
+```swift
+// GET /api/matches/{event_key}/playoff-firsts
+// Response: { "254": { "first_playoffs": false, "first_finals": true, "is_rookie": false }, ... }
+let firsts = try await APIService.shared.fetchPlayoffFirsts(eventKey: eventKey)
+```
+
+**Display** — inline next to team nickname:
+```swift
+struct PlayoffFirstBadge: View {
+    let firsts: PlayoffFirstData
+
+    var body: some View {
+        HStack(spacing: 4) {
+            if firsts.firstPlayoffs {
+                Text(firsts.isRookie ? "First Playoffs (R)" : "First Playoffs")
+                    .font(.caption2.bold())
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1)
+                    .background(.indigo, in: Capsule())
+            }
+            if firsts.firstFinals {
+                Text("First Finals")
+                    .font(.caption2.bold())
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1)
+                    .background(.purple, in: Capsule())
+            }
+        }
+    }
+}
+```
+
+Only injected for playoff matches (`compLevel == "sf"` or `"f"`).
+
+---
+
+#### 7c.14 Compare Teams Feature
+
+Allows comparing all 6 teams on the field side-by-side.
+
+**Trigger**: "Compare" button in PbP footer, or SwiftUI keyboard shortcut.
+
+```swift
+struct PbPFooter: View {
+    let match: CachedMatch
+    let eventHighScore: EventHighScore?
+    let onCompare: () -> Void
+    let onBreakdown: () -> Void
+
+    var body: some View {
+        VStack(spacing: 8) {
+            HStack {
+                Button {
+                    onCompare()
+                } label: {
+                    Label("Compare", systemImage: "arrow.left.arrow.right")
+                }
+                .buttonStyle(.bordered)
+
+                Button {
+                    onBreakdown()
+                } label: {
+                    Label("Breakdown", systemImage: "chart.bar.xaxis")
+                }
+                .buttonStyle(.bordered)
+            }
+
+            if let hs = eventHighScore {
+                Text("Event High Score: \(hs.score) in \(hs.match) (\(hs.teams.map(String.init).joined(separator: ", ")))")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding()
+    }
+}
+```
+
+**Compare action** → opens a sheet/navigation with the full H2H view for selected team pair. Two implementation options:
+
+1. **Quick compare**: Opens `HeadToHeadView` with all 6 teams, letting user pick two
+2. **Context-aware**: If user tapped two specific teams (e.g., from opposing alliance rows), jump straight to H2H for those two
+
+---
+
+#### 7c.15 Team Tap Interaction (Context / Spotlight)
+
+When the user taps a team number badge in PbP:
+
+**Primary action**: Open Team Spotlight (TeamDetailView). On iPad, this populates the right detail column. On iPhone, it pushes onto the NavigationStack.
+
+```swift
+// In PbPTeamRow:
+Button {
+    store.selectedTeam = rankings.first { $0.teamKey == team.teamKey }
+    // On iPad: detail column auto-updates via NavigationSplitView binding
+    // On iPhone: use NavigationLink or programmatic navigation
+} label: {
+    Text("\(team.teamNumber)")
+        .font(.headline.bold().monospacedDigit())
+}
+
+// Context menu (long-press):
+.contextMenu {
+    Button {
+        // Generate team storyline
+        Task { await loadTeamStoryline(team.teamNumber) }
+    } label: {
+        Label("Team Storyline", systemImage: "sparkles")
+    }
+
+    Button {
+        // Open full H2H picker pre-filled with this team
+        openH2HWithTeam(team.teamNumber)
+    } label: {
+        Label("Compare with…", systemImage: "arrow.left.arrow.right")
+    }
+
+    Button {
+        // Create a note tagged to this team
+        openNoteForTeam(team.teamKey)
+    } label: {
+        Label("Add Note", systemImage: "note.text.badge.plus")
+    }
+
+    Button {
+        UIPasteboard.general.string = "\(team.teamNumber)"
+    } label: {
+        Label("Copy Number", systemImage: "doc.on.doc")
+    }
+}
+```
+
+---
+
+#### 7c.16 PbP Settings Toggles
+
+Persisted with `@AppStorage`:
+
+```swift
+@AppStorage("pbp_showPredictions") private var showPredictions = true
+@AppStorage("pbp_showAwards") private var showAwards = true
+@AppStorage("pbp_showSponsors") private var showSponsors = true
+@AppStorage("pbp_showConnections") private var showConnections = true
+@AppStorage("pbp_showStorylines") private var showStorylines = true
+```
+
+Expose via a toolbar menu:
+```swift
+.toolbar {
+    ToolbarItem(placement: .secondaryAction) {
+        Menu {
+            Toggle("Predictions", isOn: $showPredictions)
+            Toggle("Awards", isOn: $showAwards)
+            Toggle("Sponsors", isOn: $showSponsors)
+            Toggle("Connections", isOn: $showConnections)
+            Toggle("AI Storylines", isOn: $showStorylines)
+        } label: {
+            Image(systemName: "slider.horizontal.3")
+        }
+    }
+}
+```
+
+---
+
+#### 7c.17 Auto-Refresh & Polling
+
+**Two-phase refresh** (mirrors web app):
+
+1. **Fast scores** (every 15s): `GET /api/matches/{event_key}/scores` — returns just match keys + scores. Merge into `store.matches` without full re-fetch. Flash animation on scorechange.
+
+2. **Full refresh** (every 60s): `GET /api/matches/{event_key}/all` — diffs against current data, detects new matches.
+
+**Auto-advance logic**: If user is viewing match at index `N` and `N` was the last scored match, AND a new match gets scored at `N+1`, advance `matchIndex` to `N+1`.
+
+```swift
+// In PlayByPlayView:
+.task(id: store.selectedEvent) {
+    guard let ek = store.selectedEvent else { return }
+    while !Task.isCancelled {
+        try? await Task.sleep(for: .seconds(15))
+        await refreshScores(eventKey: ek)
+    }
+}
+```
+
+**Realtime also handles this**: `store.didReceiveMatchUpdate()` fires when a match score is posted via WebSocket. PbP should observe `store.matches` changes and re-render.
+
+---
+
+#### 7c.18 Complete PlayByPlayView Assembly
+
+```swift
+struct PlayByPlayView: View {
+    @Environment(BroadcastStore.self) private var store
+    @Environment(\.horizontalSizeClass) private var hSize
+    @Environment(\.verticalSizeClass) private var vSize
+
+    @State private var matchIndex = 0
+    @State private var connections: [Connection] = []
+    @State private var storyline: String?
+    @State private var isLoadingStoryline = false
+    @State private var predictions: [String: MatchPrediction] = [:]
+    @State private var awardsSummaries: [Int: AwardsSummary] = [:]
+    @State private var gatoolSponsors: [Int: String] = [:]
+    @State private var playoffFirsts: [Int: PlayoffFirstData] = [:]
+    @State private var connectionsAllTime = false
+
+    @AppStorage("pbp_showPredictions") private var showPredictions = true
+    @AppStorage("pbp_showAwards") private var showAwards = true
+    @AppStorage("pbp_showSponsors") private var showSponsors = true
+    @AppStorage("pbp_showConnections") private var showConnections = true
+    @AppStorage("pbp_showStorylines") private var showStorylines = true
+
+    private var isCompact: Bool { hSize == .compact && vSize == .regular }
+    private var currentMatch: CachedMatch? {
+        guard !store.matches.isEmpty, matchIndex < store.matches.count else { return nil }
+        return store.matches[matchIndex]
+    }
+
+    var body: some View {
+        if store.matches.isEmpty {
+            ContentUnavailableView("No Matches", systemImage: "play.slash",
+                description: Text("Match data hasn't loaded yet."))
+        } else if let match = currentMatch {
+            ScrollView {
+                VStack(spacing: 16) {
+                    // 1. Match selector
+                    PbPTopBar(matchIndex: $matchIndex,
+                              matches: store.matches,
+                              isLive: match.status == "in_progress")
+
+                    // 2. Prediction bar (if enabled)
+                    if showPredictions, let pred = predictions[match.matchKey] {
+                        PredictionBar(redWinProb: pred.redWinProb,
+                                      redScore: pred.redScore,
+                                      blueScore: pred.blueScore)
+                    }
+
+                    // 3. Alliance cards
+                    let enriched = enrichTeams(for: match,
+                                               from: store.rankings,
+                                               allMatches: store.matches)
+                    allianceCards(match: match, red: enriched.red, blue: enriched.blue)
+
+                    // 4. AI Storyline
+                    if showStorylines {
+                        StorylineCard(text: storyline, isLoading: isLoadingStoryline,
+                                      onTapTeam: { num in /* open spotlight */ })
+                    }
+
+                    // 5. Prior Connections
+                    if showConnections && !connections.isEmpty {
+                        ConnectionsSection(
+                            connections: connections,
+                            redTeamKeys: Set(match.redTeamKeys),
+                            blueTeamKeys: Set(match.blueTeamKeys),
+                            allTime: $connectionsAllTime,
+                            onToggleRange: { Task { await loadConnections(for: match) } }
+                        )
+                    }
+
+                    // 6. Footer: Compare + Breakdown + High Score
+                    PbPFooter(
+                        match: match,
+                        eventHighScore: nil, // from store
+                        onCompare: { /* open compare sheet */ },
+                        onBreakdown: { /* switch to breakdown tab */ }
+                    )
+                }
+                .padding()
+            }
+            .onChange(of: matchIndex) { _, _ in
+                Task { await onMatchChanged() }
+            }
+            .task { await onMatchChanged() }
+            .gesture(swipeGesture)
+            .toolbar {
+                ToolbarItem(placement: .secondaryAction) {
+                    pbpSettingsMenu
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    func allianceCards(match: CachedMatch, red: [EnrichedTeam], blue: [EnrichedTeam]) -> some View {
+        let redWon = match.winningAlliance == "red"
+        let blueWon = match.winningAlliance == "blue"
+
+        // Responsive: side-by-side or stacked
+        if isCompact {
+            VStack(spacing: 12) {
+                AllianceCard(color: .red, teams: red, score: match.redScore,
+                             isWinner: redWon, isCompact: true, playoffPick: nil)
+                AllianceCard(color: .blue, teams: blue, score: match.blueScore,
+                             isWinner: blueWon, isCompact: true, playoffPick: nil)
+            }
+        } else {
+            HStack(spacing: 12) {
+                AllianceCard(color: .red, teams: red, score: match.redScore,
+                             isWinner: redWon, isCompact: false, playoffPick: nil)
+                AllianceCard(color: .blue, teams: blue, score: match.blueScore,
+                             isWinner: blueWon, isCompact: false, playoffPick: nil)
+            }
+        }
+    }
+
+    // MARK: - Data Loading
+
+    func onMatchChanged() async {
+        guard let match = currentMatch, let ek = store.selectedEvent else { return }
+
+        // Load connections
+        await loadConnections(for: match)
+
+        // Load storyline
+        if showStorylines {
+            isLoadingStoryline = true
+            storyline = nil
+            if let result = try? await APIService.shared.generateStoryline(
+                mode: .match, eventKey: ek, matchKey: match.matchKey) {
+                storyline = result.storyline
+            }
+            isLoadingStoryline = false
+        }
+
+        // Load awards (batch)
+        if showAwards {
+            let nums = (match.redTeamKeys + match.blueTeamKeys)
+                .compactMap { Int($0.replacingOccurrences(of: "frc", with: "")) }
+            if let summaries = try? await APIService.shared.fetchAwardsSummary(teams: nums) {
+                awardsSummaries.merge(summaries) { _, new in new }
+            }
+        }
+
+        // Load sponsors (once per event)
+        if showSponsors && gatoolSponsors.isEmpty {
+            if let s = try? await APIService.shared.fetchGatoolSponsors(eventKey: ek) {
+                gatoolSponsors = s
+            }
+        }
+
+        // Load playoff firsts (if playoff match)
+        if match.compLevel != "qm" && playoffFirsts.isEmpty {
+            if let f = try? await APIService.shared.fetchPlayoffFirsts(eventKey: ek) {
+                playoffFirsts = f
+            }
+        }
+    }
+
+    func loadConnections(for match: CachedMatch) async {
+        guard let ek = store.selectedEvent else { return }
+        let nums = (match.redTeamKeys + match.blueTeamKeys)
+            .compactMap { Int($0.replacingOccurrences(of: "frc", with: "")) }
+        if let c = try? await APIService.shared.fetchConnections(
+            eventKey: ek, allTime: connectionsAllTime, teams: nums) {
+            connections = c
+        }
+    }
+
+    // MARK: - Gestures
+
+    var swipeGesture: some Gesture {
+        DragGesture(minimumDistance: 60)
+            .onEnded { value in
+                if value.translation.width < -60 {
+                    // Swiped left → next
+                    if matchIndex < store.matches.count - 1 { matchIndex += 1 }
+                } else if value.translation.width > 60 {
+                    // Swiped right → prev
+                    if matchIndex > 0 { matchIndex -= 1 }
+                }
+            }
+    }
+
+    var pbpSettingsMenu: some View {
+        Menu {
+            Toggle("Predictions", isOn: $showPredictions)
+            Toggle("Awards", isOn: $showAwards)
+            Toggle("Sponsors", isOn: $showSponsors)
+            Toggle("Connections", isOn: $showConnections)
+            Toggle("AI Storylines", isOn: $showStorylines)
+        } label: {
+            Image(systemName: "slider.horizontal.3")
+        }
+    }
+}
+```
+
+---
+
+#### 7c.19 APIService Additions for PbP
+
+Add these to `APIService.swift`:
+
+```swift
+// Connections
+func fetchConnections(eventKey: String, allTime: Bool, teams: [Int]? = nil) async throws -> [Connection] {
+    var url = "\(base)/events/\(eventKey)/summary/connections?all_time=\(allTime)"
+    if let teams, !teams.isEmpty {
+        url += "&teams=\(teams.map(String.init).joined(separator: ","))"
+    }
+    return try await get(url: url)
+}
+
+// Storylines
+func checkStorylinesAvailable() async throws -> Bool {
+    let resp: [String: Bool] = try await get(url: "\(base)/storylines/status")
+    return resp["available"] ?? false
+}
+
+func generateStoryline(mode: StorylineMode, eventKey: String,
+                        matchKey: String? = nil, teamNumber: Int? = nil) async throws -> StorylineResponse {
+    var body: [String: Any] = ["mode": mode.rawValue, "event_key": eventKey]
+    if let mk = matchKey { body["match_key"] = mk }
+    if let tn = teamNumber { body["team_number"] = tn }
+    return try await post(url: "\(base)/storylines/generate", body: body)
+}
+
+enum StorylineMode: String { case match, team }
+
+// Awards summary (batch)
+func fetchAwardsSummary(teams: [Int]) async throws -> [Int: AwardsSummary] {
+    let param = teams.map(String.init).joined(separator: ",")
+    return try await get(url: "\(base)/teams/awards-summary?teams=\(param)")
+}
+
+// GATool sponsors
+func fetchGatoolSponsors(eventKey: String) async throws -> [Int: String] {
+    // Response is dict keyed by team number, extract topSponsorsLocal
+    let raw: [String: [String: String]] = try await get(url: "\(base)/events/\(eventKey)/gatool-updates")
+    return raw.reduce(into: [:]) { dict, pair in
+        if let num = Int(pair.key), let sponsors = pair.value["topSponsorsLocal"] {
+            dict[num] = sponsors
+        }
+    }
+}
+
+// Playoff firsts
+func fetchPlayoffFirsts(eventKey: String) async throws -> [Int: PlayoffFirstData] {
+    return try await get(url: "\(base)/matches/\(eventKey)/playoff-firsts")
+}
+
+// Match scores (fast refresh)
+func fetchMatchScores(eventKey: String) async throws -> [MatchScore] {
+    return try await get(url: "\(base)/matches/\(eventKey)/scores")
+}
+```
 
 ### 7d. BreakdownView
 
