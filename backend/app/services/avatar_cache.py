@@ -14,6 +14,7 @@ from typing import Optional
 
 from .cache_service import CACHE_DIR
 from .tba_client import get_tba_client
+from .frc_client import get_frc_client
 
 log = logging.getLogger(__name__)
 
@@ -59,6 +60,29 @@ async def _fetch_one(tba, team_key: str, year: int) -> tuple[str, Optional[str]]
     return (team_key, None)
 
 
+async def _fetch_frc_avatars(
+    team_keys: list[str], year: int,
+) -> dict[str, str]:
+    """Fetch avatars from the FRC Events API for teams TBA didn't cover."""
+    frc = get_frc_client()
+    result: dict[str, str] = {}
+    for tk in team_keys:
+        num = tk.replace("frc", "")
+        try:
+            async with _FETCH_SEM:
+                data = await frc.get(f"{year}/avatars?teamNumber={num}")
+        except Exception:
+            continue
+        teams = data.get("teams") or []
+        if teams:
+            b64 = teams[0].get("encodedAvatar")
+            if b64:
+                result[tk] = f"data:image/png;base64,{b64}"
+    if result:
+        log.info("FRC API avatar fallback: found %d/%d", len(result), len(team_keys))
+    return result
+
+
 async def get_avatars(team_keys: list[str], year: int) -> dict[str, str]:
     """Return ``{team_key: data_uri}`` for every team that has an avatar.
 
@@ -90,6 +114,14 @@ async def get_avatars(team_keys: list[str], year: int) -> dict[str, str]:
     for tk, uri in fetched:
         cache[tk] = uri          # persist even None (means "no avatar")
         if uri:
+            result[tk] = uri
+
+    # Fallback: try FRC Events API for teams TBA didn't have
+    still_missing = [tk for tk in missing if cache.get(tk) is None]
+    if still_missing:
+        frc_found = await _fetch_frc_avatars(still_missing, year)
+        for tk, uri in frc_found.items():
+            cache[tk] = uri
             result[tk] = uri
 
     _save_cache(year, cache)

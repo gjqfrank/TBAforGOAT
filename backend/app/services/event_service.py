@@ -8,6 +8,7 @@ from datetime import date
 from .tba_client import get_tba_client
 from .frc_client import get_frc_client
 from .statbotics_client import get_epa_map
+from .avatar_cache import get_avatars as get_cached_avatars
 from .inflight import coalesce
 from .supabase_client import (
     get_supabase,
@@ -423,6 +424,35 @@ async def _get_event_teams_with_stats_impl(event_key: str) -> list[dict]:
         except Exception:
             avatar_map = {}
 
+        # Backfill avatars from disk cache / TBA for any teams missing
+        missing_avatar_keys = [k for k in all_keys if k not in avatar_map]
+        if missing_avatar_keys:
+            try:
+                extra = await get_cached_avatars(missing_avatar_keys, year)
+                avatar_map.update(extra)
+            except Exception:
+                pass
+
+        # Backfill rankings from TBA if Supabase has no rank data
+        has_ranks = False
+        for r in sb_rows:
+            rd = r.get("raw_data") or {}
+            if isinstance(rd, str):
+                rd = json.loads(rd)
+            if rd.get("rank") is not None:
+                has_ranks = True
+                break
+        rank_map: dict[str, dict] = {}
+        if not has_ranks:
+            try:
+                client = get_tba_client()
+                rankings = await client.get_event_rankings(event_key)
+                if rankings and rankings.get("rankings"):
+                    for rk in rankings["rankings"]:
+                        rank_map[rk["team_key"]] = rk
+            except Exception as e:
+                log.debug("TBA rankings backfill skipped for %s: %s", event_key, e)
+
         result = []
         for r in sb_rows:
             tk = r["team_key"]
@@ -437,10 +467,17 @@ async def _get_event_teams_with_stats_impl(event_key: str) -> list[dict]:
                 frc_d = json.loads(frc_d)
             epa_block = raw.get("epa") or {}
 
+            # Use TBA rankings backfill if Supabase has no rank data
+            tba_rk = rank_map.get(tk, {})
+            tba_rec = tba_rk.get("record", {})
+
             # Total RP from sort_orders (same logic as FRC API path)
-            sort_orders = raw.get("sort_orders") or []
-            mp = raw.get("matches_played", 0)
-            if sort_orders and isinstance(sort_orders[0], (int, float)):
+            sort_orders = raw.get("sort_orders") or tba_rk.get("sort_orders") or []
+            mp = raw.get("matches_played") or tba_rk.get("matches_played", 0)
+            extra = tba_rk.get("extra_stats", [])
+            if extra and isinstance(extra[0], (int, float)):
+                ranking_points = round(extra[0], 1)
+            elif sort_orders and isinstance(sort_orders[0], (int, float)):
                 ranking_points = round(sort_orders[0] * mp, 1) if mp else None
             else:
                 ranking_points = None
@@ -455,11 +492,11 @@ async def _get_event_teams_with_stats_impl(event_key: str) -> list[dict]:
                 "country": frc_d.get("country") or tims.get("country", ""),
                 "rookie_year": tims.get("rookie_year") or frc_d.get("rookieYear"),
                 "avatar": avatar_map.get(tk),
-                "rank": raw.get("rank", "-"),
-                "wins": raw.get("wins", 0),
-                "losses": raw.get("losses", 0),
-                "ties": raw.get("ties", 0),
-                "qual_average": raw.get("qual_average", 0),
+                "rank": raw.get("rank") or tba_rk.get("rank", "-"),
+                "wins": raw.get("wins") or tba_rec.get("wins", 0),
+                "losses": raw.get("losses") or tba_rec.get("losses", 0),
+                "ties": raw.get("ties") or tba_rec.get("ties", 0),
+                "qual_average": raw.get("qual_average") or tba_rk.get("qual_average", 0),
                 "ranking_points": ranking_points,
                 "opr": round(raw.get("opr", 0), 2) if raw.get("opr") else 0,
                 "epa": epa_block.get("epa"),
