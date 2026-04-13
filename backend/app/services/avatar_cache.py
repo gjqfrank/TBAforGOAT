@@ -131,6 +131,19 @@ async def get_avatars(team_keys: list[str], year: int) -> dict[str, str]:
     return result
 
 
+def get_avatars_from_cache(team_keys: list[str], year: int) -> dict[str, str]:
+    """Return avatars that are already in the disk cache (no network I/O).
+
+    This is O(1) — a dictionary lookup per key — and never blocks on TBA.
+    Use for the critical request path; pair with a background prefetch_avatars()
+    to warm the cache for subsequent requests.
+    """
+    if not team_keys:
+        return {}
+    cache = _load_cache(year)
+    return {tk: cache[tk] for tk in team_keys if cache.get(tk)}
+
+
 async def prefetch_avatars(team_keys: list[str], year: int) -> None:
     """Pre-warm the avatar cache during ingestion (fire-and-forget)."""
     await get_avatars(team_keys, year)

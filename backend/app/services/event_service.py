@@ -8,7 +8,7 @@ from datetime import date
 from .tba_client import get_tba_client
 from .frc_client import get_frc_client
 from .statbotics_client import get_epa_map
-from .avatar_cache import get_avatars as get_cached_avatars
+from .avatar_cache import get_avatars as get_cached_avatars, get_avatars_from_cache, prefetch_avatars
 from .inflight import coalesce
 from .supabase_client import (
     get_supabase,
@@ -424,14 +424,18 @@ async def _get_event_teams_with_stats_impl(event_key: str) -> list[dict]:
         except Exception:
             avatar_map = {}
 
-        # Backfill avatars from disk cache / TBA for any teams missing
+        # Backfill avatars from disk cache (instant) for any teams missing
         missing_avatar_keys = [k for k in all_keys if k not in avatar_map]
         if missing_avatar_keys:
             try:
-                extra = await get_cached_avatars(missing_avatar_keys, year)
+                extra = get_avatars_from_cache(missing_avatar_keys, year)
                 avatar_map.update(extra)
             except Exception:
                 pass
+            # Background-fetch any still-missing avatars for next request
+            still_missing = [k for k in missing_avatar_keys if k not in extra]
+            if still_missing:
+                asyncio.create_task(_safe(prefetch_avatars(still_missing, year)))
 
         # Backfill rankings from TBA if Supabase has no rank data
         has_ranks = False
@@ -542,34 +546,29 @@ async def _get_event_teams_with_stats_impl(event_key: str) -> list[dict]:
 
     # ── Fallback: TBA + Statbotics (original path) ──────────
     client = get_tba_client()
-    teams = await client.get_event_teams_full(event_key)
 
-    rankings, oprs, epa_data = await asyncio.gather(
-        _safe(client.get_event_rankings(event_key)),
-        _safe(client.get_event_oprs(event_key)),
-        _safe(get_epa_map(event_key)),
+    # Fire teams, rankings, OPRs, and EPA all in parallel
+    teams_coro = _safe(client.get_event_teams_full(event_key))
+    rankings_coro = _safe(client.get_event_rankings(event_key))
+    oprs_coro = _safe(client.get_event_oprs(event_key))
+    epa_coro = _safe(get_epa_map(event_key))
+
+    teams, rankings, oprs, epa_data = await asyncio.gather(
+        teams_coro, rankings_coro, oprs_coro, epa_coro,
     )
 
+    teams = teams or []
     epa_data = epa_data or {}
 
-    # Fetch avatars for all teams in parallel (with concurrency limit)
-    async def _fetch_avatar(tk: str):
-        async with _API_SEMAPHORE:
-            return await _safe(client.get_team_media(tk, year))
+    # Instant avatar lookup from disk cache (no network I/O)
+    all_team_keys = [t["key"] for t in teams]
+    avatar_map: dict[str, str | None] = get_avatars_from_cache(all_team_keys, year)
 
-    avatar_tasks = {t["key"]: _fetch_avatar(t["key"]) for t in teams}
-    avatar_keys = list(avatar_tasks.keys())
-    avatar_results = await asyncio.gather(*avatar_tasks.values())
-    avatar_map: dict[str, str | None] = {}
-    for tk, media_list in zip(avatar_keys, avatar_results):
-        avatar_map[tk] = None
-        if media_list:
-            for m in media_list:
-                if m.get("type") == "avatar":
-                    b64 = (m.get("details") or {}).get("base64Image")
-                    if b64:
-                        avatar_map[tk] = f"data:image/png;base64,{b64}"
-                        break
+    # Fire background task to fetch any missing avatars from TBA/FRC API
+    # so the *next* request will have them
+    missing_avatar_keys = [k for k in all_team_keys if k not in avatar_map]
+    if missing_avatar_keys:
+        asyncio.create_task(_safe(prefetch_avatars(missing_avatar_keys, year)))
 
     # Build fast lookups
     rank_map: dict[str, dict] = {}
