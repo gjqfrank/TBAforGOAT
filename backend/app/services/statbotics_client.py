@@ -168,6 +168,33 @@ class StatboticsClient:
 
         return {"matches": top_matches, "epa_teams": top_epa, "team_names": team_names}
 
+    async def get_most_wins(self, year: int, limit: int = 10) -> list[dict]:
+        """Return top teams by win count for a season.
+
+        Uses ``/team_years?metric=wins&ascending=false``.
+        """
+        raw = await self.get(
+            f"/team_years?year={year}&metric=wins&ascending=false&limit={limit}"
+        )
+        results = []
+        for te in raw if isinstance(raw, list) else []:
+            record = te.get("record") or {}
+            epa_block = te.get("epa") or {}
+            total = epa_block.get("total_points", {})
+            results.append({
+                "team": te.get("team"),
+                "name": te.get("name", ""),
+                "country": te.get("country", ""),
+                "state": te.get("state", ""),
+                "wins": record.get("wins", 0),
+                "losses": record.get("losses", 0),
+                "ties": record.get("ties", 0),
+                "count": record.get("count", 0),
+                "winrate": round(record.get("winrate", 0), 4),
+                "epa": round(total.get("mean", 0), 1),
+            })
+        return results
+
 
 # ── Singleton ───────────────────────────────────────────────
 _instance: Optional[StatboticsClient] = None

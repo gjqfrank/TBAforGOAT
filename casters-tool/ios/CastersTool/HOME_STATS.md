@@ -1,6 +1,6 @@
 # Home Page Stat Boxes — Complete Wiring Guide
 
-> **Purpose**: Three hero stat boxes at the top of the Home/Event page: **Highest Match Score**, **Highest EPA**, and **Most Wins**. The first two use existing backend endpoints. Most Wins requires a **new Statbotics call**.
+> **Purpose**: Three hero stat boxes at the top of the Home/Event page: **Highest Match Score**, **Highest EPA**, and **Most Wins**. All three use backend proxy endpoints.
 
 ---
 
@@ -10,7 +10,7 @@
 |----------|--------|----------|
 | Highest Match Score | Backend (Statbotics proxy) | `GET /api/events/season-high-scores?year=2026` |
 | Highest EPA | Same endpoint | Same — `top_epa` array |
-| Most Wins | **Statbotics direct** (not in backend) | `GET https://api.statbotics.io/v3/team_years?year=2026&metric=wins&ascending=false&limit=10` |
+| Most Wins | Backend (Statbotics proxy) | `GET /api/events/season-most-wins?year=2026&limit=10` |
 
 ---
 
@@ -54,29 +54,26 @@ GET /api/events/season-high-scores?year=2026
 - `top_epa`: Top 5 EPA teams
 - `team_names`: Name lookup for teams in top matches
 
-### 2b. Most Wins (Direct Statbotics)
+### 2b. Most Wins (Backend Proxy)
 
 ```http
-GET https://api.statbotics.io/v3/team_years?year=2026&metric=wins&ascending=false&limit=10
+GET /api/events/season-most-wins?year=2026&limit=10
 ```
 
-Returns an array of team_year objects:
+Returns a flat array (backend extracts the relevant fields from Statbotics):
 ```json
 [
   {
-    "team": 2056,
-    "year": 2026,
-    "name": "OP Robotics",
-    "record": {
-      "wins": 68,
-      "losses": 7,
-      "ties": 0,
-      "count": 75,
-      "winrate": 0.9067
-    },
-    "epa": {
-      "total_points": { "mean": 120.06 }
-    }
+    "team": 118,
+    "name": "Robonauts",
+    "country": "USA",
+    "state": "TX",
+    "wins": 110,
+    "losses": 12,
+    "ties": 0,
+    "count": 122,
+    "winrate": 0.9016,
+    "epa": 104.8
   }
 ]
 ```
@@ -127,21 +124,19 @@ struct TopEpaTeam: Codable, Identifiable {
     let epa: Double
 }
 
-// Statbotics direct response
-struct StatboticsTeamYear: Codable, Identifiable {
+// Most Wins team (from backend proxy)
+struct MostWinsTeam: Codable, Identifiable {
     var id: Int { team }
     let team: Int
-    let year: Int
     let name: String
-    let record: TeamRecord
-}
-
-struct TeamRecord: Codable {
+    let country: String?
+    let state: String?
     let wins: Int
     let losses: Int
     let ties: Int
     let count: Int
     let winrate: Double
+    let epa: Double
 }
 ```
 
@@ -157,11 +152,8 @@ extension APIService {
         return try JSONDecoder().decode(SeasonHighScores.self, from: data)
     }
 
-    /// Direct Statbotics call — NOT proxied through our backend
-    static func fetchMostWins(year: Int, limit: Int = 10) async throws -> [StatboticsTeamYear] {
-        let url = URL(string: "https://api.statbotics.io/v3/team_years?year=\(year)&metric=wins&ascending=false&limit=\(limit)")!
-        let (data, _) = try await URLSession.shared.data(from: url)
-        return try JSONDecoder().decode([StatboticsTeamYear].self, from: data)
+    static func fetchMostWins(year: Int, limit: Int = 10) async throws -> [MostWinsTeam] {
+        return try await get(url: "\(base)/events/season-most-wins?year=\(year)&limit=\(limit)")
     }
 }
 ```
@@ -177,7 +169,7 @@ struct HomeStatBoxes: View {
     let year: Int
 
     @State private var highScores: SeasonHighScores?
-    @State private var mostWins: [StatboticsTeamYear] = []
+    @State private var mostWins: [MostWinsTeam] = []
     @State private var isLoading = true
 
     var body: some View {
@@ -226,9 +218,9 @@ struct HomeStatBoxes: View {
                                 title: "Most Wins",
                                 icon: "trophy.fill",
                                 color: .yellow,
-                                mainValue: "\(top.record.wins)",
+                                mainValue: "\(top.wins)",
                                 subtitle: "\(top.team) — \(top.name)",
-                                detail: "\(top.record.wins)-\(top.record.losses)-\(top.record.ties)",
+                                detail: "\(top.wins)-\(top.losses)-\(top.ties)",
                                 onTap: { /* optional drill-down */ }
                             )
                         }
@@ -348,7 +340,7 @@ struct TopMatchesSheet: View {
 
 ```swift
 struct MostWinsSheet: View {
-    let teams: [StatboticsTeamYear]
+    let teams: [MostWinsTeam]
 
     var body: some View {
         NavigationStack {
@@ -363,12 +355,12 @@ struct MostWinsSheet: View {
                     }
                     Spacer()
                     VStack(alignment: .trailing) {
-                        Text("\(team.record.wins)")
+                        Text("\(team.wins)")
                             .font(.title3.bold().monospacedDigit())
-                        Text("\(team.record.wins)-\(team.record.losses)-\(team.record.ties)")
+                        Text("\(team.wins)-\(team.losses)-\(team.ties)")
                             .font(.caption.monospacedDigit())
                             .foregroundStyle(.secondary)
-                        Text(String(format: "%.0f%%", team.record.winrate * 100))
+                        Text(String(format: "%.0f%%", team.winrate * 100))
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
                     }
@@ -384,9 +376,9 @@ struct MostWinsSheet: View {
 
 ## 7. Gotchas
 
-1. **Most Wins is NOT proxied**: This is the only stat hero box that calls Statbotics directly from the iOS app. The URL is `https://api.statbotics.io/v3/team_years?year={year}&metric=wins&ascending=false&limit=10`.
+1. **Most Wins is now proxied**: `GET /api/events/season-most-wins?year={year}&limit=10`. Backend caches for 10 minutes.
 2. **`no_foul` vs `score`**: Display `no_foul` (score without opponent fouls) as the "true" high score, but keep `score` available for context.
-3. **Statbotics rate limits**: Statbotics has reasonable rate limits. Cache the response for 5+ minutes on the client side.
+3. **Backend caching**: Both stat endpoints are disk-cached for 10 minutes on the backend. Client-side caching is optional but recommended.
 4. **Year detection**: The current season year can be derived from the selected event key (`Int(eventKey.prefix(4))`) or hardcoded for the season.
 5. **Team names in matches**: The `team_names` dict in the high scores response provides names for teams in the top matches. Use this instead of making separate team lookups.
 6. **Statbotics `record` shape**: The `record` object includes `wins`, `losses`, `ties`, `count`, and `winrate` (0.0–1.0 decimal, NOT percentage).

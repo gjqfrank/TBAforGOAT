@@ -67,6 +67,28 @@ async def season_high_scores(year: int = Query(2026)):
         raise_api_error(e, fallback_detail=f"Could not load season high scores for {year}.")
 
 
+@router.get("/season-most-wins")
+async def season_most_wins(year: int = Query(2026), limit: int = Query(10, ge=1, le=50)):
+    """Top teams by win count for a season (from Statbotics)."""
+    try:
+        cache_key = f"{year}_{limit}"
+        cached = payload_cache.read_payload("season_most_wins", cache_key, 600)
+        if cached:
+            return cached.get("teams", [])
+
+        sb = get_statbotics_client()
+        teams = await sb.get_most_wins(year, limit=limit)
+        data = {"teams": teams}
+
+        payload_cache.write_payload("season_most_wins", cache_key, data)
+        return teams
+        return data
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise_api_error(e, fallback_detail=f"Could not load most wins for {year}.")
+
+
 def _parse_match_label(match_key: str) -> str:
     """Convert a TBA match key suffix into a readable label.
 
