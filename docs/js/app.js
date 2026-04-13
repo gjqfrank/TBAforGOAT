@@ -2853,13 +2853,17 @@ let _timsCache = {};  // { teamNumber: { nickname, organization, location, top_s
 async function _loadTimsOverrides() {
     if (!teamsData) return;
     _timsCache = {};
-    // Load local overrides from IndexedDB (for instant display after editing)
-    for (const t of teamsData) {
-        try {
-            const rows = await DB.getOverridesByTeam(t.team_key);
-            if (rows.length) _timsCache[t.team_number] = rows[0];
-        } catch { /* ignore */ }
-    }
+    // Load ALL local overrides in a single IndexedDB transaction (batch read)
+    const teamKeySet = new Set(teamsData.map(t => t.team_key));
+    try {
+        const allRows = await DB.getAllOverrides();
+        for (const row of allRows) {
+            if (teamKeySet.has(row.team_key)) {
+                const num = parseInt(row.team_key.replace(/\D/g, ''), 10);
+                if (num) _timsCache[num] = row;
+            }
+        }
+    } catch { /* ignore */ }
     // Also seed cache from server-applied overrides already in teamsData
     for (const t of teamsData) {
         if (t.has_tims_overrides && !_timsCache[t.team_number]) {

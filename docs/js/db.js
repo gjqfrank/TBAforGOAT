@@ -148,6 +148,17 @@ const DB = (() => {
         });
     }
 
+    // ── getAllOverrides — batch read all overrides in a single transaction ──
+    async function getAllOverrides() {
+        const db = await initDB();
+        return new Promise((resolve, reject) => {
+            const tx  = db.transaction('tims_overrides', 'readonly');
+            const req = tx.objectStore('tims_overrides').getAll();
+            req.onsuccess = () => resolve(req.result || []);
+            req.onerror   = () => reject(req.error);
+        });
+    }
+
     // ── putOverride ────────────────────────────────────────
     async function putOverride(record) {
         const db = await initDB();
@@ -288,6 +299,7 @@ const DB = (() => {
         getMatchesByEvent,
         getNotesByTarget,
         getOverridesByTeam,
+        getAllOverrides,
         putOverride,
         generateLocalId,
         cacheTab,
