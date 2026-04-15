@@ -2629,6 +2629,7 @@ async function loadEvent(eventKey) {
         show('rankings-container');
         $('event-teams').innerHTML = await buildTeamTable(teams);
         fadeIn('rankings-container');
+        if (!isFTCMode()) _scheduleFrcAvatarPatch(currentEvent);
 
         // Reset dependent tabs — clear both visibility and inner content
         $('summary-empty')?.classList.remove('hidden');
@@ -2965,12 +2966,59 @@ function applyRankChangeIndicators(oldMap) {
 async function buildTeamTable(teams) {
     teamsData = teams;
     patchFtcAvatars(teamsData);
-    await _loadTimsOverrides();
     // Apply the current sort so upcoming events (sorted by team_number) render correctly
     sortTeamsData();
-    return rankingsCardView
+    // Render immediately with available data — don't block on TIMS overrides
+    const html = rankingsCardView
         ? renderTeamCards(teamsData)
         : renderTeamTable(teamsData, teamsSortCol, teamsSortAsc);
+    // Load TIMS overrides async; re-render only if any are found (avoids unnecessary reflow)
+    _loadTimsOverrides().then(() => {
+        if (teamsData !== teams) return; // user switched events
+        if (!Object.keys(_timsCache).length) return;
+        sortTeamsData();
+        const el = $('event-teams');
+        if (el) el.innerHTML = rankingsCardView
+            ? renderTeamCards(teamsData)
+            : renderTeamTable(teamsData, teamsSortCol, teamsSortAsc);
+    }).catch(() => {});
+    return html;
+}
+
+/** After initial FRC rankings render, patch avatar cells for any teams that loaded
+ *  without one (backend prefetch runs async; 4 s is enough for it to complete). */
+function _scheduleFrcAvatarPatch(eventKey) {
+    if (!teamsData) return;
+    const missing = teamsData.filter(t => !t.avatar);
+    if (!missing.length) return;
+    setTimeout(async () => {
+        if (currentEvent !== eventKey || !teamsData) return;
+        try {
+            const fresh = await API.eventTeams(eventKey);
+            if (!fresh || !fresh.length || currentEvent !== eventKey) return;
+            const freshMap = new Map((fresh.teams || fresh).map(t => [t.team_key, t.avatar]));
+            let patched = 0;
+            for (const team of teamsData) {
+                const newAvatar = freshMap.get(team.team_key);
+                if (!team.avatar && newAvatar) {
+                    team.avatar = newAvatar;
+                    const row = document.querySelector(`#event-teams tr[data-team-key="${team.team_key}"]`);
+                    if (row) {
+                        const cell = row.querySelector('.team-avatar-cell');
+                        if (cell) cell.innerHTML = `<img src="${newAvatar}" class="team-avatar" alt="">`;
+                    }
+                    // Card view: patch the card avatar too
+                    const card = document.querySelector(`#event-teams .rank-card[data-team-key="${team.team_key}"]`);
+                    if (card) {
+                        const ph = card.querySelector('.rank-card-avatar-placeholder');
+                        if (ph) ph.outerHTML = `<img src="${newAvatar}" class="rank-card-avatar" alt="">`;
+                    }
+                    patched++;
+                }
+            }
+            if (patched) console.debug(`[Avatar] Patched ${patched} FRC avatars`);
+        } catch { /* silent — avatars are non-critical */ }
+    }, 4000);
 }
 
 function sortTeamsData() {
@@ -3096,7 +3144,7 @@ function renderTeamTable(teams, sortCol, asc) {
                 const loc = [t.city, t.state_prov, t.country].filter(Boolean).join(', ');
                 const name = formatTeamName(t.nickname);
                 const avatarImg = t.avatar
-                    ? `<img src="${t.avatar}" class="team-avatar" alt="" loading="lazy">`
+                    ? `<img src="${t.avatar}" class="team-avatar" alt="">`
                     : `<span class="team-avatar team-avatar-placeholder">${t.team_number}</span>`;
                 const checked = compareSelection.has(t.team_key) ? 'checked' : '';
                 const isIntl = highlightForeign && t.country && eventCountry && t.country !== eventCountry;
@@ -3800,6 +3848,30 @@ function toggleAdvancement() {
 function renderAdvancement(data) {
     const el = $('summary-advancement');
     const content = $('summary-advancement-content');
+
+    // Championship Division: only show the division winner, no points or awards
+    if (summaryData && summaryData.is_championship) {
+        const winners = (data.qualified_teams || []).filter(
+            t => (t.method || '').toLowerCase().includes('winner')
+        );
+        if (!winners.length) {
+            el.classList.add('hidden');
+            return;
+        }
+        el.classList.remove('hidden');
+        let html = '<div class="adv-section"><div class="adv-qual-list">';
+        winners.forEach(t => {
+            html += '<div class="adv-qual-row">';
+            html += `<span class="adv-team-num">${t.team_number}</span>`;
+            html += `<span class="adv-team-name">${t.nickname}</span>`;
+            html += '<span class="adv-right-group">';
+            html += `<span class="adv-method adv-method-ranking">Division Winner</span>`;
+            html += '</span></div>';
+        });
+        html += '</div></div>';
+        content.innerHTML = html;
+        return;
+    }
 
     const hasQualified = data.qualified_teams && data.qualified_teams.length > 0;
     const hasDistrict = data.district_rankings && data.district_rankings.length > 0;
@@ -10665,7 +10737,7 @@ function renderTeamCards(teams) {
     const cards = teams.map(t => {
         const name = formatTeamName(t.nickname);
         const avatarImg = t.avatar
-            ? `<img src="${t.avatar}" class="rank-card-avatar" alt="" loading="lazy">`
+            ? `<img src="${t.avatar}" class="rank-card-avatar" alt="">`
             : `<span class="rank-card-avatar-placeholder">${t.team_number}</span>`;
         const isIntl = highlightForeign && t.country && eventCountry && t.country !== eventCountry;
         const isRookie = highlightRookie && t.rookie_year && currentEventYear && t.rookie_year >= currentEventYear;

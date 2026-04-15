@@ -9138,9 +9138,12 @@ a.mob-more-item { text-decoration: none; }
         transform: scale(.95) !important;
         transition: transform .08s !important;
     }
+    /* Section/stat cards: suppress scale zoom on tap */
     .summary-stat-card:active,
     .history-stat-card:active,
-    .event-section-card:active,
+    .event-section-card:active {
+        transform: none;
+    }
     .rank-card:active {
         transform: scale(.97);
         transition: transform .08s;
@@ -9173,6 +9176,25 @@ a.mob-more-item { text-decoration: none; }
 @media (max-width: 768px) {
     #manual-entry-body.collapsed { display: none; }
     .collapsed-header .collapse-toggle-arrow { font-size: .7rem; }
+}
+
+/* ── Mobile: prevent section card text overflow ─────────────── */
+@media (max-width: 768px) {
+    .event-section-card {
+        overflow: hidden;
+        word-break: break-word;
+    }
+    /* Awards/summary text rows: wrap instead of overflowing */
+    .adv-qual-row,
+    .prestige-entry,
+    .past-champ-badges {
+        flex-wrap: wrap;
+    }
+    .adv-awards-badge {
+        max-width: 100%;
+        white-space: normal;
+        word-break: break-word;
+    }
 }
 
 

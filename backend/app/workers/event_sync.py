@@ -100,7 +100,7 @@ async def _sync_event_metadata(year: int) -> set[str]:
 
         rows.append({
             "event_key": ev["key"],
-            "name": ev.get("name", ""),
+            "name": ev.get("name") or "Unknown Event",
             "start_date": start or None,
             "end_date": end or None,
             "competition_type": "frc",

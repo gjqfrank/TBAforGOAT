@@ -163,10 +163,9 @@ class FRCClient:
                 resp.raise_for_status()
                 data = resp.json()
                 teams = data.get("teams", [])
-                page_qualified = [t for t in teams if t.get("qualifiedFirstCmp")]
-                qualified.extend(page_qualified)
-                # Stop once a page has no qualified teams (data is sorted by points)
-                if not page_qualified or page >= data.get("pageTotal", page):
+                qualified.extend(t for t in teams if t.get("qualifiedFirstCmp"))
+                page_total = data.get("pageTotal", 1)
+                if page >= page_total:
                     break
                 page += 1
             return qualified
