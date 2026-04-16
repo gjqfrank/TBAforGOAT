@@ -7293,6 +7293,7 @@ async function loadBreakdownTab() {
         startBdListRefresh();
         fadeIn('bd-container');
         updateTabDots();
+        _syncMobBdLabel();
     } catch (err) {
         hideSkeleton('bd-loading');
         showInlineError('bd-error', `Failed to load breakdowns: ${err.message}`, loadBreakdownTab);
@@ -7339,6 +7340,7 @@ function buildBdSelector() {
 
 function bdGoTo(idx) {
     bdIndex = parseInt(idx, 10);
+    _syncMobBdLabel();
     loadBdMatch();
 }
 
@@ -7346,6 +7348,7 @@ function bdPrev() {
     if (bdIndex > 0) {
         bdIndex--;
         $('bd-match-select').value = bdIndex;
+        _syncMobBdLabel();
         loadBdMatch();
     }
 }
@@ -7354,6 +7357,7 @@ function bdNext() {
     if (bdData && bdIndex < bdData.matches.length - 1) {
         bdIndex++;
         $('bd-match-select').value = bdIndex;
+        _syncMobBdLabel();
         loadBdMatch();
     }
 }
@@ -7365,6 +7369,7 @@ async function loadBdMatch() {
     const m = bdData.matches[bdIndex];
     $('bd-match-label').textContent = (m.label || '').replace(/^Qualification\s*/i, 'Qual ');
     $('bd-match-select').value = bdIndex;
+    _syncMobBdLabel();
 
     // Sync URL with current breakdown match key
     if (m.key) {
@@ -9947,20 +9952,62 @@ function syncMobileNav(tabName) {
     }
 
     // Dynamic PbP navbar: swap standard nav ↔ PbP controls on mobile
+    // Dynamic BD navbar: swap standard nav ↔ Breakdown controls on mobile
     // Dynamic BS navbar: swap standard nav ↔ BS input pill on mobile
     const stdNav = document.querySelector('.mobile-bottom-nav-inner');
     const pbpNav = document.getElementById('mob-pbp-nav');
+    const bdNav  = document.getElementById('mob-bd-nav');
     const bsNav  = document.getElementById('mob-bs-nav');
     const bsMacros = document.getElementById('mob-bs-macros');
     if (stdNav && pbpNav) {
         const isPbp = tabName === 'playbyplay';
+        const isBd  = tabName === 'breakdown';
         const isBs  = tabName === 'battlestation';
-        stdNav.style.display = (isPbp || isBs) ? 'none' : '';
+        stdNav.style.display = (isPbp || isBd || isBs) ? 'none' : '';
         pbpNav.classList.toggle('hidden', !isPbp);
+        if (bdNav) {
+            if (isBd) { bdNav.classList.remove('hidden'); bdNav.style.display = 'flex'; }
+            else       { bdNav.classList.add('hidden');    bdNav.style.display = '';    }
+        }
         if (bsNav)    bsNav.classList.toggle('hidden', !isBs);
         if (bsMacros) bsMacros.classList.toggle('hidden', !isBs);
         if (isPbp) _syncMobPbpLabel();
+        if (isBd)  _syncMobBdLabel();
         if (isBs)  _syncMobBsMacros();
+    }
+}
+
+/**
+ * Toggle between Breakdown custom nav and standard nav.
+ * Called by the back button inside the BD nav bar.
+ */
+function toggleMobileBdNav() {
+    const stdNav = document.querySelector('.mobile-bottom-nav-inner');
+    const bdNav  = document.getElementById('mob-bd-nav');
+    if (!stdNav || !bdNav) return;
+    const bdVisible = !bdNav.classList.contains('hidden');
+    if (bdVisible) {
+        stdNav.style.display = '';
+        bdNav.classList.add('hidden');
+        document.querySelectorAll('.mob-nav-btn').forEach(b => {
+            b.classList.toggle('active', b.dataset.tab === 'breakdown');
+        });
+    } else {
+        stdNav.style.display = 'none';
+        bdNav.classList.remove('hidden');
+        _syncMobBdLabel();
+    }
+}
+
+/** Update the mobile Breakdown nav bar match label */
+function _syncMobBdLabel() {
+    const lbl = document.getElementById('mob-bd-label');
+    if (!lbl) return;
+    if (bdData && bdData.matches && bdData.matches.length) {
+        const m = bdData.matches[bdIndex];
+        lbl.textContent = (m?.label || 'Match').replace(/^Qualification\s*/i, 'Qual ');
+    } else {
+        lbl.textContent = 'Match';
     }
 }
 
@@ -10084,6 +10131,9 @@ function openMobUtilPanel(mode) {
     } else if (mode === 'matches') {
         header.innerHTML = '<span class="mob-util-title">Select Match</span>';
         _buildMobMatchPicker(body);
+    } else if (mode === 'bd-matches') {
+        header.innerHTML = '<span class="mob-util-title">Select Match</span>';
+        _buildMobBdMatchPicker(body);
     } else if (mode === 'matchhistory') {
         header.innerHTML = '<span class="mob-util-title">Match History</span>';
         // body filled by caller after async load
@@ -10401,6 +10451,30 @@ function _buildMobMatchPicker(container) {
     });
     container.appendChild(list);
     // Scroll active into view
+    requestAnimationFrame(() => {
+        const active = list.querySelector('.active');
+        if (active) active.scrollIntoView({ block: 'center', behavior: 'instant' });
+    });
+}
+
+/* Match picker panel content for Breakdown tab */
+function _buildMobBdMatchPicker(container) {
+    if (!bdData || !bdData.matches) {
+        container.innerHTML = '<div class="mob-util-lookup-empty">No matches loaded</div>';
+        return;
+    }
+    const list = document.createElement('div');
+    list.className = 'mob-match-picker-list';
+    bdData.matches.forEach((m, i) => {
+        const btn = document.createElement('button');
+        const hasBd = m.has_breakdown;
+        btn.className = 'mob-match-picker-item' + (i === bdIndex ? ' active' : '');
+        btn.textContent = (hasBd ? '● ' : '○ ') + (m?.label || 'Match ' + (i + 1)).replace(/^Qualification\s*/i, 'Qual ');
+        if (hasBd) btn.style.color = 'var(--success, #22c55e)';
+        btn.onclick = () => { bdGoTo(i); closeMobUtilPanel(); };
+        list.appendChild(btn);
+    });
+    container.appendChild(list);
     requestAnimationFrame(() => {
         const active = list.querySelector('.active');
         if (active) active.scrollIntoView({ block: 'center', behavior: 'instant' });

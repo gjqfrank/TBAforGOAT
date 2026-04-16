@@ -802,6 +802,23 @@
                 </div>
             </div>
         </div>
+        <!-- Breakdown dynamic nav (same pill layout as PbP) -->
+        <div class="mob-pbp-nav hidden" id="mob-bd-nav">
+            <button class="mob-pbp-back" onclick="toggleMobileBdNav()" title="Show default nav">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            </button>
+            <div class="mob-pbp-pill" id="mob-bd-pill">
+                <div class="mob-pbp-arrow" onclick="bdPrev()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                </div>
+                <div class="mob-pbp-label-wrap" onclick="openMobUtilPanel('bd-matches')">
+                    <span class="mob-pbp-label" id="mob-bd-label">Match</span>
+                </div>
+                <div class="mob-pbp-arrow" onclick="bdNext()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                </div>
+            </div>
+        </div>
         <!-- Battle Station dynamic nav (macros above, input pill below) -->
         <div class="mob-bs-macros hidden" id="mob-bs-macros"></div>
         <div class="mob-bs-nav hidden" id="mob-bs-nav">

@@ -8104,6 +8104,8 @@ tr:hover .compare-cb,
 
   .rp-table-wrap {
     max-height: 400px;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
   }
 
   .rp-hdr-full { display: none !important; }
@@ -12589,6 +12591,8 @@ td .pick-flip-back {
 .rp-table-wrap {
   max-height: 450px;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
 }
 
 .rp-table thead th {
@@ -12600,6 +12604,7 @@ td .pick-flip-back {
 .rp-event-code {
   cursor: help;
   border-bottom: 1px dotted var(--text-muted);
+  -webkit-touch-callout: none;
 }
 
 /* Qualified row highlight — subdued for directly qualified */
@@ -13945,8 +13950,8 @@ body.epa-breakdown-active .stat-opr {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 48px;
-  height: 48px;
+  width: 58px;
+  height: 58px;
   background: var(--surface-glass);
   backdrop-filter: blur(24px) saturate(1.5);
   -webkit-backdrop-filter: blur(24px) saturate(1.5);
