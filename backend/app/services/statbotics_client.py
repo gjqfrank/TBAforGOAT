@@ -120,8 +120,11 @@ class StatboticsClient:
         for m in red_matches:
             key = m.get("key", "")
             result = m.get("result") or {}
-            score = result.get("red_score", 0)
-            no_foul = result.get("red_no_foul", score)
+            score = result.get("red_score") or 0
+            # red_no_foul can be null in the API — fall back to raw score
+            no_foul = result.get("red_no_foul")
+            if no_foul is None:
+                no_foul = score
             teams = [str(k).replace("frc", "") for k in (m.get("alliances", {}).get("red", {}).get("team_keys") or [])]
             event_key = m.get("event", "")
             row = {"key": key, "event_key": event_key, "score": score, "no_foul": no_foul, "teams": teams, "color": "red"}
@@ -131,8 +134,11 @@ class StatboticsClient:
         for m in blue_matches:
             key = m.get("key", "")
             result = m.get("result") or {}
-            score = result.get("blue_score", 0)
-            no_foul = result.get("blue_no_foul", score)
+            score = result.get("blue_score") or 0
+            # blue_no_foul can be null in the API — fall back to raw score
+            no_foul = result.get("blue_no_foul")
+            if no_foul is None:
+                no_foul = score
             teams = [str(k).replace("frc", "") for k in (m.get("alliances", {}).get("blue", {}).get("team_keys") or [])]
             event_key = m.get("event", "")
             row = {"key": key, "event_key": event_key, "score": score, "no_foul": no_foul, "teams": teams, "color": "blue"}
