@@ -41,6 +41,21 @@ def read_payload(prefix: str, key: str, ttl: float) -> Optional[dict]:
     return None
 
 
+def read_stale(prefix: str, key: str) -> Optional[dict]:
+    """Return cached payload regardless of age (stale-read fallback).
+
+    Use this when the upstream source is unavailable and serving slightly
+    outdated data is better than returning an error.
+    """
+    p = _path(prefix, key)
+    if not p.exists():
+        return None
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
 def write_payload(prefix: str, key: str, payload: dict) -> None:
     """Write payload to disk with current timestamp."""
     CACHE_DIR.mkdir(parents=True, exist_ok=True)

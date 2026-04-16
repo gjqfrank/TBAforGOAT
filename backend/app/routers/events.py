@@ -40,27 +40,35 @@ async def season_high_scores(year: int = Query(2026)):
         if cached:
             return cached
 
-        sb = get_statbotics_client()
-        data = await sb.get_season_high_scores(year, limit=5)
+        # Keep stale data on hand so we can fall back if Statbotics is down
+        stale = payload_cache.read_stale("season_high", str(year))
 
-        # Resolve event keys → friendly names from season data
-        event_names: dict[str, str] = {}
         try:
-            events = await event_service.get_season_events(year)
-            for ev in events:
-                event_names[ev.get("key", "")] = ev.get("short_name") or ev.get("name") or ev.get("key", "")
+            sb = get_statbotics_client()
+            data = await sb.get_season_high_scores(year, limit=5)
+
+            # Resolve event keys → friendly names from season data
+            event_names: dict[str, str] = {}
+            try:
+                events = await event_service.get_season_events(year)
+                for ev in events:
+                    event_names[ev.get("key", "")] = ev.get("short_name") or ev.get("name") or ev.get("key", "")
+            except Exception:
+                pass
+
+            for m in data.get("matches", []):
+                ek = m.get("event_key", "")
+                m["event_name"] = event_names.get(ek, ek)
+                # Pretty match label from key (e.g. 2026caclv_sf1m1 → SF1-1)
+                raw = m.get("key", "")
+                m["match_label"] = _parse_match_label(raw)
+
+            payload_cache.write_payload("season_high", str(year), data)
+            return data
         except Exception:
-            pass
-
-        for m in data.get("matches", []):
-            ek = m.get("event_key", "")
-            m["event_name"] = event_names.get(ek, ek)
-            # Pretty match label from key (e.g. 2026caclv_sf1m1 → SF1-1)
-            raw = m.get("key", "")
-            m["match_label"] = _parse_match_label(raw)
-
-        payload_cache.write_payload("season_high", str(year), data)
-        return data
+            if stale:
+                return stale
+            raise
     except HTTPException:
         raise
     except Exception as e:
@@ -82,7 +90,6 @@ async def season_most_wins(year: int = Query(2026), limit: int = Query(10, ge=1,
 
         payload_cache.write_payload("season_most_wins", cache_key, data)
         return teams
-        return data
     except HTTPException:
         raise
     except Exception as e:
