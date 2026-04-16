@@ -81,31 +81,39 @@ class StatboticsClient:
         """
         import asyncio
 
-        async def _top_red():
-            return await self.get(
-                f"/matches?year={year}&metric=red_score&ascending=false&limit={limit * 2}"
-            )
+        async def _fetch_season_data() -> tuple:
+            """Fetch all three endpoints as a single circuit-breaker unit.
 
-        async def _top_blue():
-            return await self.get(
-                f"/matches?year={year}&metric=blue_score&ascending=false&limit={limit * 2}"
-            )
+            The three parallel requests count as ONE logical operation so that
+            a brief Statbotics outage doesn't increment the failure counter 3×.
+            If all three fail (e.g. circuit was already open or service is
+            completely down) we re-raise so the caller sees a real error and
+            can fall back to stale cache rather than writing empty data.
+            """
+            async def _raw(endpoint: str) -> Any:
+                resp = await self._client().get(endpoint)
+                resp.raise_for_status()
+                return resp.json()
 
-        async def _top_epa():
-            # Fetch extra teams so we can build a name map for match teams too
-            return await self.get(
-                f"/team_years?year={year}&metric=epa&ascending=false&limit=50"
+            results = await asyncio.gather(
+                _raw(f"/matches?year={year}&metric=red_score&ascending=false&limit={limit * 2}"),
+                _raw(f"/matches?year={year}&metric=blue_score&ascending=false&limit={limit * 2}"),
+                _raw(f"/team_years?year={year}&metric=epa&ascending=false&limit=50"),
+                return_exceptions=True,
             )
+            # If every sub-request failed, propagate so the circuit counts one
+            # failure and the router falls back to stale data instead of caching
+            # an empty payload.
+            if all(isinstance(r, BaseException) for r in results):
+                raise results[0]
+            return results  # type: ignore[return-value]
 
-        red_matches, blue_matches, epa_teams = await asyncio.gather(
-            _top_red(), _top_blue(), _top_epa(),
-            return_exceptions=True,
-        )
+        red_matches, blue_matches, epa_teams = await statbotics_breaker.call(_fetch_season_data)
 
         # --- Merge match scores (pick best alliance per match) ---------------
-        if isinstance(red_matches, Exception):
+        if isinstance(red_matches, BaseException):
             red_matches = []
-        if isinstance(blue_matches, Exception):
+        if isinstance(blue_matches, BaseException):
             blue_matches = []
 
         seen: dict[str, dict] = {}  # match_key -> best row
@@ -134,7 +142,7 @@ class StatboticsClient:
         top_matches = sorted(seen.values(), key=lambda r: r["no_foul"], reverse=True)[:limit]
 
         # --- EPA teams + name map ---------------------------------------------
-        if isinstance(epa_teams, Exception):
+        if isinstance(epa_teams, BaseException):
             epa_teams = []
 
         team_names: dict[str, str] = {}
