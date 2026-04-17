@@ -226,6 +226,12 @@ async def _poll_ftc_rankings(event_key: str) -> None:
 
 # ── Main loop ───────────────────────────────────────────────
 
+async def _staggered_poll_ftc_matches(event_key: str, delay: float) -> None:
+    if delay:
+        await asyncio.sleep(delay)
+    await _poll_ftc_matches(event_key)
+
+
 async def run_ftc_match_poller() -> None:
     """Main loop — runs until cancelled."""
     global _last_rankings_poll
@@ -234,11 +240,14 @@ async def run_ftc_match_poller() -> None:
 
     while True:
         try:
-            events = get_ftc_poll_events()
+            events = list(get_ftc_poll_events())
             if events:
-                # Always poll matches
+                # Stagger polls across the interval window to avoid request bursts
+                # when many events are active simultaneously (e.g. championship season).
+                n = len(events)
+                stagger = POLL_INTERVAL / n if n > 1 else 0
                 await asyncio.gather(
-                    *[_poll_ftc_matches(ek) for ek in events],
+                    *[_staggered_poll_ftc_matches(ek, i * stagger) for i, ek in enumerate(events)],
                     return_exceptions=True,
                 )
 

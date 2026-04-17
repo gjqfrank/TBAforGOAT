@@ -169,6 +169,12 @@ async def _poll_matches(event_key: str) -> None:
             log.warning("Supabase match upsert failed for %s: %s", event_key, e)
 
 
+async def _staggered_poll_matches(event_key: str, delay: float) -> None:
+    if delay:
+        await asyncio.sleep(delay)
+    await _poll_matches(event_key)
+
+
 async def _poll_rankings(event_key: str) -> None:
     """Fetch latest rankings from FRC API and upsert into event_teams."""
     frc = get_frc_client()
@@ -245,11 +251,14 @@ async def run_match_poller() -> None:
 
     while True:
         try:
-            events = get_active_events()
+            events = list(get_active_events())
             if events:
-                # Always poll matches
+                # Stagger polls across the interval window to avoid request bursts
+                # when many events are active simultaneously (e.g. championship season).
+                n = len(events)
+                stagger = POLL_INTERVAL / n if n > 1 else 0
                 await asyncio.gather(
-                    *[_poll_matches(ek) for ek in events],
+                    *[_staggered_poll_matches(ek, i * stagger) for i, ek in enumerate(events)],
                     return_exceptions=True,
                 )
 

@@ -441,20 +441,29 @@ async def run_event_sync(year: int | None = None) -> None:
             else:
                 log.debug("No active events found")
 
-            # 2) For ongoing events, sync teams/OPRs, alliances, EPA, FRC data, avatars
-            #    Split into phases:
-            #    a) Seed upserts + read-only fetches (safe to parallelise)
-            #    b) Merge-heavy writes (serialised by _merge_lock, but run
-            #       sequentially per-event to minimise lock contention)
-            seed_tasks = []
-            for ek in ongoing:
-                seed_tasks.append(_sync_teams_and_oprs(ek))
-                seed_tasks.append(_sync_alliances(ek))
-                seed_tasks.append(_sync_frc_team_data(ek))
-                seed_tasks.append(_sync_avatars(ek))
+            # 2) For ongoing events, sync teams/OPRs, alliances, EPA, FRC data, avatars.
+            #    Stagger per-event groups across a 30s window to avoid simultaneous
+            #    FRC API bursts when many championship events are active.
+            if ongoing:
+                event_list = list(ongoing)
+                n = len(event_list)
+                stagger = 30.0 / n if n > 1 else 0
 
-            if seed_tasks:
-                await asyncio.gather(*seed_tasks, return_exceptions=True)
+                async def _sync_event_seed(ek: str, delay: float) -> None:
+                    if delay:
+                        await asyncio.sleep(delay)
+                    await asyncio.gather(
+                        _sync_teams_and_oprs(ek),
+                        _sync_alliances(ek),
+                        _sync_frc_team_data(ek),
+                        _sync_avatars(ek),
+                        return_exceptions=True,
+                    )
+
+                await asyncio.gather(
+                    *[_sync_event_seed(ek, i * stagger) for i, ek in enumerate(event_list)],
+                    return_exceptions=True,
+                )
 
             # EPA merges into raw_data — run one event at a time
             for ek in ongoing:
