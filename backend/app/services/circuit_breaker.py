@@ -11,7 +11,7 @@ import asyncio
 import logging
 import time
 from enum import Enum
-from typing import Any, Callable, Coroutine
+from typing import Any, Callable, Coroutine, Optional
 
 log = logging.getLogger(__name__)
 
@@ -23,7 +23,11 @@ class State(Enum):
 
 
 class CircuitBreaker:
-    """Per-service circuit breaker with configurable thresholds."""
+    """Per-service circuit breaker with configurable thresholds.
+
+    Failures are counted within a sliding *window* seconds so that old
+    failures from brief blips don't keep the circuit open indefinitely.
+    """
 
     def __init__(
         self,
@@ -31,14 +35,16 @@ class CircuitBreaker:
         failure_threshold: int = 5,
         recovery_timeout: float = 30.0,
         half_open_max: int = 1,
+        window: float = 60.0,
     ) -> None:
         self.name = name
         self.failure_threshold = failure_threshold
         self.recovery_timeout = recovery_timeout
         self.half_open_max = half_open_max
+        self.window = window
 
         self._state = State.CLOSED
-        self._failure_count = 0
+        self._failure_times: list[float] = []
         self._last_failure_time = 0.0
         self._half_open_count = 0
         self._lock = asyncio.Lock()
@@ -50,10 +56,19 @@ class CircuitBreaker:
                 return State.HALF_OPEN
         return self._state
 
-    async def call(self, coro_factory: Callable[[], Coroutine[Any, Any, Any]]) -> Any:
+    async def call(
+        self,
+        coro_factory: Callable[[], Coroutine[Any, Any, Any]],
+        is_failure: Optional[Callable[[Exception], bool]] = None,
+    ) -> Any:
         """Execute *coro_factory()* through the breaker.
 
         Raises ``CircuitOpenError`` when the circuit is open.
+
+        *is_failure* optionally classifies exceptions: return True to count the
+        exception toward the threshold, False to let it propagate without
+        tripping the breaker (e.g. 404 Not Found is not a service outage).
+        When omitted every exception counts as a failure.
         """
         current = self.state
 
@@ -69,7 +84,8 @@ class CircuitBreaker:
         try:
             result = await coro_factory()
         except Exception as exc:
-            await self._record_failure()
+            if is_failure is None or is_failure(exc):
+                await self._record_failure()
             raise
         else:
             await self._record_success()
@@ -77,13 +93,16 @@ class CircuitBreaker:
 
     async def _record_failure(self) -> None:
         async with self._lock:
-            self._failure_count += 1
-            self._last_failure_time = time.monotonic()
-            if self._failure_count >= self.failure_threshold:
+            now = time.monotonic()
+            self._failure_times.append(now)
+            self._last_failure_time = now
+            cutoff = now - self.window
+            self._failure_times = [t for t in self._failure_times if t >= cutoff]
+            if len(self._failure_times) >= self.failure_threshold:
                 if self._state != State.OPEN:
                     log.warning(
-                        "Circuit breaker [%s] OPEN after %d failures",
-                        self.name, self._failure_count,
+                        "Circuit breaker [%s] OPEN after %d failures in %.0fs window",
+                        self.name, len(self._failure_times), self.window,
                     )
                 self._state = State.OPEN
 
@@ -92,13 +111,13 @@ class CircuitBreaker:
             if self._state in (State.HALF_OPEN, State.OPEN):
                 log.info("Circuit breaker [%s] CLOSED (recovered)", self.name)
             self._state = State.CLOSED
-            self._failure_count = 0
+            self._failure_times = []
             self._half_open_count = 0
 
     def reset(self) -> None:
         """Manually close the breaker (e.g. after a cache clear)."""
         self._state = State.CLOSED
-        self._failure_count = 0
+        self._failure_times = []
         self._half_open_count = 0
 
 
@@ -123,9 +142,12 @@ def get_breaker(name: str, **kwargs: Any) -> CircuitBreaker:
     return _breakers[name]
 
 
-# Pre-configured breakers for each upstream
-tba_breaker = get_breaker("The Blue Alliance", failure_threshold=5, recovery_timeout=30)
-frc_breaker = get_breaker("FRC Events API", failure_threshold=5, recovery_timeout=30)
-ftc_breaker = get_breaker("FTC Events API", failure_threshold=5, recovery_timeout=30)
-statbotics_breaker = get_breaker("Statbotics", failure_threshold=5, recovery_timeout=60)
-gatool_breaker = get_breaker("GATool", failure_threshold=5, recovery_timeout=60)
+# Pre-configured breakers for each upstream.
+# FRC breaker threshold is higher because championship season runs 8+ events
+# concurrently — a single transient rate-limit produces one failure per event,
+# so 5 was too easy to trip from normal background churn.
+tba_breaker = get_breaker("The Blue Alliance", failure_threshold=5, recovery_timeout=30, window=60)
+frc_breaker = get_breaker("FRC Events API", failure_threshold=10, recovery_timeout=60, window=60)
+ftc_breaker = get_breaker("FTC Events API", failure_threshold=5, recovery_timeout=30, window=60)
+statbotics_breaker = get_breaker("Statbotics", failure_threshold=5, recovery_timeout=60, window=60)
+gatool_breaker = get_breaker("GATool", failure_threshold=5, recovery_timeout=60, window=60)

@@ -16,6 +16,17 @@ STATBOTICS_BASE = "https://api.statbotics.io/v3"
 CACHE_TTL = 300  # 5 minutes — same cadence as TBA cache
 
 
+def _is_service_failure(exc: Exception) -> bool:
+    """Only count 5xx responses and network errors — not 404/4xx — as breaker failures.
+
+    Statbotics returns 404 for events it hasn't indexed yet; those are
+    expected "no data" responses, not signs the service is down.
+    """
+    if isinstance(exc, httpx.HTTPStatusError):
+        return exc.response.status_code >= 500
+    return True
+
+
 class StatboticsClient:
     """Thin async wrapper around Statbotics REST API with TTL cache."""
 
@@ -43,7 +54,7 @@ class StatboticsClient:
             resp.raise_for_status()
             return resp.json()
 
-        data = await statbotics_breaker.call(_do_request)
+        data = await statbotics_breaker.call(_do_request, is_failure=_is_service_failure)
         self._cache[endpoint] = (now, data)
         return data
 
@@ -108,7 +119,9 @@ class StatboticsClient:
                 raise results[0]
             return results  # type: ignore[return-value]
 
-        red_matches, blue_matches, epa_teams = await statbotics_breaker.call(_fetch_season_data)
+        red_matches, blue_matches, epa_teams = await statbotics_breaker.call(
+            _fetch_season_data, is_failure=_is_service_failure
+        )
 
         # --- Merge match scores (pick best alliance per match) ---------------
         if isinstance(red_matches, BaseException):
