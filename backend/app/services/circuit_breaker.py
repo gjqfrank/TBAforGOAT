@@ -143,11 +143,11 @@ def get_breaker(name: str, **kwargs: Any) -> CircuitBreaker:
 
 
 # Pre-configured breakers for each upstream.
-# FRC breaker threshold is higher because championship season runs 8+ events
-# concurrently — a single transient rate-limit produces one failure per event,
-# so 5 was too easy to trip from normal background churn.
+# FRC and Statbotics thresholds are higher because championship season runs 8+
+# events concurrently — a single transient rate-limit produces one failure per
+# event, so 5 was too easy to trip from normal background churn.
 tba_breaker = get_breaker("The Blue Alliance", failure_threshold=5, recovery_timeout=30, window=60)
 frc_breaker = get_breaker("FRC Events API", failure_threshold=10, recovery_timeout=60, window=60)
 ftc_breaker = get_breaker("FTC Events API", failure_threshold=5, recovery_timeout=30, window=60)
-statbotics_breaker = get_breaker("Statbotics", failure_threshold=5, recovery_timeout=60, window=60)
+statbotics_breaker = get_breaker("Statbotics", failure_threshold=10, recovery_timeout=60, window=60)
 gatool_breaker = get_breaker("GATool", failure_threshold=5, recovery_timeout=60, window=60)
