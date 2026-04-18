@@ -24,6 +24,7 @@ from .match_poller import set_active_events
 log = logging.getLogger(__name__)
 
 SYNC_INTERVAL = 120  # seconds between full sweeps
+EPA_STAGGER   =   5  # seconds between per-event EPA calls (avoids Statbotics bursts)
 
 
 def _strip_nulls(d: dict) -> dict:
@@ -465,8 +466,11 @@ async def run_event_sync(year: int | None = None) -> None:
                     return_exceptions=True,
                 )
 
-            # EPA merges into raw_data — run one event at a time
-            for ek in ongoing:
+            # EPA merges into raw_data — run one event at a time with a stagger
+            # so that 6 simultaneous events don't burst Statbotics in <3 seconds.
+            for i, ek in enumerate(ongoing):
+                if i > 0:
+                    await asyncio.sleep(EPA_STAGGER)
                 try:
                     await _sync_epa(ek)
                 except Exception as e:

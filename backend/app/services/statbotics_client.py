@@ -30,9 +30,24 @@ def _is_service_failure(exc: Exception) -> bool:
 class StatboticsClient:
     """Thin async wrapper around Statbotics REST API with TTL cache."""
 
+    # Statbotics is a free public API — be conservative: 1 concurrent HTTP
+    # request at a time with a 0.5 s floor between calls (~2 req/s max).
+    # With 6 simultaneous events each background-syncing EPA every 120 s, plus
+    # on-demand frontend traffic, bursts can otherwise exceed 10+ calls in <5 s
+    # and trigger rate-limit failures that trip the circuit breaker.
+    _CONCURRENCY = 1
+    _MIN_INTERVAL = 0.5  # seconds between outbound HTTP calls
+
     def __init__(self) -> None:
         self._cache: dict[str, tuple[float, Any]] = {}
         self._http: Optional[httpx.AsyncClient] = None
+        self._rate_sem = asyncio.Semaphore(self._CONCURRENCY)
+        self._last_call: float = 0.0
+        # In-flight request coalescing: endpoint → Future carrying the result.
+        # When a second caller asks for the same endpoint while an HTTP call is
+        # already in progress, it awaits the same Future instead of firing a
+        # duplicate request.
+        self._in_flight: dict[str, asyncio.Future] = {}
 
     def _client(self) -> httpx.AsyncClient:
         if self._http is None or self._http.is_closed:
@@ -49,14 +64,36 @@ class StatboticsClient:
             if now - ts < CACHE_TTL:
                 return data
 
-        async def _do_request():
-            resp = await self._client().get(endpoint)
-            resp.raise_for_status()
-            return resp.json()
+        # If another coroutine is already fetching this endpoint, wait for it.
+        if endpoint in self._in_flight:
+            return await asyncio.shield(self._in_flight[endpoint])
 
-        data = await statbotics_breaker.call(_do_request, is_failure=_is_service_failure)
-        self._cache[endpoint] = (now, data)
-        return data
+        loop = asyncio.get_event_loop()
+        fut: asyncio.Future = loop.create_future()
+        self._in_flight[endpoint] = fut
+
+        try:
+            async def _do_request():
+                async with self._rate_sem:
+                    # Enforce minimum interval between outbound calls.
+                    wait = self._MIN_INTERVAL - (time.monotonic() - self._last_call)
+                    if wait > 0:
+                        await asyncio.sleep(wait)
+                    self._last_call = time.monotonic()
+                    resp = await self._client().get(endpoint)
+                    resp.raise_for_status()
+                    return resp.json()
+
+            data = await statbotics_breaker.call(_do_request, is_failure=_is_service_failure)
+            self._cache[endpoint] = (time.time(), data)
+            fut.set_result(data)
+            return data
+        except Exception as exc:
+            if not fut.done():
+                fut.set_exception(exc)
+            raise
+        finally:
+            self._in_flight.pop(endpoint, None)
 
     def clear_cache(self) -> None:
         self._cache.clear()
@@ -95,16 +132,30 @@ class StatboticsClient:
         async def _fetch_season_data() -> tuple:
             """Fetch all three endpoints as a single circuit-breaker unit.
 
-            The three parallel requests count as ONE logical operation so that
-            a brief Statbotics outage doesn't increment the failure counter 3×.
-            If all three fail (e.g. circuit was already open or service is
-            completely down) we re-raise so the caller sees a real error and
-            can fall back to stale cache rather than writing empty data.
+            The three requests count as ONE logical operation so that a brief
+            Statbotics outage doesn't increment the failure counter 3×.
+            Each sub-request checks the client TTL cache and goes through the
+            rate limiter — bypassing only the outer circuit-breaker layer (the
+            outer statbotics_breaker.call() handles that already).
+            If all three fail we re-raise so the caller can fall back to stale
+            data rather than caching an empty payload.
             """
             async def _raw(endpoint: str) -> Any:
-                resp = await self._client().get(endpoint)
-                resp.raise_for_status()
-                return resp.json()
+                now = time.time()
+                if endpoint in self._cache:
+                    ts, data = self._cache[endpoint]
+                    if now - ts < CACHE_TTL:
+                        return data
+                async with self._rate_sem:
+                    wait = self._MIN_INTERVAL - (time.monotonic() - self._last_call)
+                    if wait > 0:
+                        await asyncio.sleep(wait)
+                    self._last_call = time.monotonic()
+                    resp = await self._client().get(endpoint)
+                    resp.raise_for_status()
+                    data = resp.json()
+                self._cache[endpoint] = (now, data)
+                return data
 
             results = await asyncio.gather(
                 _raw(f"/matches?year={year}&metric=red_score&ascending=false&limit={limit * 2}"),
