@@ -17,7 +17,7 @@ EVENT_CACHE_TTL = 120  # 2 min for event queries
 WR_CACHE_TTL = 600     # 10 min for world record
 _MAX_CACHE_ENTRIES = 500  # cap to prevent unbounded growth
 
-ftcscout_breaker = get_breaker("FTC Scout", failure_threshold=5, recovery_timeout=60)
+ftcscout_breaker = get_breaker("FTC Scout", failure_threshold=10, recovery_timeout=60, window=60)
 
 
 class FTCScoutClient:
@@ -70,6 +70,9 @@ class FTCScoutClient:
             return resp.json()
 
         body = await ftcscout_breaker.call(_do_request)
+        if not isinstance(body, dict):
+            log.warning("FTC Scout returned unexpected body type: %r", body)
+            return {}
         if "errors" in body and body["errors"]:
             log.warning("FTC Scout GraphQL errors: %s", body["errors"])
         return body.get("data", {})

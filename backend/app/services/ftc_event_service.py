@@ -223,7 +223,7 @@ async def get_event_teams_with_stats(event_key: str) -> list[dict]:
         log.warning("FTC rankings fetch failed for %s: %s", event_key, raw_rankings)
         raw_rankings = []
     if isinstance(scout_stats, Exception):
-        log.warning("FTC Scout stats fetch failed for %s: %s", event_key, scout_stats)
+        log.warning("FTC Scout stats fetch failed for %s: %r", event_key, scout_stats)
         scout_stats = []
 
     # Build ranking lookup

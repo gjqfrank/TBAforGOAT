@@ -201,7 +201,7 @@ async def _sync_ftc_stats(event_key: str) -> None:
         log.debug("Circuit open — skipping FTC Scout stats for %s", event_key)
         return
     except Exception as e:
-        log.warning("FTC Scout stats fetch failed for %s: %s", event_key, e)
+        log.warning("FTC Scout stats fetch failed for %s: %r", event_key, e)
         return
 
     if not stats:

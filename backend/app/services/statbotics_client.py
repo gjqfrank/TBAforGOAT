@@ -18,13 +18,14 @@ CACHE_TTL = 300  # 5 minutes — same cadence as TBA cache
 
 
 def _is_service_failure(exc: Exception) -> bool:
-    """Only count 5xx responses and network errors — not 404/4xx — as breaker failures.
+    """Only count 503/network errors as breaker failures — not 4xx or 500.
 
-    Statbotics returns 404 for events it hasn't indexed yet; those are
-    expected "no data" responses, not signs the service is down.
+    Statbotics returns 404 or 500 for events it hasn't indexed yet; those are
+    data-gap responses, not signs the service is down. Only 503 Service
+    Unavailable reliably indicates a full outage worth opening the breaker for.
     """
     if isinstance(exc, httpx.HTTPStatusError):
-        return exc.response.status_code >= 500
+        return exc.response.status_code == 503
     return True
 
 

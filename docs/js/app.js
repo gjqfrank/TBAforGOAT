@@ -6941,10 +6941,10 @@ function renderPbpTeam(t, sideCls) {
                 <div class="pbp-stat-label">EPA${deltaHtml}</div>
                 <div class="pbp-stat-value epa-val${epaCls}">${t.epa != null ? t.epa : '\u2013'}</div>
             </div>`}
-            <div class="pbp-stat">
+            ${ftcMode ? '' : `<div class="pbp-stat">
                 <div class="pbp-stat-label">Avg RP</div>
                 <div class="pbp-stat-value">${t.avg_rp}</div>
-            </div>
+            </div>`}
         </div>
         <div class="pbp-awards-slot" data-team="${t.team_number}"></div>
         <div class="pbp-bottom-row">
