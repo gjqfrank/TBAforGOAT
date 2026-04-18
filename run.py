@@ -1,4 +1,4 @@
-    #!/usr/bin/env python3
+#!/usr/bin/env python3
 """Start the FRC Caster's Tool server."""
 import uvicorn
 

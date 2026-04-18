@@ -5,6 +5,7 @@ No API key required.  Be nice to their servers — cache aggressively.
 """
 from __future__ import annotations
 
+import asyncio
 import time
 from typing import Any, Optional
 
@@ -127,8 +128,6 @@ class StatboticsClient:
         Fetches red-sorted and blue-sorted matches from Statbotics,
         merges, dedupes, and returns the top *limit* along with top EPA teams.
         """
-        import asyncio
-
         async def _fetch_season_data() -> tuple:
             """Fetch all three endpoints as a single circuit-breaker unit.
 

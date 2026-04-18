@@ -6912,7 +6912,7 @@ function renderPbpTeam(t, sideCls) {
     return `
     <div class="pbp-team ${foreignCls} ${rookieCls}" data-country="${t.country || ''}" data-rookie-year="${t.rookie_year || ''}">
         <div class="pbp-team-top">
-            <div class="pbp-team-number">${_renderTeamNum(t)}${pickHtml}</div>
+            <div class="pbp-team-number" data-team-number="${t.team_number}">${_renderTeamNum(t)}${pickHtml}</div>
             <div class="pbp-team-identity">
                 <div class="pbp-team-name-row">
                     <div class="pbp-team-nickname">${t.nickname || 'Team ' + t.team_number}</div>

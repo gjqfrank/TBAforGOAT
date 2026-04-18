@@ -5853,6 +5853,8 @@ tr:hover .compare-cb,
     /* ── Regional Pool Table Mobile ── */
     .rp-table-wrap {
         max-height: 400px;
+        -webkit-overflow-scrolling: touch;
+        touch-action: pan-y;
     }
     .rp-table {
         font-size: .72rem;
@@ -8528,6 +8530,8 @@ td .pick-flip-back { font-size: inherit; }
 .rp-table-wrap {
     max-height: 450px;
     overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
 }
 .rp-table thead th {
     position: sticky;
@@ -8537,6 +8541,7 @@ td .pick-flip-back { font-size: inherit; }
 .rp-event-code {
     cursor: help;
     border-bottom: 1px dotted var(--text-muted);
+    -webkit-touch-callout: none;
 }
 
 /* Qualified row highlight — subdued for directly qualified */
