@@ -414,13 +414,15 @@ const BattleStation = (() => {
         _renderTimeline();
         _scrollToTop();
         try {
-            await NotesService.insertNote({
+            const saved = await NotesService.insertNote({
                 event_key: _eventKey,
                 match_key: _matchKey,
                 author: 'SYSTEM',
                 content: code,
                 type: 'system',
             });
+            const optIdx = _notes.findIndex(n => n.id === optimistic.id);
+            if (optIdx !== -1 && saved) _notes[optIdx] = saved;
         } catch (e) {
             console.error('[BattleStation] Macro inject failed:', e);
         }
@@ -459,7 +461,7 @@ const BattleStation = (() => {
         _renderTimeline();
         _scrollToTop();
         try {
-            await NotesService.insertNote({
+            const saved = await NotesService.insertNote({
                 event_key: _eventKey,
                 match_key: _matchKey,
                 team_key: teamKey,
@@ -467,6 +469,8 @@ const BattleStation = (() => {
                 content: text,
                 type: 'manual',
             });
+            const optIdx = _notes.findIndex(n => n.id === optimistic.id);
+            if (optIdx !== -1 && saved) _notes[optIdx] = saved;
         } catch (e2) {
             console.error('[BattleStation] Note submit failed:', e2);
             input.value = text;
@@ -502,7 +506,7 @@ const BattleStation = (() => {
         _renderTimeline();
         _scrollToTop();
         try {
-            await NotesService.insertNote({
+            const saved = await NotesService.insertNote({
                 event_key: _eventKey,
                 match_key: _matchKey,
                 team_key: teamKey,
@@ -510,6 +514,8 @@ const BattleStation = (() => {
                 content: text,
                 type: 'manual',
             });
+            const optIdx = _notes.findIndex(n => n.id === optimistic.id);
+            if (optIdx !== -1 && saved) _notes[optIdx] = saved;
         } catch (e2) {
             console.error('[BattleStation] Mobile submit failed:', e2);
             input.value = text;
