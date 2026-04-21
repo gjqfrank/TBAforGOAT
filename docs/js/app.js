@@ -4018,7 +4018,21 @@ document.addEventListener('click', () => {
 });
 
 function renderPastEventChampions(champions) {
-    $('summary-past-champs-list').innerHTML = champions.map(t => {
+    // Sort by most recent year (descending) — teams who were most recently here appear first
+    const sorted = [...champions].sort((a, b) => {
+        const latestA = Math.max(
+            ...(a.years_won.map(y => y.year)),
+            ...(a.years_finalist.map(y => y.year)),
+            0
+        );
+        const latestB = Math.max(
+            ...(b.years_won.map(y => y.year)),
+            ...(b.years_finalist.map(y => y.year)),
+            0
+        );
+        return latestB - latestA || a.team_number - b.team_number;
+    });
+    $('summary-past-champs-list').innerHTML = sorted.map(t => {
         const badges = [];
         if (t.years_won.length)
             badges.push(_champBadge(t.years_won, 'past-champ-winner', '\u{1F3C6}', 'Winner'));
@@ -4068,7 +4082,13 @@ function renderPastSeasonAwards(awards) {
         return;
     }
 
-    $('summary-past-awards-list').innerHTML = filtered.map(t => {
+    // Sort by most recent award year descending; tie-break by team number
+    const sorted = [...filtered].sort((a, b) => {
+        const latestYear = tm => Math.max(0, ...tm.awards.map(aw => parseInt(aw.event_key, 10) || 0));
+        return latestYear(b) - latestYear(a) || a.team_number - b.team_number;
+    });
+
+    $('summary-past-awards-list').innerHTML = sorted.map(t => {
         const chips = t.awards.map(a => {
             const icon = a.type === 'winner' ? '\u{1F3C6}' : a.type === 'finalist' ? '\u{1F948}' : '\u{2B50}';
             const cls = `past-award-chip-${a.type}`;
