@@ -3005,13 +3005,13 @@ function _scheduleFrcAvatarPatch(eventKey) {
                     const row = document.querySelector(`#event-teams tr[data-team-key="${team.team_key}"]`);
                     if (row) {
                         const cell = row.querySelector('.team-avatar-cell');
-                        if (cell) cell.innerHTML = `<img src="${newAvatar}" class="team-avatar" alt="">`;
+                        if (cell) cell.innerHTML = `<img src="${newAvatar}" class="team-avatar" width="32" height="32" alt="">`;
                     }
                     // Card view: patch the card avatar too
                     const card = document.querySelector(`#event-teams .rank-card[data-team-key="${team.team_key}"]`);
                     if (card) {
                         const ph = card.querySelector('.rank-card-avatar-placeholder');
-                        if (ph) ph.outerHTML = `<img src="${newAvatar}" class="rank-card-avatar" alt="">`;
+                        if (ph) ph.outerHTML = `<img src="${newAvatar}" class="rank-card-avatar" width="32" height="32" alt="">`;
                     }
                     patched++;
                 }
@@ -3144,9 +3144,8 @@ function renderTeamTable(teams, sortCol, asc) {
                 const loc = [t.city, t.state_prov, t.country].filter(Boolean).join(', ');
                 const name = formatTeamName(t.nickname);
                 const avatarImg = t.avatar
-                    ? `<img src="${t.avatar}" class="team-avatar" alt="">`
+                    ? `<img src="${t.avatar}" class="team-avatar" width="32" height="32" alt="">`
                     : `<span class="team-avatar team-avatar-placeholder">${t.team_number}</span>`;
-                const checked = compareSelection.has(t.team_key) ? 'checked' : '';
                 const isIntl = highlightForeign && t.country && eventCountry && t.country !== eventCountry;
                 const isRookie = highlightRookie && t.rookie_year && currentEventYear && t.rookie_year >= currentEventYear;
                 const oprVal = parseFloat(t.opr);
@@ -3485,6 +3484,10 @@ async function loadSummaryAwards() {
             summaryData.season_impact = data.season_impact || [];
             summaryData.einstein_contenders = data.einstein_contenders || [];
             _renderChampsSummaryAwards(data);
+            // Ensure the year toggle is hidden — it's an artifact from the
+            // regular-event awards card and must not appear on championship divisions
+            const champToggle = $('award-season-toggle');
+            if (champToggle) champToggle.classList.add('hidden');
             autoCacheTab('summary', summaryData);
             return;
         }
@@ -4555,6 +4558,11 @@ function renderConnections(connections, filter) {
         if (partnerCount) chips.push(`<span class="conn-chip conn-chip-partner">${svgPartner} ${partnerCount}</span>`);
         if (opponentCount) chips.push(`<span class="conn-chip conn-chip-opponent">${svgOpponent} ${opponentCount}</span>`);
 
+        // H2H record badge for opponent connections
+        const h2hHtml = (c.h2h_wins_a != null && c.h2h_wins_b != null && opponentCount > 0)
+            ? `<span class="conn-chip conn-chip-h2h" title="Head-to-head playoff record">${c.team_a}: ${c.h2h_wins_a} &ndash; ${c.team_b}: ${c.h2h_wins_b}</span>`
+            : '';
+
         // Detail lines (shown on expand)
         const lines = [];
         c.partnered_at.forEach(p => {
@@ -4569,11 +4577,15 @@ function renderConnections(connections, filter) {
             </div>`);
         });
         c.opponents_at.forEach(o => {
+            const h2hMini = (o.team_a_wins != null && o.team_b_wins != null)
+                ? `<span class="conn-detail-h2h">${c.team_a}: ${o.team_a_wins} &ndash; ${c.team_b}: ${o.team_b_wins}</span>`
+                : '';
             lines.push(`<div class="conn-detail-line conn-line-opponent">
                 <span class="conn-detail-icon">${svgOpponent}</span>
                 <span class="conn-detail-event">${o.event_name || o.event_key}</span>
                 <span class="conn-detail-year">${o.year}</span>
                 <span class="conn-detail-stage">${o.stage}</span>
+                ${h2hMini}
             </div>`);
         });
 
@@ -4583,7 +4595,7 @@ function renderConnections(connections, filter) {
                 <span class="conn-team has-tooltip">${c.team_a}<span class="custom-tooltip">${c.team_a_name}</span></span>
                 <span class="conn-vs">&amp;</span>
                 <span class="conn-team has-tooltip">${c.team_b}<span class="custom-tooltip">${c.team_b_name}</span></span>
-                <span class="conn-chips">${chips.join('')}</span>
+                <span class="conn-chips">${chips.join('')}${h2hHtml}</span>
                 <span class="conn-expand-icon">▸</span>
             </div>
             <div class="conn-row-details">${lines.join('')}</div>
@@ -4778,8 +4790,16 @@ function renderBracketTree() {
         const redLost = blueWon;
         const blueLost = redWon;
         const replay = m.match_number > 1 ? ` <span class="bkt-replay">R${m.match_number}</span>` : '';
-        const redSeed  = m.red.alliance_number  ? `<span class="bkt-seed">#${m.red.alliance_number}</span>` : '';
-        const blueSeed = m.blue.alliance_number ? `<span class="bkt-seed">#${m.blue.alliance_number}</span>` : '';
+        // For Einstein: show division name instead of seed number
+        const _seedLabel = (num) => {
+            if (!num) return '';
+            if (allianceData && allianceData.is_einstein && allianceData.division_names && allianceData.division_names[num]) {
+                return `<span class="bkt-seed bkt-seed-div">${allianceData.division_names[num]}</span>`;
+            }
+            return `<span class="bkt-seed">#${num}</span>`;
+        };
+        const redSeed  = m.red.alliance_number  ? _seedLabel(m.red.alliance_number)  : '';
+        const blueSeed = m.blue.alliance_number ? _seedLabel(m.blue.alliance_number) : '';
         return `<div class="bkt-slot ${upcoming ? 'bkt-upcoming' : ''} ${redWon || blueWon ? 'bkt-decided' : ''}">
                     <div class="bkt-slot-header">${label}${replay}</div>
                     <div class="bkt-row bkt-red ${redWon ? 'bkt-won' : ''}${redLost ? ' bkt-lost' : ''}">
@@ -4949,8 +4969,15 @@ function _renderFtcBracketTree() {
         const firstM = matches[0];
         const redNums  = firstM.red?.teams  ? firstM.red.teams.map(t => t.team_number)  : (firstM.red?.team_numbers || []);
         const blueNums = firstM.blue?.teams ? firstM.blue.teams.map(t => t.team_number) : (firstM.blue?.team_numbers || []);
-        const redSeed  = firstM.red?.alliance_number  ? `<span class="bkt-seed">#${firstM.red.alliance_number}</span>` : '';
-        const blueSeed = firstM.blue?.alliance_number ? `<span class="bkt-seed">#${firstM.blue.alliance_number}</span>` : '';
+        const _seriesDivLabel = (num) => {
+            if (!num) return '';
+            if (allianceData && allianceData.is_einstein && allianceData.division_names && allianceData.division_names[num]) {
+                return `<span class="bkt-seed bkt-seed-div">${allianceData.division_names[num]}</span>`;
+            }
+            return `<span class="bkt-seed">#${num}</span>`;
+        };
+        const redSeed  = firstM.red?.alliance_number  ? _seriesDivLabel(firstM.red.alliance_number)  : '';
+        const blueSeed = firstM.blue?.alliance_number ? _seriesDivLabel(firstM.blue.alliance_number) : '';
 
         let redWins = 0, blueWins = 0;
         matches.forEach(m => {
@@ -5085,8 +5112,15 @@ function _renderFtcBracketSeries() {
         const blueLost = redWon;
         const redNums = m.red.teams ? m.red.teams.map(t => t.team_number) : (m.red.team_numbers || []);
         const blueNums = m.blue.teams ? m.blue.teams.map(t => t.team_number) : (m.blue.team_numbers || []);
-        const redSeed  = m.red.alliance_number  ? `<span class="bkt-seed">#${m.red.alliance_number}</span>` : '';
-        const blueSeed = m.blue.alliance_number ? `<span class="bkt-seed">#${m.blue.alliance_number}</span>` : '';
+        const _rmDivLabel = (num) => {
+            if (!num) return '';
+            if (allianceData && allianceData.is_einstein && allianceData.division_names && allianceData.division_names[num]) {
+                return `<span class="bkt-seed bkt-seed-div">${allianceData.division_names[num]}</span>`;
+            }
+            return `<span class="bkt-seed">#${num}</span>`;
+        };
+        const redSeed  = m.red.alliance_number  ? _rmDivLabel(m.red.alliance_number)  : '';
+        const blueSeed = m.blue.alliance_number ? _rmDivLabel(m.blue.alliance_number) : '';
 
         const shortLabel = /final/i.test(m.label || '') ? 'Finals' : ('Match ' + (m.set_number || '?'));
 
@@ -5119,9 +5153,15 @@ function _renderFtcBracketSeries() {
         const firstMatch = matches[0];
         const allianceNumRed = firstMatch.red?.alliance_number;
         const allianceNumBlue = firstMatch.blue?.alliance_number;
+        const _ftcDivName = (num) => {
+            if (allianceData && allianceData.is_einstein && allianceData.division_names && allianceData.division_names[num]) {
+                return allianceData.division_names[num];
+            }
+            return `#${num}`;
+        };
         let seriesLabel = `Series ${sKey}`;
         if (allianceNumRed && allianceNumBlue) {
-            seriesLabel = `#${allianceNumRed} vs #${allianceNumBlue}`;
+            seriesLabel = `${_ftcDivName(allianceNumRed)} vs ${_ftcDivName(allianceNumBlue)}`;
         }
 
         const seriesWinner = redWins >= 2 ? 'red' : (blueWins >= 2 ? 'blue' : null);
@@ -5439,12 +5479,10 @@ function renderAlliances(data) {
     const tb = $('alliance-toolbar');
     if (tb) tb.classList.remove('hidden');
 
-    const roleLabels = ['Captain', '1st Pick', '2nd Pick', '3rd Pick', 'Backup'];
-    // At non-championship events alliances have 4 teams; idx 3 is the backup
-    const getRoleLabel = (idx, teamCount) => {
-        if (idx === 3 && teamCount <= 4) return 'Backup';
-        return roleLabels[idx] || '';
-    };
+    // Use pick_label from the backend (already correct for championship vs regular events)
+    // Championship: Captain / 1st Pick / 2nd Pick / 3rd Pick — no backups
+    // Regular events: Captain / 1st Pick / 2nd Pick / Backup (for emergency replacements)
+    const getRoleLabel = (t) => t.pick_label || '';
 
     // Compute event-average OPR and EPA for highlighting
     const allOPRs = alliances.flatMap(a => a.teams.map(t => parseFloat(t.opr))).filter(v => !isNaN(v));
@@ -5539,7 +5577,7 @@ function renderAlliances(data) {
 
                     return `
                     <div class="alliance-team-row${isIntl ? ' foreign-team-row' : ''}${isRookie ? ' rookie-team-row' : ''}" data-country="${t.country || ''}" data-rookie-year="${t.rookie_year || ''}">
-                        <span class="team-role">${getRoleLabel(idx, a.teams.length)}</span>
+                        <span class="team-role">${getRoleLabel(t)}</span>
                         ${avatarHtml}
                         <span class="team-num has-tooltip">${_renderTeamNum(t)}${(_timsCache[t.team_number]?.nickname || t.nickname) ? `<span class="custom-tooltip">${_timsCache[t.team_number]?.nickname || t.nickname}</span>` : ''}</span>
                         ${allianceShowAttrs ? _renderBdTags(t.team_number) : ''}
@@ -6615,18 +6653,45 @@ function renderPbpMatch() {
     }
 
     // Alliance titles (include alliance # for playoff matches)
+    // For Einstein, use division name instead of "Alliance #N"
     const redAllianceNum = m.red.alliance_number;
     const blueAllianceNum = m.blue.alliance_number;
-    const redTitle = redAllianceNum ? `Alliance #${redAllianceNum}` : 'Red Alliance';
-    const blueTitle = blueAllianceNum ? `Alliance #${blueAllianceNum}` : 'Blue Alliance';
+    const _divLabel = (num, fallback) => {
+        if (!num) return fallback;
+        if (allianceData && allianceData.is_einstein && allianceData.division_names) {
+            const name = allianceData.division_names[num];
+            if (name) return name;
+        }
+        return `Alliance #${num}`;
+    };
+    const redTitle = _divLabel(redAllianceNum, 'Red Alliance');
+    const blueTitle = _divLabel(blueAllianceNum, 'Blue Alliance');
+
+    // For championship playoff matches, include any bench team (3rd Pick not playing)
+    const _isChampPlayoff = allianceData && allianceData.is_championship && m.comp_level && m.comp_level !== 'qm';
+    const _getBenchCard = (side, sideClass) => {
+        if (!_isChampPlayoff) return '';
+        const allianceNum = side.alliance_number;
+        if (!allianceNum || !allianceData.alliances) return '';
+        const fullAlliance = allianceData.alliances.find(a => a.number === allianceNum);
+        if (!fullAlliance || fullAlliance.teams.length < 4) return '';
+        const playingNums = new Set((side.teams || []).map(t => t.team_number));
+        const benchTeam = fullAlliance.teams.find(t => !playingNums.has(t.team_number));
+        if (!benchTeam) return '';
+        return `<div class="pbp-team-card pbp-team-bench ${sideClass}" title="${benchTeam.pick_label || '3rd Pick'} — Not playing this match">
+            <div class="pbp-team-num">${benchTeam.team_number}</div>
+            <div class="pbp-team-name">${benchTeam.nickname || ''}</div>
+            <span class="pbp-bench-badge">3rd Pick · Bench</span>
+        </div>`;
+    };
 
     // Render team cards or alliance placeholder when teams aren't assigned yet
     const redTeamCards = m.red.teams.length
-        ? m.red.teams.map(t => renderPbpTeam(t, 'red-side')).join('')
-        : (redAllianceNum ? `<div class="pbp-alliance-placeholder red-side">Alliance #${redAllianceNum} — Teams TBD</div>` : '<div class="pbp-alliance-placeholder">Teams TBD</div>');
+        ? m.red.teams.map(t => renderPbpTeam(t, 'red-side')).join('') + _getBenchCard(m.red, 'red-side')
+        : (redAllianceNum ? `<div class="pbp-alliance-placeholder red-side">${redTitle} \u2014 Teams TBD</div>` : '<div class="pbp-alliance-placeholder">Teams TBD</div>');
     const blueTeamCards = m.blue.teams.length
-        ? m.blue.teams.map(t => renderPbpTeam(t, 'blue-side')).join('')
-        : (blueAllianceNum ? `<div class="pbp-alliance-placeholder blue-side">Alliance #${blueAllianceNum} — Teams TBD</div>` : '<div class="pbp-alliance-placeholder">Teams TBD</div>');
+        ? m.blue.teams.map(t => renderPbpTeam(t, 'blue-side')).join('') + _getBenchCard(m.blue, 'blue-side')
+        : (blueAllianceNum ? `<div class="pbp-alliance-placeholder blue-side">${blueTitle} \u2014 Teams TBD</div>` : '<div class="pbp-alliance-placeholder">Teams TBD</div>');
 
     $('pbp-arena').innerHTML = `
         <div class="pbp-alliance red-side ${redWon ? 'pbp-alliance-won' : ''}">
@@ -6804,9 +6869,21 @@ async function renderPbpConnections(match) {
         }
 
         const groupOrder = sideClass === 'pbp-conn-red' ? 0 : sideClass === 'pbp-conn-blue' ? 1 : 2;
+        const isCross = sideClass === 'pbp-conn-cross';
+        // For cross-alliance items: show VS separator + H2H win counts in brackets
+        let teamsLabel;
+        if (isCross) {
+            const winsA = c.h2h_wins_a != null ? c.h2h_wins_a : null;
+            const winsB = c.h2h_wins_b != null ? c.h2h_wins_b : null;
+            const bracketA = winsA != null ? ` <span class="pbp-conn-h2h-wins">(${winsA})</span>` : '';
+            const bracketB = winsB != null ? ` <span class="pbp-conn-h2h-wins">(${winsB})</span>` : '';
+            teamsLabel = `${c.team_a}${bracketA} <span class="pbp-conn-vs">VS</span> ${c.team_b}${bracketB}`;
+        } else {
+            teamsLabel = `${c.team_a} &amp; ${c.team_b}`;
+        }
         items.push({ order: groupOrder, html: `
             <div class="pbp-conn-item ${sideClass}">
-                <span class="pbp-conn-teams">${c.team_a} &amp; ${c.team_b}</span>
+                <span class="pbp-conn-teams">${teamsLabel}</span>
                 <div class="pbp-conn-highlights">${visibleHtml}${extraHtml}</div>
             </div>` });
     }
@@ -10811,7 +10888,7 @@ function renderTeamCards(teams) {
     const cards = teams.map(t => {
         const name = formatTeamName(t.nickname);
         const avatarImg = t.avatar
-            ? `<img src="${t.avatar}" class="rank-card-avatar" alt="">`
+            ? `<img src="${t.avatar}" class="rank-card-avatar" width="32" height="32" alt="">`
             : `<span class="rank-card-avatar-placeholder">${t.team_number}</span>`;
         const isIntl = highlightForeign && t.country && eventCountry && t.country !== eventCountry;
         const isRookie = highlightRookie && t.rookie_year && currentEventYear && t.rookie_year >= currentEventYear;

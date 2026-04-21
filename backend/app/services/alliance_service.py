@@ -113,6 +113,14 @@ async def get_alliances_with_stats(event_key: str) -> dict:
             raw = json.loads(raw)
         sb_alliances_raw = raw.get("alliances")
 
+    # Detect event type from Supabase event data
+    sb_event_type = -1
+    if sb_event:
+        sb_raw = sb_event.get("raw_data") or {}
+        if isinstance(sb_raw, str):
+            sb_raw = json.loads(sb_raw)
+        sb_event_type = sb_raw.get("event_type", -1)
+
     if sb_alliances_raw and sb_teams and _sb_teams_valid(sb_teams):
         # Build lookups from Supabase data (TBA + FRC + Statbotics merged)
         name_map: dict[str, str] = {}
@@ -270,14 +278,19 @@ async def get_alliances_with_stats(event_key: str) -> dict:
     return await _build_alliances_response(
         alliances_raw, name_map, country_map, school_map,
         rookie_year_map, frc_org_map, rank_map, opr_map, avatar_map,
-        frc_playoff_matches, year, event_key,
+        frc_playoff_matches, year, event_key, event_type=tba_event_type,
     )
+
+
+# Championship event types (no backup teams, alliances have 4 real picks)
+_CHAMP_DIVISION_TYPE = 3   # Championship Division
+_EINSTEIN_TYPE = 4         # Championship Finals (Einstein)
 
 
 async def _build_alliances_response(
     alliances_raw, name_map, country_map, school_map,
     rookie_year_map, frc_org_map, rank_map, opr_map, avatar_map,
-    frc_playoff_matches, year, event_key,
+    frc_playoff_matches, year, event_key, event_type: int = -1,
 ) -> dict:
     """Build the final alliances response dict from lookup maps."""
     _pick_labels = ['Captain', '1st Pick', '2nd Pick', '3rd Pick', 'Backup']
@@ -389,10 +402,26 @@ async def _build_alliances_response(
     # ── Partnership history ─────────────────────────────────
     partnerships = await _check_all_partnerships(alliances_raw, event_key)
 
+    # ── Championship / Einstein metadata ────────────────────
+    is_championship = event_type in (_CHAMP_DIVISION_TYPE, _EINSTEIN_TYPE)
+    is_einstein = event_type == _EINSTEIN_TYPE
+
+    # Build division_names map for Einstein: alliance_number → division name
+    # TBA often sets alliance.name to the division name (e.g. "Archimedes")
+    division_names: dict[int, str] = {}
+    if is_einstein:
+        for a in alliances:
+            default_name = f"Alliance {a['number']}"
+            if a["name"] and a["name"] != default_name:
+                division_names[a["number"]] = a["name"]
+
     return {
         "alliances": alliances,
         "partnerships": partnerships,
         "max_combined_opr": max_opr,
+        "is_championship": is_championship,
+        "is_einstein": is_einstein,
+        "division_names": division_names,
     }
 
 
@@ -430,11 +459,14 @@ async def _check_all_partnerships(
             tasks.append(_events_for(tk, y))
     results = await asyncio.gather(*tasks)
 
+    _SKIP_PARTNERSHIP_TYPES = {99, 100, -1}  # Offseason, Preseason, Unknown
     team_events: dict[str, set[str]] = {}
     for tk, _y, events in results:
         if tk not in team_events:
             team_events[tk] = set()
         for ev in events:
+            if ev.get("event_type", -1) in _SKIP_PARTNERSHIP_TYPES:
+                continue
             team_events[tk].add(ev["key"])
 
     # 3) Identify all common events we'll need alliance data for

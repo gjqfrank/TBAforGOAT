@@ -1594,9 +1594,11 @@ async def _find_playoff_connections(
                     "result": alliance_result,
                 })
 
-            # Check playoff opponents — capture highest comp_level
+            # Check playoff opponents — capture highest comp_level + H2H wins
             highest_label = None
             highest_order = -1
+            h2h_a_wins = 0
+            h2h_b_wins = 0
             is_de = event_year >= 2023
             for m in match_cache.get(ek, []):
                 cl = m.get("comp_level", "qm")
@@ -1604,6 +1606,7 @@ async def _find_playoff_connections(
                     continue
                 red = m.get("alliances", {}).get("red", {}).get("team_keys", [])
                 blue = m.get("alliances", {}).get("blue", {}).get("team_keys", [])
+                winner = m.get("winning_alliance", "")
                 if (ta in red and tb in blue) or (ta in blue and tb in red):
                     if is_de:
                         order, label = _resolve_de_stage(m)
@@ -1613,6 +1616,17 @@ async def _find_playoff_connections(
                     if order > highest_order:
                         highest_order = order
                         highest_label = label
+                    # Track H2H wins per match
+                    if ta in red and tb in blue:
+                        if winner == "red":
+                            h2h_a_wins += 1
+                        elif winner == "blue":
+                            h2h_b_wins += 1
+                    elif ta in blue and tb in red:
+                        if winner == "blue":
+                            h2h_a_wins += 1
+                        elif winner == "red":
+                            h2h_b_wins += 1
 
             if highest_label:
                 opponent_events.append({
@@ -1620,6 +1634,8 @@ async def _find_playoff_connections(
                     "event_name": event_name_map.get(ek, ek),
                     "year": event_year,
                     "stage": highest_label,
+                    "team_a_wins": h2h_a_wins,
+                    "team_b_wins": h2h_b_wins,
                 })
 
         if partner_events or opponent_events:
@@ -1645,13 +1661,18 @@ async def _find_playoff_connections(
                         best[ek] = e
                 return sorted(best.values(), key=lambda x: x["year"], reverse=True)
 
+            deduped_opponents = _dedup_by_event(opponent_events)
+            h2h_wins_a = sum(e.get("team_a_wins", 0) for e in deduped_opponents)
+            h2h_wins_b = sum(e.get("team_b_wins", 0) for e in deduped_opponents)
             connections.append({
                 "team_a": int(ta.replace("frc", "")),
                 "team_a_name": name_map.get(ta, ""),
                 "team_b": int(tb.replace("frc", "")),
                 "team_b_name": name_map.get(tb, ""),
                 "partnered_at": _dedup_by_event(partner_events),
-                "opponents_at": _dedup_by_event(opponent_events),
+                "opponents_at": deduped_opponents,
+                "h2h_wins_a": h2h_wins_a,
+                "h2h_wins_b": h2h_wins_b,
             })
 
     # Sort by most connections

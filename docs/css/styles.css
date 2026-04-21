@@ -2099,6 +2099,17 @@ input.input-loading {
     flex-shrink: 0;
     font-family: var(--mono);
 }
+.bkt-seed-div {
+    font-family: var(--sans, inherit);
+    font-size: .72rem;
+    font-weight: 700;
+    letter-spacing: .01em;
+    min-width: 4rem;
+    max-width: 7rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
 .bkt-row.bkt-red .bkt-seed { color: var(--red); }
 .bkt-row.bkt-blue .bkt-seed { color: var(--blue); }
 .bkt-teams {
@@ -3639,6 +3650,47 @@ input.input-loading {
 .pbp-alliance-placeholder.red-side { color: var(--red); }
 .pbp-alliance-placeholder.blue-side { color: var(--blue); }
 
+/* Bench team card — non-playing 3rd pick in championship matches */
+.pbp-team-bench {
+    padding: .65rem 1.3rem;
+    border-bottom: 1px solid var(--border-subtle);
+    background: var(--bg);
+    opacity: .55;
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+}
+.pbp-team-bench:last-child { border-bottom: none; }
+.pbp-team-bench .pbp-team-num {
+    font-size: 1.3rem;
+    font-weight: 800;
+    font-family: var(--mono);
+    color: var(--text-muted);
+}
+.pbp-team-bench.red-side .pbp-team-num { color: color-mix(in srgb, var(--red) 55%, var(--text-muted)); }
+.pbp-team-bench.blue-side .pbp-team-num { color: color-mix(in srgb, var(--blue) 55%, var(--text-muted)); }
+.pbp-team-bench .pbp-team-name {
+    flex: 1;
+    font-size: .82rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.pbp-bench-badge {
+    font-size: .62rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    padding: .1rem .4rem;
+    border-radius: 100px;
+    background: rgba(100,116,139,.1);
+    color: var(--text-muted);
+    border: 1px solid rgba(100,116,139,.2);
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
 .pbp-team {
     padding: 1rem 1.3rem;
     border-bottom: 1px solid var(--border-subtle);
@@ -4214,6 +4266,20 @@ input.input-loading {
 .pbp-conn-sep {
     color: var(--text-muted);
     font-weight: 400;
+}
+.pbp-conn-vs {
+    font-weight: 800;
+    font-size: .7rem;
+    letter-spacing: .05em;
+    color: var(--text-muted);
+    text-transform: uppercase;
+}
+.pbp-conn-h2h-wins {
+    font-size: .7rem;
+    color: var(--purple, #a855f7);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    margin-left: .1rem;
 }
 .pbp-conn-more {
     font-size: .68rem;
@@ -6602,6 +6668,11 @@ tr:hover .compare-cb,
     font-weight: 600;
     font-size: .82rem;
     color: var(--text);
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 .summary-hof-loc {
     color: var(--text-muted);
@@ -6723,6 +6794,8 @@ tr:hover .compare-cb,
     gap: .35rem;
     flex-wrap: wrap;
     width: 100%;
+    min-width: 0;
+    overflow: hidden;
     padding-top: .25rem;
     padding-left: 4.1rem;
 }
@@ -6736,6 +6809,9 @@ tr:hover .compare-cb,
     padding: .2rem .65rem;
     border-radius: 999px;
     white-space: nowrap;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
     cursor: default;
     transition: var(--transition);
 }
@@ -7223,6 +7299,20 @@ tr:hover .compare-cb,
     background: rgba(239, 68, 68, .1);
     color: var(--red);
     border: 1px solid rgba(239, 68, 68, .2);
+}
+.conn-chip-h2h {
+    background: rgba(168, 85, 247, .1);
+    color: var(--purple, #a855f7);
+    border: 1px solid rgba(168, 85, 247, .2);
+    font-variant-numeric: tabular-nums;
+}
+.conn-detail-h2h {
+    font-size: .7rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--purple, #a855f7);
+    font-weight: 600;
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 .conn-expand-icon {
     font-size: .7rem;
