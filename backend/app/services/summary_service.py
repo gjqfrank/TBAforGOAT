@@ -1367,24 +1367,36 @@ async def get_event_connections(event_key: str, all_time: bool = False) -> list[
     """Public entry point to fetch connections with configurable lookback."""
     cache_key = f"{event_key}_all" if all_time else event_key
 
+    def _has_h2h(conns: list[dict]) -> bool:
+        """Return True if the connections list already contains H2H data."""
+        for c in conns:
+            if c.get("opponents_at"):
+                return "h2h_wins_a" in c
+        return True  # no opponent pairs → nothing to check
+
     # 1) Disk cache
     cached = payload_cache.read_payload("connections", cache_key, _CONNECTIONS_TTL)
     if cached:
-        cached.pop("_ts", None)
-        # If we served the 3-year version, also warm the all-time cache in bg
-        if not all_time:
-            _maybe_warm_alltime_connections(event_key)
-        return cached.get("connections", [])
+        conns = cached.get("connections", [])
+        if _has_h2h(conns):
+            cached.pop("_ts", None)
+            if not all_time:
+                _maybe_warm_alltime_connections(event_key)
+            return conns
+        # Stale cache (pre-H2H) — invalidate so we rebuild with H2H data
+        payload_cache.invalidate("connections", cache_key)
 
     # 2) Supabase cache
     sb_key = f"conn_{cache_key}"
     sb_row = await get_cached_summary(sb_key)
     if sb_row and sb_row.get("summary"):
-        payload_cache.write_payload("connections", cache_key, sb_row["summary"])
-        # Also warm all-time in bg when serving 3-year
-        if not all_time:
-            _maybe_warm_alltime_connections(event_key)
-        return sb_row["summary"].get("connections", [])
+        conns = sb_row["summary"].get("connections", [])
+        if _has_h2h(conns):
+            payload_cache.write_payload("connections", cache_key, sb_row["summary"])
+            if not all_time:
+                _maybe_warm_alltime_connections(event_key)
+            return conns
+        # Stale Supabase entry — fall through to rebuild
 
     # 3) Build from scratch
     client = get_tba_client()
