@@ -4627,7 +4627,7 @@ function renderConnections(connections, filter) {
                     }
                 }
                 return `<div class="conn-detail-line conn-line-partner">
-                    <span class="conn-detail-event-year">${p.year} &mdash; ${p.event_name || p.event_key}</span>
+                    <span class="conn-detail-event-year"><span class="conn-detail-year-num">${p.year}</span><span class="conn-detail-event-name">${p.event_name || p.event_key}</span></span>
                     ${stagePill}
                     ${resultBadge}
                 </div>`;
@@ -4649,7 +4649,7 @@ function renderConnections(connections, filter) {
                     else              h2hScore = `<span class="conn-h2h-score conn-h2h-tie">${wa}\u2013${wb}</span>`;
                 }
                 return `<div class="conn-detail-line conn-line-opponent">
-                    <span class="conn-detail-event-year">${o.year} &mdash; ${o.event_name || o.event_key}</span>
+                    <span class="conn-detail-event-year"><span class="conn-detail-year-num">${o.year}</span><span class="conn-detail-event-name">${o.event_name || o.event_key}</span></span>
                     <span class="conn-detail-stage">${o.stage}</span>
                     ${h2hScore}
                 </div>`;
