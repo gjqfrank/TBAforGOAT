@@ -214,9 +214,11 @@ async def get_event_summary_awards(event_key: str) -> dict:
     # 3) Build from scratch
     result = await _build_event_summary_awards(event_key)
     payload_cache.write_payload("awards", event_key, result)
-    # Only persist to Supabase when we have meaningful data
-    if any(result.get(k) for k in ("past_event_champions", "past_season_awards",
-                                    "current_season_winners", "impact_recipients")):
+    # Persist to Supabase for regular events AND championship divisions
+    if result.get("is_championship") or any(result.get(k) for k in (
+            "past_event_champions", "past_season_awards",
+            "current_season_winners", "impact_recipients",
+            "season_winners", "season_impact", "einstein_contenders")):
         await set_cached_summary(event_key, awards=result)
     return result
 

@@ -6666,6 +6666,10 @@ tr:hover .compare-cb,
     max-height: 420px;
     overflow-y: auto;
 }
+#summary-past-awards-list {
+    max-height: 420px;
+    overflow-y: auto;
+}
 
 /* ── Shared row styles (HoF, past champs, past awards) ── */
 .summary-hof-team {
