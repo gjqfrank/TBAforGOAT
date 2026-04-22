@@ -459,13 +459,16 @@ async def _check_all_partnerships(
             tasks.append(_events_for(tk, y))
     results = await asyncio.gather(*tasks)
 
-    _SKIP_PARTNERSHIP_TYPES = {99, 100, -1}  # Offseason, Preseason, Unknown
+    # Whitelist: only official FRC competition event types.
+    # Using a whitelist (not blacklist) ensures offseason events with unexpected
+    # type values (e.g. registered as type 0 instead of 99) are also excluded.
+    _VALID_PARTNERSHIP_TYPES = {0, 1, 2, 3, 4, 5}  # Regional, District, DCmp, Champ Div, Einstein, DC Div
     team_events: dict[str, set[str]] = {}
     for tk, _y, events in results:
         if tk not in team_events:
             team_events[tk] = set()
         for ev in events:
-            if ev.get("event_type", -1) in _SKIP_PARTNERSHIP_TYPES:
+            if ev.get("event_type", -1) not in _VALID_PARTNERSHIP_TYPES:
                 continue
             team_events[tk].add(ev["key"])
 
