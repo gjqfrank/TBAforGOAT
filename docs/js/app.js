@@ -3154,7 +3154,7 @@ function renderTeamTable(teams, sortCol, asc) {
                 const epaAboveCls = !isNaN(epaVal) && epaVal >= p75EPA ? ' epa-top25-rank' : (!isNaN(epaVal) && epaVal > avgEPA ? ' epa-above-avg-rank' : '');
                 return `
             <tr class="${isIntl ? 'foreign-team-row' : ''}${isRookie ? ' rookie-team-row' : ''}" data-team-key="${t.team_key}" data-country="${t.country || ''}" data-rookie-year="${t.rookie_year || ''}">
-                <td class="compare-td"><input type="checkbox" class="compare-cb" data-team="${t.team_key}" ${checked} onclick="toggleCompareTeam('${t.team_key}')"></td>
+                <td class="compare-td"><input type="checkbox" class="compare-cb" data-team="${t.team_key}" ${compareSelection.has(t.team_key) ? 'checked' : ''} onclick="toggleCompareTeam('${t.team_key}')"></td>
                 <td class="rank${Number(t.rank) >= 1 && Number(t.rank) <= 8 ? ' rank-top8' : ''}">${t.rank != null ? t.rank : '\u2013'}</td>
                 <td class="team-avatar-cell">${avatarImg}</td>
                 <td class="team-num">${t.team_number}</td>
@@ -5957,54 +5957,53 @@ function renderH2H(d) {
         if (ov.nickname) nicks[String(num)] = ov.nickname;
     }
 
-    // Helper: render a team number with hover tooltip showing nickname
-    const tn = (num) => {
+    // Bold colored team number chip with tooltip
+    const tnChip = (num, cls) => {
         const n = nicks[String(num)];
-        if (n) return `<span class="has-tooltip">${num}<span class="custom-tooltip">${n}</span></span>`;
-        return String(num);
+        const tip = n ? `<span class="custom-tooltip">${n}</span>` : '';
+        return `<span class="h2h-match-num ${cls} has-tooltip">${num}${tip}</span>`;
     };
-    // Helper: render a list of team numbers with tooltips
-    const tList = (nums) => nums.map(tn).join(', ');
+    const tChips = (nums, cls) => nums.map(n => tnChip(n, cls)).join(' ');
+
+    const nickA = nicks[String(d.team_a)] || '';
+    const nickB = nicks[String(d.team_b)] || '';
 
     return `
     <div class="h2h-card">
         <div class="h2h-header">
-            <span class="red-text">${tn(d.team_a)}</span>
+            <span class="h2h-team-num red-text has-tooltip">${d.team_a}${nickA ? `<span class="custom-tooltip">${nickA}</span>` : ''}</span>
             <span class="vs-label">vs</span>
-            <span class="blue-text">${tn(d.team_b)}</span>
+            <span class="h2h-team-num blue-text has-tooltip">${d.team_b}${nickB ? `<span class="custom-tooltip">${nickB}</span>` : ''}</span>
+            <span class="h2h-score-badge"><span class="red-text">${s.team_a_wins}</span><span class="h2h-score-dash">–</span><span class="blue-text">${s.team_b_wins}</span></span>
         </div>
 
-        <div class="h2h-summary">
-            <p>Checked years: ${d.years_checked.join(', ')}</p>
-            <div class="h2h-score">
-                <span class="red-text">${s.team_a_wins} W</span>
-                <span>–</span>
-                <span class="blue-text">${s.team_b_wins} W</span>
-            </div>
-            <p class="muted">${s.total_opponent_matches} opponent match${s.total_opponent_matches !== 1 ? 'es' : ''} &nbsp;|&nbsp;
-               ${s.total_ally_matches} as allies</p>
-        </div>
+        <p class="muted" style="text-align:center; margin:.2rem 0 1.2rem">
+            ${s.total_opponent_matches} playoff match${s.total_opponent_matches !== 1 ? 'es' : ''} as opponents
+            &nbsp;·&nbsp; ${s.total_ally_matches} as allies
+            &nbsp;·&nbsp; Years: ${d.years_checked.join(', ')}
+        </p>
 
         ${d.opponent_matches.length ? `
         <h4>As Opponents</h4>
         <table class="data-table compact">
             <thead><tr>
-                <th>Match</th><th>Event</th><th>Round</th>
-                <th>Red</th><th>Score</th><th>Blue</th><th>Score</th><th>Winner</th>
+                <th>Match</th><th>Event</th><th>Red</th><th></th><th>Blue</th><th>Winner</th>
             </tr></thead>
             <tbody>
-                ${d.opponent_matches.map(m => `
+                ${d.opponent_matches.map(m => {
+                    const winnerIsA = m.winner === String(d.team_a);
+                    const winnerCls = winnerIsA ? 'red-text' : (m.winner === 'tie' ? '' : 'blue-text');
+                    const winnerNum = winnerIsA ? d.team_a : d.team_b;
+                    return `
                 <tr>
                     <td class="stat">${m.match_label || m.match_key.split('_').pop()}</td>
                     <td class="muted">${m.event_name || m.event_key} (${m.year})</td>
-                    <td>${m.comp_level}</td>
-                    <td class="red-text stat">${tList(m.red_teams)}</td>
-                    <td class="stat">${m.red_score}</td>
-                    <td class="blue-text stat">${tList(m.blue_teams)}</td>
-                    <td class="stat">${m.blue_score}</td>
-                    <td class="${m.winner === String(d.team_a) ? 'red-text' : 'blue-text'} stat">
-                        ${m.winner}</td>
-                </tr>`).join('')}
+                    <td class="stat">${tChips(m.red_teams, 'red-text')}</td>
+                    <td class="stat h2h-score-cell"><span class="red-text">${m.red_score}</span><span class="h2h-score-dash">–</span><span class="blue-text">${m.blue_score}</span></td>
+                    <td class="stat">${tChips(m.blue_teams, 'blue-text')}</td>
+                    <td class="stat ${winnerCls}"><span class="h2h-match-num">${m.winner === 'tie' ? '–' : winnerNum}</span></td>
+                </tr>`;
+                }).join('')}
             </tbody>
         </table>` : ''}
 
@@ -6012,21 +6011,22 @@ function renderH2H(d) {
         <h4>As Allies</h4>
         <table class="data-table compact">
             <thead><tr>
-                <th>Match</th><th>Event</th><th>Round</th>
-                <th>Red</th><th>Score</th><th>Blue</th><th>Score</th><th>Result</th>
+                <th>Match</th><th>Event</th><th>Red</th><th></th><th>Blue</th><th>Result</th>
             </tr></thead>
             <tbody>
-                ${d.ally_matches.map(m => `
+                ${d.ally_matches.map(m => {
+                    const aOnRed = m.red_teams.map(String).includes(String(d.team_a));
+                    const resultCls = m.winner === 'both' ? (aOnRed ? 'red-text' : 'blue-text') : 'muted';
+                    return `
                 <tr>
                     <td class="stat">${m.match_label || m.match_key.split('_').pop()}</td>
                     <td class="muted">${m.event_name || m.event_key} (${m.year})</td>
-                    <td>${m.comp_level}</td>
-                    <td class="red-text stat">${tList(m.red_teams)}</td>
-                    <td class="stat">${m.red_score}</td>
-                    <td class="blue-text stat">${tList(m.blue_teams)}</td>
-                    <td class="stat">${m.blue_score}</td>
-                    <td class="stat">${m.winner === 'both' ? '✓ Won' : 'Lost'}</td>
-                </tr>`).join('')}
+                    <td class="stat">${tChips(m.red_teams, 'red-text')}</td>
+                    <td class="stat h2h-score-cell"><span class="red-text">${m.red_score}</span><span class="h2h-score-dash">–</span><span class="blue-text">${m.blue_score}</span></td>
+                    <td class="stat">${tChips(m.blue_teams, 'blue-text')}</td>
+                    <td class="stat ${resultCls}">${m.winner === 'both' ? '✓ Won' : 'Lost'}</td>
+                </tr>`;
+                }).join('')}
             </tbody>
         </table>` : ''}
 
@@ -6797,10 +6797,71 @@ function _connCacheKey(teamNums, allTime) {
     return [...teamNums].sort((a, b) => a - b).join(',') + '|' + (allTime ? '1' : '0');
 }
 
+/** Compute prior connections for the 6 teams on the field from pbpData match history.
+ *  Scans all completed matches before upToMatchIdx — no network call needed. */
+function _computeInEventConnections(upToMatchIdx) {
+    if (!pbpData || !pbpData.matches) return [];
+    const connMap = {};
+    const getConn = (a, b) => {
+        const [lo, hi] = a < b ? [a, b] : [b, a];
+        const key = `${lo}:${hi}`;
+        if (!connMap[key]) connMap[key] = { team_a: lo, team_b: hi, partnered_at: [], opponents_at: [], h2h_wins_a: 0, h2h_wins_b: 0 };
+        return connMap[key];
+    };
+    const eventName = eventInfoData?.name || currentEvent;
+    const year = currentEventYear || new Date().getFullYear();
+
+    for (let i = 0; i < upToMatchIdx; i++) {
+        const m = pbpData.matches[i];
+        if (!m) continue;
+        const redScore = m.red?.score ?? -1;
+        const blueScore = m.blue?.score ?? -1;
+        if (redScore < 0 || blueScore < 0) continue; // not yet played
+
+        const redTeams = (m.red?.teams || []).map(t => t.team_number);
+        const blueTeams = (m.blue?.teams || []).map(t => t.team_number);
+        const compLevel = m.comp_level || 'qm';
+        const matchShort = compLevel === 'qm'
+            ? `Q${m.match_number}`
+            : compLevel === 'f'
+                ? `Final ${m.match_number}`
+                : `P${m.set_number || 1}-${m.match_number}`;
+        const entry = { event_key: currentEvent, event_name: eventName, match_key: m.match_key || m.key, year, stage: matchShort };
+
+        // Same-alliance pairs (partners)
+        for (const arr of [redTeams, blueTeams]) {
+            const won = (arr === redTeams) ? redScore > blueScore : blueScore > redScore;
+            const result = won ? 'winner' : '';
+            for (let x = 0; x < arr.length; x++) {
+                for (let y = x + 1; y < arr.length; y++) {
+                    getConn(arr[x], arr[y]).partnered_at.push({ ...entry, result });
+                }
+            }
+        }
+        // Cross-alliance pairs (opponents)
+        for (const r of redTeams) {
+            for (const b of blueTeams) {
+                const conn = getConn(r, b);
+                const aIsRed = redTeams.includes(conn.team_a);
+                const redWon = redScore > blueScore;
+                const blueWon = blueScore > redScore;
+                if (aIsRed && redWon) conn.h2h_wins_a++;
+                else if (!aIsRed && blueWon) conn.h2h_wins_a++;
+                else if (aIsRed && blueWon) conn.h2h_wins_b++;
+                else if (!aIsRed && redWon) conn.h2h_wins_b++;
+                conn.opponents_at.push({ ...entry, result: redWon ? 'winner' : blueWon ? 'winner' : '' });
+            }
+        }
+    }
+    return Object.values(connMap);
+}
+
 async function fetchMatchConnections(teamNums, forceAllTime) {
     const wantAllTime = forceAllTime !== undefined ? forceAllTime : _pbpConnAllTime;
     const key = _connCacheKey(teamNums, wantAllTime);
     if (_pbpConnCache[key]) return _pbpConnCache[key];
+
+    // Default (past 3yr) and all-time both go to the API — historical context is the value here
     try {
         const result = await getActiveAPI().eventConnections(currentEvent, wantAllTime, teamNums);
         _pbpConnCache[key] = result;
@@ -6924,7 +6985,7 @@ async function renderPbpConnections(match) {
             Prior Connections on the Field
             <span class="pbp-conn-count">${items.length}</span>
             <label class="pbp-conn-range-toggle" onclick="event.stopPropagation()">
-                <span class="conn-range-side${!_pbpConnAllTime ? ' active' : ''}">Past 3 Seasons</span>
+                <span class="conn-range-side${!_pbpConnAllTime ? ' active' : ''}">Past 3yr</span>
                 <input type="checkbox"${checkedAttr} onchange="togglePbpConnRange(this.checked)">
                 <span class="conn-toggle-slider"></span>
                 <span class="conn-range-side${_pbpConnAllTime ? ' active' : ''}">${isFTCMode() ? 'Since 2019' : 'All time'}</span>
@@ -7289,6 +7350,10 @@ async function pbpAutoRefresh() {
         // Update global data
         pbpData = fresh;
         bdData = fresh;  // Shared data source for breakdown tab
+        // Invalidate in-event connection cache (computed from pbpData, which just changed)
+        for (const k of Object.keys(_pbpConnCache)) {
+            if (!k.endsWith('|1')) delete _pbpConnCache[k];
+        }
         checkWorldRecordFromPbp(fresh);
 
         // If nothing changed, skip re-render
