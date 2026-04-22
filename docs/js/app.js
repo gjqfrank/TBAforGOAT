@@ -6366,7 +6366,6 @@ function _getPickRole(teamNum) {
         const idx = (a.teams || []).findIndex(t => t.team_number === teamNum);
         if (idx >= 0) {
             if (idx === 0) return 'C';
-            if (a.teams.length <= 4 && idx === a.teams.length - 1 && idx >= 3) return 'BU';
             return `P${idx}`;
         }
     }
@@ -6725,13 +6724,18 @@ function renderPbpMatch() {
         const fullAlliance = allianceData.alliances.find(a => a.number === allianceNum);
         if (!fullAlliance || fullAlliance.teams.length < 4) return '';
         const playingNums = new Set((side.teams || []).map(t => t.team_number));
-        const benchTeam = fullAlliance.teams.find(t => !playingNums.has(t.team_number));
-        if (!benchTeam) return '';
-        return `<div class="pbp-team-card pbp-team-bench ${sideClass}" title="${benchTeam.pick_label || '3rd Pick'} — Not playing this match">
-            <div class="pbp-team-num">${benchTeam.team_number}</div>
-            <div class="pbp-team-name">${benchTeam.nickname || ''}</div>
-            <span class="pbp-bench-badge">3rd Pick · Bench</span>
-        </div>`;
+        const benchTeamData = fullAlliance.teams.find(t => !playingNums.has(t.team_number));
+        if (!benchTeamData) return '';
+        // Build a team object compatible with renderPbpTeam
+        const benchTeam = Object.assign({
+            city: '', state_prov: '', country: '',
+            robot_name: null, avg_rp: '\u2013',
+            _streak_type: null, _streak_count: 0,
+            _opr_top25: false, _opr_above_avg: false,
+            _epa_top25: false, _epa_above_avg: false,
+            _delta: null, _tims_sponsors: null,
+        }, benchTeamData);
+        return renderPbpTeam(benchTeam, sideClass, { isBench: true });
     };
 
     // Render team cards or alliance placeholder when teams aren't assigned yet
@@ -7057,7 +7061,8 @@ async function togglePbpConnRange(allTime) {
     }
 }
 
-function renderPbpTeam(t, sideCls) {
+function renderPbpTeam(t, sideCls, opts = {}) {
+    const isBench = opts.isBench === true;
     t = _applyTimsOverrides(t);
     const loc = [t.city, t.state_prov, t.country].filter(Boolean).join(', ');
     const shortLoc = [t.state_prov, t.country].filter(Boolean).join(', ');
@@ -7097,13 +7102,16 @@ function renderPbpTeam(t, sideCls) {
     const pickRole = isPlayoff ? _getPickRole(t.team_number) : null;
     const pickHtml = pickRole ? `<span class="pbp-pick-role">${pickRole}</span>` : '';
 
+    const benchBadge = isBench ? `<span class="pbp-bench-badge">Bench</span>` : '';
+
     return `
-    <div class="pbp-team ${foreignCls} ${rookieCls}" data-country="${t.country || ''}" data-rookie-year="${t.rookie_year || ''}">
+    <div class="pbp-team ${isBench ? 'pbp-is-bench' : ''} ${foreignCls} ${rookieCls}" data-country="${t.country || ''}" data-rookie-year="${t.rookie_year || ''}">
         <div class="pbp-team-top">
             <div class="pbp-team-number" data-team-number="${t.team_number}">${_renderTeamNum(t)}${pickHtml}</div>
             <div class="pbp-team-identity">
                 <div class="pbp-team-name-row">
                     <div class="pbp-team-nickname">${t.nickname || 'Team ' + t.team_number}</div>
+                    ${benchBadge}
                     <div class="pbp-firsts-slot" data-firsts-team="${t.team_number}"></div>
                 </div>
                 ${t.school_name ? `<div class="pbp-team-school">${t.school_name}</div>` : ''}
