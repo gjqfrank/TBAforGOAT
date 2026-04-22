@@ -966,12 +966,14 @@ async def _build_champs_awards(
 
     einstein_contenders: list[dict] = []
     if einstein_keys:
-        # Fetch alliances (not all teams) — only teams that were actually picked
-        # onto an alliance at Einstein count as "Einstein contenders"
-        einstein_alliance_results = await asyncio.gather(
-            *[_safe(client.get_event_alliances(ek)) for ek in einstein_keys]
+        # Fetch alliances AND awards in parallel — alliances to find who competed,
+        # awards to find who actually won Einstein.
+        einstein_alliance_results, einstein_award_results = await asyncio.gather(
+            asyncio.gather(*[_safe(client.get_event_alliances(ek)) for ek in einstein_keys]),
+            asyncio.gather(*[_safe(client.get_event_awards(ek)) for ek in einstein_keys]),
         )
         prev_einstein_teams: set[int] = set()
+        einstein_winner_teams: set[int] = set()
         for ek_alliances in einstein_alliance_results:
             if ek_alliances:
                 for al in ek_alliances:
@@ -981,11 +983,23 @@ async def _build_champs_awards(
                                 prev_einstein_teams.add(int(tk[3:]))
                             except ValueError:
                                 pass
+        for ek_awards in einstein_award_results:
+            if ek_awards:
+                for award in ek_awards:
+                    if award.get("award_type") == 1:  # Winner
+                        for tr in (award.get("recipient_list") or []):
+                            tk = tr.get("team_key", "")
+                            if tk.startswith("frc"):
+                                try:
+                                    einstein_winner_teams.add(int(tk[3:]))
+                                except ValueError:
+                                    pass
 
         for num in sorted(team_nums & prev_einstein_teams):
             einstein_contenders.append({
                 "team_number": num,
                 "nickname": name_map.get(num, ""),
+                "einstein_winner": num in einstein_winner_teams,
             })
 
     return {

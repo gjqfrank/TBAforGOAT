@@ -1204,13 +1204,16 @@ async def get_playoff_firsts(event_key: str):
         client = get_tba_client()
         year = int(event_key[:4])
 
-        # Get alliances + team info in parallel
-        alliances_raw, teams_raw = await asyncio.gather(
+        # Get alliances + team info + event info in parallel
+        alliances_raw, teams_raw, event_info_raw = await asyncio.gather(
             _safe(client.get_event_alliances(event_key)),
             _safe(client.get_event_teams(event_key)),
+            _safe(client.get_event(event_key)),
         )
         if not alliances_raw:
             return {}
+
+        is_einstein = (event_info_raw or {}).get("event_type") == 4
 
         rookie_map: dict[str, int] = {}
         for t in (teams_raw or []):
@@ -1227,6 +1230,32 @@ async def get_playoff_firsts(event_key: str):
             async with sem:
                 return await _safe(coro)
 
+        # Pre-compute Einstein veterans when this is an Einstein Finals event
+        einstein_veterans: set[str] = set()
+        if is_einstein:
+            sem2 = asyncio.Semaphore(8)
+
+            async def _sem2_get(tk: str):
+                async with sem2:
+                    return await _safe(client.get(f"/team/{tk}/events/simple"))
+
+            all_team_events = await asyncio.gather(
+                *[_sem2_get(tk) for tk in playoff_team_keys]
+            )
+            for tk, events in zip(playoff_team_keys, all_team_events):
+                if not events:
+                    continue
+                for ev in events:
+                    if not isinstance(ev, dict):
+                        continue
+                    ev_key = ev.get("key") or ""
+                    if (ev.get("event_type") == 4
+                            and ev_key != event_key
+                            and ev_key[:4].isdigit()
+                            and int(ev_key[:4]) < year):
+                        einstein_veterans.add(tk)
+                        break
+
         async def check_team(tk: str) -> tuple[int, dict]:
             num = int(tk.replace("frc", ""))
             ry = rookie_map.get(tk, 0)
@@ -1236,6 +1265,7 @@ async def get_playoff_firsts(event_key: str):
                 return num, {
                     "first_playoff": True,
                     "first_finals": True,
+                    "first_einstein": is_einstein,
                     "rookie": True,
                 }
 
@@ -1271,6 +1301,7 @@ async def get_playoff_firsts(event_key: str):
             return num, {
                 "first_playoff": not ever_playoff,
                 "first_finals": not ever_finals,
+                "first_einstein": is_einstein and tk not in einstein_veterans,
                 "rookie": ry >= year,
             }
 

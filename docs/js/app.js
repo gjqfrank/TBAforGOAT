@@ -6810,6 +6810,18 @@ function renderPbpMatch() {
     // Inject playoff-firsts badges for playoff matches
     if (m.comp_level && m.comp_level !== 'qm') {
         const allTeams = [...(m.red?.teams || []), ...(m.blue?.teams || [])];
+        // Include bench teams for champ playoffs so they also get Einstein badges
+        if (_isChampPlayoff && allianceData && allianceData.alliances) {
+            for (const side of [m.red, m.blue]) {
+                const allianceNum = side?.alliance_number;
+                if (!allianceNum) continue;
+                const fullAlliance = allianceData.alliances.find(a => a.number === allianceNum);
+                if (!fullAlliance || fullAlliance.teams.length < 4) continue;
+                const playingNums = new Set((side.teams || []).map(t => t.team_number));
+                const benchTeamData = fullAlliance.teams.find(t => !playingNums.has(t.team_number));
+                if (benchTeamData) allTeams.push(benchTeamData);
+            }
+        }
         _injectPlayoffFirsts(allTeams, pbpIndex, m.comp_level);
     }
 
@@ -7194,23 +7206,53 @@ async function _injectPlayoffFirsts(teams, matchIdx, compLevel) {
     if (pbpIndex !== matchIdx) return;
 
     const isFinals = compLevel === 'f';
+    const isEinstein = !!(allianceData && allianceData.is_einstein);
+    const isChampDiv  = !!(allianceData && allianceData.is_championship && !allianceData.is_einstein);
+
+    // Build Einstein contenders lookup for champ division events
+    // summaryData.einstein_contenders = [{team_number, nickname, einstein_winner}, ...]
+    const einsteinContenderMap = new Map(); // team_number → entry
+    if (isChampDiv && summaryData && summaryData.einstein_contenders) {
+        for (const ec of summaryData.einstein_contenders) {
+            einsteinContenderMap.set(ec.team_number, ec);
+        }
+    }
 
     for (const t of teams) {
         const info = _playoffFirstsCache[t.team_number];
-        if (!info) continue;
-
         const slot = document.querySelector(`.pbp-firsts-slot[data-firsts-team="${t.team_number}"]`);
         if (!slot) continue;
 
         const badges = [];
-        if (isFinals && info.first_finals) {
-            badges.push(`<span class="pbp-first-badge pbp-first-finals" title="First-ever appearance in Finals">
+
+        // ── Einstein Finals event: First Einstein badge ────────────────────
+        if (isEinstein && info && info.first_einstein) {
+            badges.push(`<span class="pbp-first-badge pbp-first-einstein" title="First-ever Einstein appearance${info.rookie ? ' (Rookie)' : ''}">First Einstein${info.rookie ? ' (R)' : ''}</span>`);
+        }
+
+        // ── Championship division: Returning Einstein badges ───────────────
+        if (isChampDiv) {
+            const ec = einsteinContenderMap.get(t.team_number);
+            if (ec) {
+                if (ec.einstein_winner) {
+                    badges.push(`<span class="pbp-first-badge pbp-einstein-winner" title="Previous Einstein Winner">Einstein Winner</span>`);
+                } else {
+                    badges.push(`<span class="pbp-first-badge pbp-einstein-contender" title="Returning Einstein Contender">Returning Einstein</span>`);
+                }
+            }
+        }
+
+        // ── Standard first-time badges (only when no Einstein badge shown) ─
+        if (badges.length === 0 && info) {
+            if (isFinals && info.first_finals) {
+                badges.push(`<span class="pbp-first-badge pbp-first-finals" title="First-ever appearance in Finals">
                 First Finals
             </span>`);
-        } else if (info.first_playoff) {
-            badges.push(`<span class="pbp-first-badge pbp-first-playoff" title="First-ever playoff appearance${info.rookie ? ' (Rookie)' : ''}">
+            } else if (info.first_playoff) {
+                badges.push(`<span class="pbp-first-badge pbp-first-playoff" title="First-ever playoff appearance${info.rookie ? ' (Rookie)' : ''}">
                 First Playoffs${info.rookie ? ' (R)' : ''}
             </span>`);
+            }
         }
         slot.innerHTML = badges.join('');
     }
