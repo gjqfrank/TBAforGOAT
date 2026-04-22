@@ -3676,8 +3676,11 @@ function _renderChampsSummaryAwards(data) {
         filterBar.querySelectorAll('.past-awards-filter-btn').forEach(b => b.classList.remove('active'));
         filterBar.querySelector('[data-champs-filter="all"]').classList.add('active');
 
+        const _latestYear = t => Math.max(0, ...(t.awards || []).map(a => parseInt(a.event_key, 10) || 0));
+        const sortedWinners = [...(data.season_winners || [])].sort((a, b) => _latestYear(b) - _latestYear(a) || a.team_number - b.team_number);
+        const sortedImpact  = [...(data.season_impact  || [])].sort((a, b) => _latestYear(b) - _latestYear(a) || a.team_number - b.team_number);
         const rows = [];
-        for (const t of (data.season_winners || [])) {
+        for (const t of sortedWinners) {
             const chips = t.awards.map(a => {
                 const front = `\u{1F3C6} Winner @ ${_esc(a.event_name)}`;
                 if (a.pick) {
@@ -3697,7 +3700,7 @@ function _renderChampsSummaryAwards(data) {
                 <div class="past-award-chips">${chips}</div>
             </div>`);
         }
-        for (const t of (data.season_impact || [])) {
+        for (const t of sortedImpact) {
             const chips = t.awards.map(a =>
                 `<span class="past-award-chip past-award-chip-impact">\u2B50 Impact @ ${_esc(a.event_name)}</span>`
             ).join('');
@@ -3775,8 +3778,9 @@ function renderPrequalifiedTeams() {
     const content = $('summary-prequalified-content');
     if (!el || !content) return;
 
-    // Only for FRC 2026+ events with loaded team data
-    if (isFTCMode() || !teamsData || !teamsData.length || (currentEventYear && currentEventYear < 2026)) {
+    // Only for FRC 2026+ non-championship events with loaded team data
+    if (isFTCMode() || !teamsData || !teamsData.length || (currentEventYear && currentEventYear < 2026)
+        || (summaryData && summaryData.is_championship)) {
         el.classList.add('hidden');
         return;
     }
@@ -4178,7 +4182,13 @@ function renderSummary(data) {
     const hofEl = $('summary-hof');
     const prestigeRow = $('summary-prestige-row');
     if (data.hall_of_fame.length > 0) {
-        $('summary-hof-list').innerHTML = data.hall_of_fame.map(t => {
+        $('summary-hof-list').innerHTML = [...data.hall_of_fame]
+            .sort((a, b) => {
+                const latestA = Math.max(0, ...(a.impact_years || []).map(Number).filter(Boolean));
+                const latestB = Math.max(0, ...(b.impact_years || []).map(Number).filter(Boolean));
+                return latestB - latestA || a.team_number - b.team_number;
+            })
+            .map(t => {
             const years = t.impact_years ? t.impact_years.join(', ') : '';
             return `<div class="prestige-entry">
                 <span class="prestige-entry-num prestige-num-hof">${t.team_number}</span>
@@ -4200,7 +4210,13 @@ function renderSummary(data) {
         if (impactLabel) {
             impactLabel.textContent = isFTCMode() ? '⭐ Inspire Award Winners' : '⭐ Impact Award Finalists';
         }
-        $('summary-impact-list').innerHTML = data.impact_finalists.map(t => {
+        $('summary-impact-list').innerHTML = [...data.impact_finalists]
+            .sort((a, b) => {
+                const latestA = Math.max(0, ...(a.impact_years || []).map(Number).filter(Boolean));
+                const latestB = Math.max(0, ...(b.impact_years || []).map(Number).filter(Boolean));
+                return latestB - latestA || a.team_number - b.team_number;
+            })
+            .map(t => {
             const years = t.impact_years.join(', ');
             return `<div class="prestige-entry">
                 <span class="prestige-entry-num prestige-num-impact">${t.team_number}</span>
@@ -4348,11 +4364,12 @@ function renderSummary(data) {
         const champsFilterBar = $('champs-filter-bar');
         if (champsFilterBar) champsFilterBar.classList.add('hidden');
 
-        pastChampsEl.classList.remove('hidden');
         if (data.past_event_champions && data.past_event_champions.length > 0) {
             renderPastEventChampions(data.past_event_champions);
+            pastChampsEl.classList.remove('hidden');
         } else if (!data.past_event_champions) {
-            $('summary-past-champs-list').innerHTML = '<p class="empty" style="margin:.5rem 0;font-size:.82rem">Loading\u2026</p>';
+            // Not yet fetched — keep hidden; loadSummaryAwards() will show it
+            pastChampsEl.classList.add('hidden');
         } else {
             pastChampsEl.classList.add('hidden');
         }
@@ -4378,11 +4395,12 @@ function renderSummary(data) {
                 b.classList.toggle('active', b.dataset.season === 'current'));
         }
 
-        pastAwardsEl.classList.remove('hidden');
         if (data.season_awards && data.season_awards.length > 0) {
             renderPastSeasonAwards(data.season_awards);
+            pastAwardsEl.classList.remove('hidden');
         } else if (!data.season_awards) {
-            $('summary-past-awards-list').innerHTML = '<p class="empty" style="margin:.5rem 0;font-size:.82rem">Loading\u2026</p>';
+            // Not yet fetched — keep hidden; loadSeasonAwards() will show it
+            pastAwardsEl.classList.add('hidden');
             loadSeasonAwards();
         } else if (data.past_season_awards && data.past_season_awards.length > 0) {
             // No current season awards — fall back to past season tab
@@ -4390,8 +4408,10 @@ function renderSummary(data) {
             if (seasonToggle) seasonToggle.querySelectorAll('.award-season-btn').forEach(b =>
                 b.classList.toggle('active', b.dataset.season === 'past'));
             renderPastSeasonAwards(data.past_season_awards);
+            pastAwardsEl.classList.remove('hidden');
         } else if (!data.past_season_awards) {
-            $('summary-past-awards-list').innerHTML = '<p class="empty" style="margin:.5rem 0;font-size:.82rem">Loading\u2026</p>';
+            // Not yet fetched — keep hidden; loadSummaryAwards() will show it
+            pastAwardsEl.classList.add('hidden');
         } else {
             pastAwardsEl.classList.add('hidden');
         }
@@ -4569,7 +4589,6 @@ function renderConnections(connections, filter) {
     $('summary-history-list').innerHTML = filtered.map(c => {
         const partnerCount = c.partnered_at.length;
         const opponentCount = c.opponents_at.length;
-        const totalCount = partnerCount + opponentCount;
 
         // Summary chips for the header
         const chips = [];
@@ -4578,10 +4597,8 @@ function renderConnections(connections, filter) {
         if (partnerCount) chips.push(`<span class="conn-chip conn-chip-partner">${svgPartner} ${partnerCount}</span>`);
         if (opponentCount) chips.push(`<span class="conn-chip conn-chip-opponent">${svgOpponent} ${opponentCount}</span>`);
 
-        // H2H record badge for opponent connections
-        const h2hHtml = (c.h2h_wins_a != null && c.h2h_wins_b != null && opponentCount > 0)
-            ? `<span class="conn-chip conn-chip-h2h" title="Head-to-head playoff record">${c.team_a}: ${c.h2h_wins_a} &ndash; ${c.team_b}: ${c.h2h_wins_b}</span>`
-            : '';
+        // H2H record badge omitted from summary — cross-event opponent counts are shown in chips
+        const h2hHtml = '';
 
         // Detail lines (shown on expand)
         const lines = [];
@@ -6954,12 +6971,13 @@ async function renderPbpConnections(match) {
         // For cross-alliance items: show VS separator + H2H win counts in brackets
         let teamsLabel;
         if (isCross) {
-            const winsA = c.h2h_wins_a != null ? c.h2h_wins_a : null;
-            const winsB = c.h2h_wins_b != null ? c.h2h_wins_b : null;
-            const bracketA = winsA != null ? ` <span class="pbp-conn-h2h-wins">(${winsA})</span>` : '';
-            const bracketB = winsB != null ? ` <span class="pbp-conn-h2h-wins">(${winsB})</span>` : '';
-            teamsLabel = `${c.team_a}${bracketA} <span class="pbp-conn-vs">VS</span> ${c.team_b}${bracketB}`;
-        } else {
+                const winsA = c.h2h_wins_a != null ? c.h2h_wins_a : null;
+                const winsB = c.h2h_wins_b != null ? c.h2h_wins_b : null;
+                const record = (winsA != null && winsB != null)
+                    ? ` <span class="pbp-conn-h2h-wins">(${winsA}–${winsB})</span>`
+                    : '';
+                teamsLabel = `${c.team_a} <span class="pbp-conn-vs">vs</span> ${c.team_b}${record}`;
+            } else {
             teamsLabel = `${c.team_a} &amp; ${c.team_b}`;
         }
         items.push({ order: groupOrder, html: `

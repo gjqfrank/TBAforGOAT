@@ -4315,11 +4315,12 @@ input.input-loading {
     text-transform: uppercase;
 }
 .pbp-conn-h2h-wins {
-    font-size: .7rem;
-    color: var(--purple, #a855f7);
-    font-weight: 600;
+    font-size: .68rem;
+    color: var(--text-muted);
+    font-weight: 500;
     font-variant-numeric: tabular-nums;
-    margin-left: .1rem;
+    margin-left: 0;
+    letter-spacing: -.01em;
 }
 .pbp-conn-more {
     font-size: .68rem;
