@@ -4604,30 +4604,18 @@ function renderConnections(connections, filter) {
         let detailHtml = '';
 
         if (c.partnered_at.length > 0) {
-            const _stageRank = s => {
-                if (!s) return 0;
-                if (s === 'Finals') return 4;
-                if (s.startsWith('Semis') || s === 'Semi-Finals') return 3;
-                if (s === 'Quarters') return 2;
-                if (s === 'Eighths') return 1;
-                return 0;
-            };
             const partnerLines = c.partnered_at.map(p => {
-                // If there's a result badge, suppress the redundant bracket pill
-                let resultBadge = '', stagePill = '';
+                let resultBadge = '';
+                let stagePill = '';
                 if (p.result === 'winner') {
                     resultBadge = '<span class="conn-detail-result conn-result-winner">Winner</span>';
                 } else if (p.result === 'finalist') {
                     resultBadge = '<span class="conn-detail-result conn-result-finalist">Finalist</span>';
                 } else {
-                    // No event-result — show bracket pill + optional semi-finalist note
                     stagePill = `<span class="conn-detail-stage">${p.stage}</span>`;
-                    if (_stageRank(p.stage) >= 3) {
-                        resultBadge = '<span class="conn-detail-result conn-result-semifinalist">Semi-Finalist</span>';
-                    }
                 }
                 return `<div class="conn-detail-line conn-line-partner">
-                    <span class="conn-detail-event-year"><span class="conn-detail-year-num">${p.year}</span><span class="conn-detail-event-name">${p.event_name || p.event_key}</span></span>
+                    <span class="conn-detail-event-year"><span class="conn-year-lbl">${p.year}</span><span class="conn-year-sep">·</span><span class="conn-evt-name">${p.event_name || p.event_key}</span></span>
                     ${stagePill}
                     ${resultBadge}
                 </div>`;
@@ -4639,24 +4627,11 @@ function renderConnections(connections, filter) {
         }
 
         if (c.opponents_at.length > 0) {
-            const oppLines = c.opponents_at.map(o => {
-                // H2H: plain colored score, no pill — let color speak, not words
-                let h2hScore = '';
-                if (o.team_a_wins != null && o.team_b_wins != null) {
-                    const wa = o.team_a_wins, wb = o.team_b_wins;
-                    if (wa > wb)      h2hScore = `<span class="conn-h2h-score conn-h2h-win">${wa}\u2013${wb}</span>`;
-                    else if (wb > wa) h2hScore = `<span class="conn-h2h-score conn-h2h-loss">${wa}\u2013${wb}</span>`;
-                    else              h2hScore = `<span class="conn-h2h-score conn-h2h-tie">${wa}\u2013${wb}</span>`;
-                }
-                return `<div class="conn-detail-line conn-line-opponent">
-                    <span class="conn-detail-event-year"><span class="conn-detail-year-num">${o.year}</span><span class="conn-detail-event-name">${o.event_name || o.event_key}</span></span>
-                    <span class="conn-detail-stage">${o.stage}</span>
-                    ${h2hScore}
-                </div>`;
-            }).join('');
+            const totalA = c.opponents_at.reduce((s, o) => s + (o.team_a_wins || 0), 0);
+            const totalB = c.opponents_at.reduce((s, o) => s + (o.team_b_wins || 0), 0);
+            const h2hInline = `<span class="conn-opp-h2h">${c.team_a}&thinsp;<strong>(${totalA})</strong>&ensp;vs&ensp;${c.team_b}&thinsp;<strong>(${totalB})</strong></span>`;
             detailHtml += `<div class="conn-section">
-                <div class="conn-section-label">${svgOpponent} Opponents</div>
-                ${oppLines}
+                <div class="conn-section-label conn-section-label-opp">${svgOpponent} Opponents${h2hInline}</div>
             </div>`;
         }
 
