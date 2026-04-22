@@ -4600,31 +4600,43 @@ function renderConnections(connections, filter) {
         // H2H record badge omitted from summary — cross-event opponent counts are shown in chips
         const h2hHtml = '';
 
-        // Detail lines (shown on expand)
-        const lines = [];
-        c.partnered_at.forEach(p => {
-            const resultBadge = p.result === 'winner' ? '<span class="conn-detail-result conn-result-winner">Winner</span>'
-                : p.result === 'finalist' ? '<span class="conn-detail-result conn-result-finalist">Finalist</span>' : '';
-            lines.push(`<div class="conn-detail-line conn-line-partner">
-                <span class="conn-detail-icon">${svgPartner}</span>
-                <span class="conn-detail-event">${p.event_name || p.event_key}</span>
-                <span class="conn-detail-year">${p.year}</span>
-                ${resultBadge}
-                <span class="conn-detail-stage">${p.stage}</span>
-            </div>`);
-        });
-        c.opponents_at.forEach(o => {
-            const h2hMini = (o.team_a_wins != null && o.team_b_wins != null)
-                ? `<span class="conn-detail-h2h">${c.team_a}: ${o.team_a_wins} &ndash; ${c.team_b}: ${o.team_b_wins}</span>`
-                : '';
-            lines.push(`<div class="conn-detail-line conn-line-opponent">
-                <span class="conn-detail-icon">${svgOpponent}</span>
-                <span class="conn-detail-event">${o.event_name || o.event_key}</span>
-                <span class="conn-detail-year">${o.year}</span>
-                <span class="conn-detail-stage">${o.stage}</span>
-                ${h2hMini}
-            </div>`);
-        });
+        // Detail lines (shown on expand) — two sections: Partners then Opponents
+        let detailHtml = '';
+
+        if (c.partnered_at.length > 0) {
+            const partnerLines = c.partnered_at.map(p => {
+                const resultBadge = p.result === 'winner'
+                    ? '<span class="conn-detail-result conn-result-winner">Winner</span>'
+                    : p.result === 'finalist'
+                        ? '<span class="conn-detail-result conn-result-finalist">Finalist</span>'
+                        : '';
+                return `<div class="conn-detail-line conn-line-partner">
+                    <span class="conn-detail-event-year">${p.year} &mdash; ${p.event_name || p.event_key}</span>
+                    ${resultBadge}
+                    <span class="conn-detail-stage">${p.stage}</span>
+                </div>`;
+            }).join('');
+            detailHtml += `<div class="conn-section">
+                <div class="conn-section-label">${svgPartner} Partners</div>
+                ${partnerLines}
+            </div>`;
+        }
+
+        if (c.opponents_at.length > 0) {
+            const oppLines = c.opponents_at.map(o => {
+                const h2hRecord = (o.team_a_wins != null && o.team_b_wins != null)
+                    ? ` <span class="conn-detail-h2h">(${c.team_a}: ${o.team_a_wins} &ndash; ${c.team_b}: ${o.team_b_wins})</span>`
+                    : '';
+                return `<div class="conn-detail-line conn-line-opponent">
+                    <span class="conn-detail-event-year">${o.year} &mdash; ${o.event_name || o.event_key}</span>
+                    <span class="conn-detail-stage">${o.stage}${h2hRecord}</span>
+                </div>`;
+            }).join('');
+            detailHtml += `<div class="conn-section">
+                <div class="conn-section-label">${svgOpponent} Opponents</div>
+                ${oppLines}
+            </div>`;
+        }
 
         return `
         <div class="conn-row" onclick="toggleConnRow(this)">
@@ -4635,7 +4647,7 @@ function renderConnections(connections, filter) {
                 <span class="conn-chips">${chips.join('')}${h2hHtml}</span>
                 <span class="conn-expand-icon">▸</span>
             </div>
-            <div class="conn-row-details">${lines.join('')}</div>
+            <div class="conn-row-details">${detailHtml}</div>
         </div>`;
     }).join('');
 }

@@ -211,7 +211,7 @@ async def get_alliances_with_stats(event_key: str) -> dict:
     year = int(event_key[:4]) if event_key[:4].isdigit() else 2026
     event_code = event_key[4:]
 
-    alliances_raw, rankings, oprs, teams_list, frc_teams_raw, epa_data, frc_playoff_matches = await asyncio.gather(
+    alliances_raw, rankings, oprs, teams_list, frc_teams_raw, epa_data, frc_playoff_matches, tba_event_info = await asyncio.gather(
         client.get_event_alliances(event_key),
         _safe(client.get_event_rankings(event_key)),
         _safe(client.get_event_oprs(event_key)),
@@ -219,9 +219,11 @@ async def get_alliances_with_stats(event_key: str) -> dict:
         _safe(frc.get_event_teams(year, event_code)),
         _safe(get_epa_map(event_key)),
         _safe(frc.get_matches(year, event_code.upper(), level="Playoff")) if year >= 2023 else asyncio.sleep(0),
+        _safe(client.get_event(event_key)),
     )
     if not isinstance(frc_playoff_matches, list):
         frc_playoff_matches = None
+    tba_event_type = (tba_event_info or {}).get("event_type", -1)
     if epa_data is None:
         epa_data = {}
 

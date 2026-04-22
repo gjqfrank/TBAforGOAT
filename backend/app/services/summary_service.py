@@ -964,16 +964,21 @@ async def _build_champs_awards(
 
     einstein_contenders: list[dict] = []
     if einstein_keys:
-        einstein_team_results = await asyncio.gather(
-            *[_safe(client.get_event_teams(ek)) for ek in einstein_keys]
+        # Fetch alliances (not all teams) — only teams that were actually picked
+        # onto an alliance at Einstein count as "Einstein contenders"
+        einstein_alliance_results = await asyncio.gather(
+            *[_safe(client.get_event_alliances(ek)) for ek in einstein_keys]
         )
         prev_einstein_teams: set[int] = set()
-        for ek_teams in einstein_team_results:
-            if ek_teams:
-                for et in ek_teams:
-                    num = et.get("team_number")
-                    if num:
-                        prev_einstein_teams.add(num)
+        for ek_alliances in einstein_alliance_results:
+            if ek_alliances:
+                for al in ek_alliances:
+                    for tk in al.get("picks", []):
+                        if tk.startswith("frc"):
+                            try:
+                                prev_einstein_teams.add(int(tk[3:]))
+                            except ValueError:
+                                pass
 
         for num in sorted(team_nums & prev_einstein_teams):
             einstein_contenders.append({
