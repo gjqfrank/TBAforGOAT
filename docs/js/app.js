@@ -4597,8 +4597,20 @@ function renderConnections(connections, filter) {
         if (partnerCount) chips.push(`<span class="conn-chip conn-chip-partner">${svgPartner} ${partnerCount}</span>`);
         if (opponentCount) chips.push(`<span class="conn-chip conn-chip-opponent">${svgOpponent} ${opponentCount}</span>`);
 
-        // H2H record badge omitted from summary — cross-event opponent counts are shown in chips
-        const h2hHtml = '';
+        // H2H record: calculate totals for header display
+        let teamAHeader = `${c.team_a}`;
+        let teamBHeader = `${c.team_b}`;
+        let h2hLeaderTeam = null;
+        if (c.opponents_at.length > 0) {
+            const totalA = c.opponents_at.reduce((s, o) => s + (o.team_a_wins || 0), 0);
+            const totalB = c.opponents_at.reduce((s, o) => s + (o.team_b_wins || 0), 0);
+            const aLeads = totalA > totalB;
+            const bLeads = totalB > totalA;
+            teamAHeader = `${c.team_a}<span class="conn-h2h-wins${aLeads ? ' conn-h2h-wins-leader' : ''}">(<span class="conn-h2h-num">${totalA}</span>)</span>`;
+            teamBHeader = `${c.team_b}<span class="conn-h2h-wins${bLeads ? ' conn-h2h-wins-leader' : ''}">(<span class="conn-h2h-num">${totalB}</span>)</span>`;
+            if (aLeads) h2hLeaderTeam = c.team_a;
+            else if (bLeads) h2hLeaderTeam = c.team_b;
+        }
 
         // Detail lines (shown on expand) — two sections: Partners then Opponents
         let detailHtml = '';
@@ -4627,21 +4639,31 @@ function renderConnections(connections, filter) {
         }
 
         if (c.opponents_at.length > 0) {
-            const totalA = c.opponents_at.reduce((s, o) => s + (o.team_a_wins || 0), 0);
-            const totalB = c.opponents_at.reduce((s, o) => s + (o.team_b_wins || 0), 0);
-            const h2hInline = `<span class="conn-opp-h2h">${c.team_a}&thinsp;<strong>(${totalA})</strong>&ensp;vs&ensp;${c.team_b}&thinsp;<strong>(${totalB})</strong></span>`;
+            const oppLines = c.opponents_at.map(o => {
+                const stagePill = o.stage ? `<span class="conn-detail-stage">${o.stage}</span>` : '';
+                let leaderPill = '';
+                if (o.team_a_wins !== undefined && o.team_b_wins !== undefined) {
+                    if (o.team_a_wins > o.team_b_wins) leaderPill = `<span class="conn-chip conn-chip-h2h-leader">${c.team_a}</span>`;
+                    else if (o.team_b_wins > o.team_a_wins) leaderPill = `<span class="conn-chip conn-chip-h2h-leader">${c.team_b}</span>`;
+                }
+                return `<div class="conn-detail-line conn-line-opponent">
+                    <span class="conn-detail-event-year"><span class="conn-year-lbl">${o.year}</span><span class="conn-year-sep">·</span><span class="conn-evt-name">${o.event_name || o.event_key}</span></span>
+                    ${stagePill}${leaderPill}
+                </div>`;
+            }).join('');
             detailHtml += `<div class="conn-section">
-                <div class="conn-section-label conn-section-label-opp">${svgOpponent} Opponents${h2hInline}</div>
+                <div class="conn-section-label conn-section-label-opp">${svgOpponent} Opponents</div>
+                ${oppLines}
             </div>`;
         }
 
         return `
         <div class="conn-row" onclick="toggleConnRow(this)">
             <div class="conn-row-header">
-                <span class="conn-team has-tooltip">${c.team_a}<span class="custom-tooltip">${c.team_a_name}</span></span>
+                <span class="conn-team has-tooltip">${teamAHeader}<span class="custom-tooltip">${c.team_a_name}</span></span>
                 <span class="conn-vs">&amp;</span>
-                <span class="conn-team has-tooltip">${c.team_b}<span class="custom-tooltip">${c.team_b_name}</span></span>
-                <span class="conn-chips">${chips.join('')}${h2hHtml}</span>
+                <span class="conn-team has-tooltip">${teamBHeader}<span class="custom-tooltip">${c.team_b_name}</span></span>
+                <span class="conn-chips">${chips.join('')}</span>
                 <span class="conn-expand-icon">▸</span>
             </div>
             <div class="conn-row-details">${detailHtml}</div>

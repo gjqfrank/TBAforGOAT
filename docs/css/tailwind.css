@@ -3562,7 +3562,6 @@ input.input-loading {
   padding: .8rem 1.3rem;
   background: linear-gradient(180deg, rgba(99,102,241,.06) 0%, transparent 100%);
   border-bottom: 1px solid var(--border);
-  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   gap: .6rem;
   flex-wrap: wrap;
 }
@@ -5749,6 +5748,12 @@ body.show-team-attrs .pbp-hardware-tag {
 
 .pbp-conn-cross {
   border-left-color: var(--text-muted);
+}
+
+.pbp-conn-cross .pbp-conn-teams {
+  font-weight: 500;
+  color: var(--text-secondary);
+  font-size: .78rem;
 }
 
 .pbp-conn-teams {
@@ -10355,7 +10360,9 @@ tr:hover .compare-cb,
   border-radius: 8px;
   margin-bottom: .35rem;
   cursor: pointer;
-  transition: box-shadow .15s;
+  background: rgba(255,255,255,.025);
+  box-shadow: 0 2px 6px rgba(0,0,0,.18);
+  transition: background .15s, box-shadow .15s;
 }
 
 .conn-row:last-child {
@@ -10363,7 +10370,8 @@ tr:hover .compare-cb,
 }
 
 .conn-row:hover {
-  box-shadow: 0 1px 4px rgba(0,0,0,.08);
+  background: rgba(99,102,241,.06);
+  box-shadow: 0 3px 10px rgba(0,0,0,.28);
 }
 
 .conn-row-header {
@@ -10375,9 +10383,28 @@ tr:hover .compare-cb,
 
 .conn-team {
   font-family: var(--mono);
-  font-weight: 700;
-  font-size: .9rem;
+  font-weight: 800;
+  font-size: 1rem;
   color: var(--text);
+}
+
+.conn-h2h-wins {
+  font-family: var(--mono);
+  font-size: .65rem;
+  font-weight: 400;
+  color: var(--text-muted);
+  margin-left: .15rem;
+  opacity: .75;
+}
+
+.conn-h2h-wins.conn-h2h-wins-leader {
+  opacity: 1;
+}
+
+.conn-h2h-wins-leader .conn-h2h-num {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
 }
 
 .conn-vs {
@@ -10412,7 +10439,7 @@ tr:hover .compare-cb,
 }
 
 .conn-expand-icon {
-  font-size: .7rem;
+  font-size: .95rem;
   color: var(--text-muted);
   transition: transform .2s;
   flex-shrink: 0;
@@ -10431,6 +10458,67 @@ tr:hover .compare-cb,
 
 .conn-row.expanded .conn-row-details {
   display: block;
+}
+
+/* Section groups inside expanded panel */
+
+.conn-section {
+  padding: .3rem 0 .15rem;
+}
+
+.conn-section + .conn-section {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.conn-section-label {
+  display: flex;
+  align-items: center;
+  gap: .35rem;
+  font-size: .76rem;
+  font-weight: 600;
+  color: var(--text);
+  padding: .3rem .7rem .2rem 1rem;
+}
+
+.conn-section-label-opp {
+  padding-bottom: .3rem;
+}
+
+.conn-section-label .conn-svg {
+  width: .72rem;
+  height: .72rem;
+  flex-shrink: 0;
+  vertical-align: unset;
+}
+
+.conn-detail-event-year {
+  flex: 0 0 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  margin-right: .4rem;
+}
+
+.conn-year-lbl {
+  font-family: var(--mono);
+  font-size: .72rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-right: .3rem;
+}
+
+.conn-year-sep {
+  color: var(--text-muted);
+  font-size: .7rem;
+  margin: 0 .25rem;
+}
+
+.conn-evt-name {
+  font-weight: 500;
+  font-size: .78rem;
+  color: var(--text-secondary);
+  margin-left: .3rem;
 }
 
 .conn-detail-line {
@@ -10493,6 +10581,35 @@ tr:hover .compare-cb,
   background: rgba(239, 68, 68, .1);
   color: var(--red);
   border: 1px solid rgba(239, 68, 68, .25);
+}
+
+.conn-opp-leader-pill {
+  margin-left: auto;
+}
+
+.conn-chip-h2h-leader {
+  font-size: .62rem;
+  font-weight: 600;
+  padding: .05rem .35rem;
+  border-radius: 100px;
+  white-space: nowrap;
+  background: rgba(239, 68, 68, .1);
+  color: var(--red);
+  border: 1px solid rgba(239, 68, 68, .25);
+}
+
+.pbp-conn-h2h-wins {
+  font-family: var(--mono);
+  font-size: .72rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  opacity: .8;
+}
+
+.pbp-conn-vs {
+  font-size: .7rem;
+  color: var(--text-muted);
+  font-weight: 400;
 }
 
 /* Top scorers */
@@ -17493,9 +17610,9 @@ body.epa-breakdown-active .stat-opr {
   width: 34px;
   height: 34px;
   border-radius: 8px;
-  background: var(--primary);
-  border: none;
-  color: #fff;
+  background: rgba(100, 116, 139, .25);
+  border: 1px solid rgba(100, 116, 139, .3);
+  color: var(--text-muted);
   cursor: pointer;
   flex-shrink: 0;
   padding: 0;
@@ -17507,8 +17624,15 @@ body.epa-breakdown-active .stat-opr {
   display: block;
   width: 16px;
   height: 16px;
-  stroke: #fff;
+  stroke: var(--text-muted);
   fill: none;
+}
+
+.gn-auth-hint {
+  font-size: .68rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 /* ── Selector (shared: team search, match search) ─────────── */

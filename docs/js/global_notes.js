@@ -122,24 +122,26 @@ const GlobalNotes = (() => {
         const code = parts[parts.length - 1] || matchKey;
         const qm = code.match(/^qm(\d+)$/i);
         if (qm) return 'Qual ' + qm[1];
-        const sf = code.match(/^sf(\d+)m(\d+)$/i);
-        if (sf) return 'SF' + sf[1] + (sf[2] !== '1' ? '-' + sf[2] : '');
-        const f = code.match(/^f(\d+)m(\d+)$/i);
-        if (f) return 'F' + f[1] + (f[2] !== '1' ? '-' + f[2] : '');
-        return code.toUpperCase();
+        const f = code.match(/^f\d+m(\d+)$/i);
+        if (f) return 'Final ' + f[1];
+        return _playoffSeqLabel(matchKey);
     }
 
     function _matchLabelFull(matchKey) {
-        if (!matchKey) return '';
-        const parts = matchKey.split('_');
-        const code = parts[parts.length - 1] || matchKey;
-        const qm = code.match(/^qm(\d+)$/i);
-        if (qm) return 'Qual ' + qm[1];
-        const sf = code.match(/^sf(\d+)m(\d+)$/i);
-        if (sf) return 'SF ' + sf[1] + (sf[2] !== '1' ? ' Match ' + sf[2] : '');
-        const f = code.match(/^f(\d+)m(\d+)$/i);
-        if (f) return 'Final ' + f[1] + (f[2] !== '1' ? ' Match ' + f[2] : '');
-        return code.toUpperCase();
+        return _matchLabel(matchKey);
+    }
+
+    function _playoffSeqLabel(matchKey) {
+        const all = _matches();
+        let seq = 0;
+        for (const m of all) {
+            const key = m.match_key || m.key || '';
+            const c = key.split('_').pop();
+            if (/^qm\d+$/i.test(c) || /^f\d+m\d+$/i.test(c)) continue;
+            seq++;
+            if (key === matchKey) return 'Match ' + seq;
+        }
+        return (matchKey.split('_').pop() || matchKey).toUpperCase();
     }
 
     function _teamName(teamKey) {
@@ -412,10 +414,12 @@ const GlobalNotes = (() => {
 
     function _renderTeamFooter() {
         const num = _teamFilter ? _teamFilter.replace(/\D/g, '') : '';
+        const authHint = window.isGuest ? '<span class="gn-auth-hint">Sign in to send</span>' : '';
         return '<form class="gn-note-form" onsubmit="GlobalNotes._submitTeamNote(event)">' +
             '<input type="text" class="gn-note-input" id="gn-team-note-input"' +
             ' placeholder="Note for ' + _esc(num) + '\u2026" autocomplete="off" />' +
-            '<button type="submit" class="gn-send" title="Send">' +
+            authHint +
+            '<button type="submit" class="gn-send" title="Sign in to send notes">' +
               '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>' +
             '</button>' +
           '</form>';
@@ -559,10 +563,12 @@ const GlobalNotes = (() => {
     }
 
     function _renderEventFooter() {
+        const authHint = window.isGuest ? '<span class="gn-auth-hint">Sign in to send</span>' : '';
         return '<form class="gn-note-form" onsubmit="GlobalNotes._submitEventNote(event)">' +
             '<input type="text" class="gn-note-input" id="gn-event-input"' +
             ' placeholder="Add an event note\u2026" autocomplete="off" />' +
-            '<button type="submit" class="gn-send" title="Send">' +
+            authHint +
+            '<button type="submit" class="gn-send" title="Sign in to send notes">' +
               '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>' +
             '</button>' +
           '</form>';

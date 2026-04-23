@@ -7317,6 +7317,14 @@ tr:hover .compare-cb,
     font-size: 1rem;
     color: var(--text);
 }
+.conn-h2h-wins {
+    font-family: var(--mono);
+    font-size: .65rem;
+    font-weight: 400;
+    color: var(--text-muted);
+    margin-left: .15rem;
+    opacity: .75;
+}
 .conn-vs {
     color: var(--text-muted);
     font-size: .8rem;
@@ -7384,11 +7392,9 @@ tr:hover .compare-cb,
 .conn-section-label {
     display: flex;
     align-items: center;
-    gap: .4rem;
-    font-size: .65rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: .07em;
+    gap: .35rem;
+    font-size: .7rem;
+    font-weight: 600;
     color: var(--text-muted);
     padding: .3rem .7rem .2rem 1rem;
 }
@@ -7410,8 +7416,8 @@ tr:hover .compare-cb,
     font-weight: 700;
 }
 .conn-section-label .conn-svg {
-    width: 1rem;
-    height: 1rem;
+    width: .65rem;
+    height: .65rem;
     flex-shrink: 0;
     vertical-align: unset;
 }
@@ -7444,16 +7450,18 @@ tr:hover .compare-cb,
     font-size: .72rem;
     font-weight: 500;
     color: var(--text-muted);
+    margin-right: .3rem;
 }
 .conn-year-sep {
-    color: var(--border);
+    color: var(--text-muted);
     font-size: .7rem;
-    margin: 0 .28rem;
+    margin: 0 .25rem;
 }
 .conn-evt-name {
     font-weight: 500;
-    font-size: .8rem;
+    font-size: .78rem;
     color: var(--text-secondary);
+    margin-left: .3rem;
 }
 .conn-detail-event {
     flex: 1;

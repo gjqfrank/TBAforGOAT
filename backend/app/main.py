@@ -17,6 +17,7 @@ from .config import TRUSTED_API_KEYS
 from .routers import events, matches, alliances, teams, storylines
 from .routers import ftc_events, ftc_matches, ftc_alliances
 from .routers import sync, snapshot
+from .routers import auth
 
 log = logging.getLogger(__name__)
 
@@ -222,6 +223,10 @@ class TimeoutMiddleware(BaseHTTPMiddleware):
 
 
 app.add_middleware(TimeoutMiddleware)
+
+# ── Auth router ────────────────────────────────────────────
+# prefix is defined inside the router itself (/auth/...)
+app.include_router(auth.router)
 
 # ── API routers ─────────────────────────────────────────────
 app.include_router(events.router, prefix="/api/events", tags=["Events"])
