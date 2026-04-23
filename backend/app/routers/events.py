@@ -45,7 +45,7 @@ async def season_high_scores(year: int = Query(2026)):
 
         try:
             sb = get_statbotics_client()
-            data = await sb.get_season_high_scores(year, limit=5)
+            data = await sb.get_season_high_scores(year, limit=10)
 
             # Resolve event keys → friendly names from season data
             event_names: dict[str, str] = {}
