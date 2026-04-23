@@ -270,7 +270,7 @@ async function _showTimsHistory(teamKey) {
         html += '</tbody></table></div>';
         const overlay = document.createElement('div');
         overlay.id = 'tims-history-overlay';
-        overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center';
+        overlay.style.cssText = 'position:fixed;inset:0;z-index:10001;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center';
         overlay.innerHTML = `<div style="background:var(--card);border-radius:16px;padding:1.2rem;max-width:500px;width:90%;color:var(--text);box-shadow:0 8px 32px rgba(0,0,0,.4)"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem"><strong>Edit History — ${_escHtml(teamKey)}</strong><button onclick="this.closest('#tims-history-overlay').remove()" style="background:none;border:none;color:var(--text);font-size:1.2rem;cursor:pointer">&times;</button></div>${html}</div>`;
         document.body.appendChild(overlay);
     } catch (err) {
