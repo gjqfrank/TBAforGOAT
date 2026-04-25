@@ -68,10 +68,19 @@ class StatboticsClient:
 
         # If another coroutine is already fetching this endpoint, wait for it.
         if endpoint in self._in_flight:
-            return await asyncio.shield(self._in_flight[endpoint])
+            # Await the shared future directly (not via asyncio.shield) so that
+            # its exception is always retrieved and Python doesn't log
+            # "Future exception was never retrieved" warnings.
+            try:
+                return await self._in_flight[endpoint]
+            except Exception:
+                raise
 
         loop = asyncio.get_event_loop()
         fut: asyncio.Future = loop.create_future()
+        # Add a no-op callback so Python considers the exception "retrieved"
+        # even if all waiters are cancelled before they see it.
+        fut.add_done_callback(lambda f: None if f.cancelled() else f.exception())
         self._in_flight[endpoint] = fut
 
         try:
