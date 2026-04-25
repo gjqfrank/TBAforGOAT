@@ -93,6 +93,9 @@ class TBAClient:
     async def get_event_alliances(self, event_key: str):
         return await self.get(f"/event/{event_key}/alliances")
 
+    async def get_event_awards(self, event_key: str):
+        return await self.get(f"/event/{event_key}/awards")
+
     # ── Team endpoints ──────────────────────────────────────
     async def get_team(self, team_key: str):
         return await self.get(f"/team/{team_key}")

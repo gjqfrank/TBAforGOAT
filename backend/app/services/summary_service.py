@@ -195,6 +195,7 @@ async def _build_event_summary(event_key: str) -> dict:
         "impact_finalists": impact_finalists,
         "top_scorers": top_scorers,
         "high_scores": high_scores,
+        "is_championship": (event_info or {}).get("event_type") in (3, 4),
     }
 
 
@@ -202,17 +203,27 @@ async def get_event_summary_awards(event_key: str) -> dict:
     """Deferred summary data — disk → Supabase → build."""
     # 1) Disk cache
     cached = payload_cache.read_payload("awards", event_key, _AWARDS_TTL)
-    if cached:
+    if cached and "is_championship" in cached:
         return cached
 
     # 2) Supabase cache
     sb_row = await get_cached_summary(event_key)
     if sb_row and sb_row.get("awards"):
-        payload_cache.write_payload("awards", event_key, sb_row["awards"])
-        return sb_row["awards"]
+        awards = sb_row["awards"]
+        # Skip old-format cache entries (pre-championship-detection era).
+        # Valid entries always include the "is_championship" key.
+        if "is_championship" in awards:
+            payload_cache.write_payload("awards", event_key, awards)
+            return awards
 
-    # 3) Build from scratch
-    result = await _build_event_summary_awards(event_key)
+    # 3) Build from scratch — fall back to stale disk cache if live build fails
+    try:
+        result = await _build_event_summary_awards(event_key)
+    except Exception:
+        stale = payload_cache.read_stale("awards", event_key)
+        if stale and "is_championship" in stale:
+            return stale
+        raise
     payload_cache.write_payload("awards", event_key, result)
     # Persist to Supabase for regular events AND championship divisions
     if result.get("is_championship") or any(result.get(k) for k in (
@@ -247,7 +258,7 @@ async def _build_event_summary_awards(event_key: str) -> dict:
     current_event_type = (event_info or {}).get("event_type", -1)
 
     if not teams:
-        return {"past_event_champions": [], "past_season_awards": []}
+        return {"is_championship": False, "past_event_champions": [], "past_season_awards": []}
 
     # ── Championship division: specialised payload ──────────
     if current_event_type in _CHAMPIONSHIP_EVENT_TYPES:
@@ -283,6 +294,7 @@ async def _build_event_summary_awards(event_key: str) -> dict:
     )
 
     return {
+        "is_championship": False,
         "past_event_champions": past_event_champions,
         "past_season_awards": past_season_awards,
     }

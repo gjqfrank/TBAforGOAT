@@ -3484,6 +3484,7 @@ async function loadSummaryAwards() {
             summaryData.season_impact = data.season_impact || [];
             summaryData.einstein_contenders = data.einstein_contenders || [];
             _renderChampsSummaryAwards(data);
+            renderPrequalifiedTeams(); // ensure "Already Qualified" section is hidden
             // Ensure the year toggle is hidden — it's an artifact from the
             // regular-event awards card and must not appear on championship divisions
             const champToggle = $('award-season-toggle');
@@ -3527,7 +3528,10 @@ async function loadSummaryAwards() {
             ? 'Rate limited by API — retrying shortly\u2026'
             : 'Could not load — switch tabs to retry.';
         $('summary-past-champs-list').innerHTML = `<p class="empty" style="margin:.5rem 0;font-size:.82rem">${msg}</p>`;
-        $('summary-past-awards-list').innerHTML = `<p class="empty" style="margin:.5rem 0;font-size:.82rem">${msg}</p>`;
+        // Only overwrite the awards list if season awards haven't already been loaded
+        if (!summaryData.season_awards || summaryData.season_awards.length === 0) {
+            $('summary-past-awards-list').innerHTML = `<p class="empty" style="margin:.5rem 0;font-size:.82rem">${msg}</p>`;
+        }
         if (isRateLimit) setTimeout(() => { _loadingAwards = false; loadSummaryAwards(); }, 5000);
     } finally {
         _loadingAwards = false;
@@ -3659,10 +3663,11 @@ async function loadFtcPastAwards() {
     }
 }
 
-/** Render championship-specific awards into the two summary card slots. */
+/** Render championship-specific awards into the summary card slots and prestige row. */
 function _renderChampsSummaryAwards(data) {
-    const champsEl = $('summary-past-champs');
-    const awardsEl = $('summary-past-awards');
+    const champsEl    = $('summary-past-champs');
+    const awardsEl    = $('summary-past-awards');
+    const prestigeRow = $('summary-prestige-row');
 
     // ── Left card: Season Winners + Impact ─────────────────
     const hasWinners = data.season_winners && data.season_winners.length > 0;
@@ -3716,19 +3721,53 @@ function _renderChampsSummaryAwards(data) {
         champsEl.classList.add('hidden');
     }
 
-    // ── Right card: Returning Einstein Contenders ──────────
-    const hasEinstein = data.einstein_contenders && data.einstein_contenders.length > 0;
-    if (hasEinstein) {
-        awardsEl.querySelector('h3').textContent = 'Returning Einstein Contenders';
-        const filterBar = awardsEl.querySelector('.past-awards-filter-bar');
-        if (filterBar) filterBar.classList.add('hidden');
-        $('summary-past-awards-list').innerHTML = data.einstein_contenders.map(t =>
-            `<div class="summary-hof-team">
-                <span class="summary-hof-num">${t.team_number}</span>
-                <span class="summary-hof-name">${t.nickname}</span>
+    // ── Prestige row: Einstein Winners + Contenders ────────
+    const einsteinWinnersEl  = $('summary-einstein-winners');
+    const einsteinContsEl    = $('summary-einstein-contenders');
+    const allContenders      = data.einstein_contenders || [];
+    const einWinners         = allContenders.filter(t => t.einstein_winner);
+    const einContenders      = allContenders.filter(t => !t.einstein_winner);
+
+    if (einWinners.length > 0) {
+        $('summary-einstein-winners-list').innerHTML = einWinners.map(t =>
+            `<div class="prestige-entry">
+                <span class="prestige-entry-num prestige-num-einstein">${t.team_number}</span>
+                <span class="prestige-entry-name">${t.nickname}</span>
             </div>`
         ).join('');
+        einsteinWinnersEl.classList.remove('hidden');
+        prestigeRow.classList.remove('hidden');
+    } else {
+        if (einsteinWinnersEl) einsteinWinnersEl.classList.add('hidden');
+    }
+
+    if (einContenders.length > 0) {
+        $('summary-einstein-contenders-list').innerHTML = einContenders.map(t =>
+            `<div class="prestige-entry">
+                <span class="prestige-entry-num prestige-num-einstein">${t.team_number}</span>
+                <span class="prestige-entry-name">${t.nickname}</span>
+            </div>`
+        ).join('');
+        einsteinContsEl.classList.remove('hidden');
+        prestigeRow.classList.remove('hidden');
+    } else {
+        if (einsteinContsEl) einsteinContsEl.classList.add('hidden');
+    }
+
+    // ── Right card: Award-Winning Teams (current season only, no year toggle) ──
+    awardsEl.querySelector('h3').textContent = 'Award-Winning Teams';
+    const seasonToggle = $('award-season-toggle');
+    if (seasonToggle) seasonToggle.classList.add('hidden');
+    const awardsFilterBar = awardsEl.querySelector('.past-awards-filter-bar');
+    if (awardsFilterBar) awardsFilterBar.classList.remove('hidden');
+
+    if (summaryData.season_awards && summaryData.season_awards.length > 0) {
+        renderPastSeasonAwards(summaryData.season_awards);
         awardsEl.classList.remove('hidden');
+    } else if (!summaryData.season_awards) {
+        // Not yet fetched — trigger lazy load (toggle stays hidden)
+        awardsEl.classList.add('hidden');
+        loadSeasonAwards();
     } else {
         awardsEl.classList.add('hidden');
     }
@@ -4148,6 +4187,13 @@ function renderSummary(data) {
     $('summary-title').textContent = `Event Summary · ${currentEvent.toUpperCase()}`;
     show('summary-container');
 
+    // Propagate is_championship to summaryData immediately so helper functions
+    // (like renderPrequalifiedTeams) see it even before loadSummaryAwards fires.
+    if (data.is_championship) {
+        summaryData = summaryData || data;
+        summaryData.is_championship = true;
+    }
+
     // Demographics
     const d = data.demographics;
     if (!d) {
@@ -4232,6 +4278,13 @@ function renderSummary(data) {
     // Hide row if both empty
     if (data.hall_of_fame.length === 0 && (!data.impact_finalists || data.impact_finalists.length === 0)) {
         prestigeRow.classList.add('hidden');
+    }
+    // Always hide Einstein prestige boxes for non-championship events
+    if (!data.is_championship) {
+        const ewEl = $('summary-einstein-winners');
+        const ecEl = $('summary-einstein-contenders');
+        if (ewEl) ewEl.classList.add('hidden');
+        if (ecEl) ecEl.classList.add('hidden');
     }
 
     // Returning Event Champions & Finalists — lazy-load
@@ -4375,8 +4428,10 @@ function renderSummary(data) {
         }
 
         // FRC: Award-Winning Teams — season toggle (current year / previous year)
+        // Only show the toggle for non-championship events. If is_championship is already
+        // known (e.g. second render after loadSummaryAwards resolved), keep it hidden.
         const seasonToggle = $('award-season-toggle');
-        if (seasonToggle) {
+        if (seasonToggle && !summaryData.is_championship) {
             seasonToggle.classList.remove('hidden');
             const btns = seasonToggle.querySelectorAll('.award-season-btn');
             btns[0].textContent = String(currentEventYear);
@@ -4422,7 +4477,10 @@ function renderSummary(data) {
     // Skip for FTC — no past-event-champion / past-season-award API.
     const _noChamps = !data.is_championship && (!data.past_event_champions || data.past_event_champions.length === 0);
     const _noAwards = !data.is_championship && (!data.past_season_awards  || data.past_season_awards.length === 0);
-    if (_noChamps && _noAwards && !isFTCMode()) {
+    // For championship divisions, loadSummaryAwards fetches the champs-specific
+    // payload (season_winners, einstein_contenders etc). Trigger it if not cached yet.
+    const _noChampAwards = data.is_championship && !data.einstein_contenders;
+    if ((_noChamps && _noAwards && !isFTCMode()) || _noChampAwards) {
         loadSummaryAwards();
     }
 

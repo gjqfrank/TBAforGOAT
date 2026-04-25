@@ -9582,6 +9582,54 @@ tr:hover .compare-cb,
   border-color: rgba(59, 130, 246, .2);
 }
 
+.highlight-einstein-winner {
+  border-color: rgba(168, 85, 247, .25);
+}
+
+.highlight-einstein-winner::after {
+  background: #a855f7;
+}
+
+.highlight-einstein-winner:hover {
+  border-color: rgba(168, 85, 247, .35);
+}
+
+.highlight-einstein-winner .highlight-label {
+  color: #a855f7;
+}
+
+.highlight-einstein-contender {
+  border-color: rgba(99, 102, 241, .2);
+}
+
+.highlight-einstein-contender::after {
+  background: var(--primary);
+}
+
+.highlight-einstein-contender:hover {
+  border-color: rgba(99, 102, 241, .3);
+}
+
+.highlight-einstein-contender .highlight-label {
+  color: var(--primary-hover);
+}
+
+[data-theme="light"] .highlight-einstein-winner {
+  border-color: rgba(126, 34, 206, .2);
+}
+
+[data-theme="light"] .highlight-einstein-winner .highlight-label {
+  color: #7e22ce;
+}
+
+[data-theme="light"] .highlight-einstein-contender {
+  border-color: rgba(99, 102, 241, .2);
+}
+
+[data-theme="light"] .highlight-einstein-contender .highlight-label {
+  color: #4f46e5;
+}
+
 /* Prestige entry rows inside highlight cards */
 
 .prestige-entry {
@@ -9664,7 +9712,7 @@ tr:hover .compare-cb,
 }
 
 .summary-collapse-body:not(.collapsed) {
-  overflow: visible;
+  overflow: hidden;
 }
 
 .summary-collapse-body.collapsed {
@@ -9693,6 +9741,13 @@ tr:hover .compare-cb,
 
 .ftc-full-width-card #summary-past-champs-list {
   max-height: 800px;
+}
+
+/* Scrollable list for award-winning teams */
+
+#summary-past-awards-list {
+  max-height: 420px;
+  overflow-y: auto;
 }
 
 /* ── Shared row styles (HoF, past champs, past awards) ── */
@@ -10593,9 +10648,9 @@ tr:hover .compare-cb,
   padding: .05rem .35rem;
   border-radius: 100px;
   white-space: nowrap;
-  background: rgba(239, 68, 68, .1);
-  color: var(--red);
-  border: 1px solid rgba(239, 68, 68, .25);
+  background: rgba(148, 163, 184, .12);
+  color: var(--text-secondary);
+  border: 1px solid rgba(148, 163, 184, .28);
 }
 
 .pbp-conn-h2h-wins {
