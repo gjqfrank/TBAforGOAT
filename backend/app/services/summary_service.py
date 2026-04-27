@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from datetime import date, datetime, timezone
+from pathlib import Path
 from . import payload_cache
 from .region_service import _load_region_stats, get_event_history
 from .supabase_client import get_cached_summary, set_cached_summary
@@ -19,6 +21,10 @@ _CONNECTIONS_TTL = 3600  # 1 hr — prior playoff connections (historical)
 _SEASON_AWARDS_TTL = 3600 # 1 hr — season awards (historical)
 _ADVANCEMENT_TTL = 300   # 5 min — moderate cost
 
+# Bump this whenever the championship awards payload format changes in a way
+# that requires existing Supabase cache entries to be invalidated and rebuilt.
+_EINSTEIN_CACHE_VERSION = 2  # v2: switched to static einstein_history.json lookup
+
 
 def invalidate_event_caches(event_key: str) -> None:
     """Clear all disk-cached summary/awards for an event."""
@@ -32,6 +38,30 @@ def invalidate_event_caches(event_key: str) -> None:
 # ── Static HoF / Impact lookup (built once from region_stats.json) ───
 _HOF_BY_NUM: dict[int, dict] | None = None
 _IMPACT_BY_NUM: dict[int, dict] | None = None
+
+# ── Static Einstein history lookup (built once from einstein_history.json) ──
+_EINSTEIN_BY_NUM: dict[int, dict] | None = None
+_EINSTEIN_HISTORY_PATH = (
+    Path(__file__).resolve().parent.parent.parent.parent / "docs" / "data" / "einstein_history.json"
+)
+
+
+def _ensure_einstein_lookup():
+    """Load einstein_history.json into a dict keyed by team_number."""
+    global _EINSTEIN_BY_NUM
+    if _EINSTEIN_BY_NUM is not None:
+        return
+    _EINSTEIN_BY_NUM = {}
+    try:
+        with open(_EINSTEIN_HISTORY_PATH) as f:
+            raw = json.load(f)
+        for team_str, data in raw.items():
+            try:
+                _EINSTEIN_BY_NUM[int(team_str)] = data
+            except ValueError:
+                pass
+    except FileNotFoundError:
+        pass
 
 
 def _ensure_award_lookups():
@@ -204,7 +234,9 @@ async def get_event_summary_awards(event_key: str) -> dict:
     # 1) Disk cache
     cached = payload_cache.read_payload("awards", event_key, _AWARDS_TTL)
     if cached and "is_championship" in cached:
-        return cached
+        # Reject stale championship entries built before the static Einstein lookup.
+        if not cached.get("is_championship") or cached.get("einstein_v") == _EINSTEIN_CACHE_VERSION:
+            return cached
 
     # 2) Supabase cache
     sb_row = await get_cached_summary(event_key)
@@ -212,9 +244,11 @@ async def get_event_summary_awards(event_key: str) -> dict:
         awards = sb_row["awards"]
         # Skip old-format cache entries (pre-championship-detection era).
         # Valid entries always include the "is_championship" key.
+        # Also skip championship entries built before the static Einstein lookup.
         if "is_championship" in awards:
-            payload_cache.write_payload("awards", event_key, awards)
-            return awards
+            if not awards.get("is_championship") or awards.get("einstein_v") == _EINSTEIN_CACHE_VERSION:
+                payload_cache.write_payload("awards", event_key, awards)
+                return awards
 
     # 3) Build from scratch — fall back to stale disk cache if live build fails
     try:
@@ -967,55 +1001,28 @@ async def _build_champs_awards(
             })
 
     # ── 2) Returning Einstein contenders ────────────────────
-    # Find all Einstein (type 4) events from the previous year, then
-    # check which of *this division's* teams competed there.
-    prev_year = year - 1
-    prev_events = await _safe(client.get_events_by_year(prev_year))
-    einstein_keys = [
-        ev["key"] for ev in (prev_events or [])
-        if ev.get("event_type") == _EINSTEIN_EVENT_TYPE
-    ]
-
+    # Use the pre-built static lookup so we capture ALL-TIME winners,
+    # not just teams that won in the immediately preceding year.
+    _ensure_einstein_lookup()
     einstein_contenders: list[dict] = []
-    if einstein_keys:
-        # Fetch alliances AND awards in parallel — alliances to find who competed,
-        # awards to find who actually won Einstein.
-        einstein_alliance_results, einstein_award_results = await asyncio.gather(
-            asyncio.gather(*[_safe(client.get_event_alliances(ek)) for ek in einstein_keys]),
-            asyncio.gather(*[_safe(client.get_event_awards(ek)) for ek in einstein_keys]),
-        )
-        prev_einstein_teams: set[int] = set()
-        einstein_winner_teams: set[int] = set()
-        for ek_alliances in einstein_alliance_results:
-            if ek_alliances:
-                for al in ek_alliances:
-                    for tk in al.get("picks", []):
-                        if tk.startswith("frc"):
-                            try:
-                                prev_einstein_teams.add(int(tk[3:]))
-                            except ValueError:
-                                pass
-        for ek_awards in einstein_award_results:
-            if ek_awards:
-                for award in ek_awards:
-                    if award.get("award_type") == 1:  # Winner
-                        for tr in (award.get("recipient_list") or []):
-                            tk = tr.get("team_key", "")
-                            if tk.startswith("frc"):
-                                try:
-                                    einstein_winner_teams.add(int(tk[3:]))
-                                except ValueError:
-                                    pass
-
-        for num in sorted(team_nums & prev_einstein_teams):
-            einstein_contenders.append({
-                "team_number": num,
-                "nickname": name_map.get(num, ""),
-                "einstein_winner": num in einstein_winner_teams,
-            })
+    for num in sorted(team_nums):
+        entry = (_EINSTEIN_BY_NUM or {}).get(num)
+        if not entry:
+            continue
+        # Only surface teams whose most recent Einstein appearance was the
+        # year before this championship (keeps the list relevant).
+        contender_years = entry.get("contender_years", [])
+        if not contender_years or max(contender_years) != year - 1:
+            continue
+        einstein_contenders.append({
+            "team_number": num,
+            "nickname": name_map.get(num, "") or entry.get("nickname", ""),
+            "einstein_winner": bool(entry.get("winner_years")),
+        })
 
     return {
         "is_championship": True,
+        "einstein_v": _EINSTEIN_CACHE_VERSION,
         "season_winners": season_winners,
         "season_impact": season_impact,
         "einstein_contenders": einstein_contenders,

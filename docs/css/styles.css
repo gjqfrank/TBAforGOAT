@@ -6541,6 +6541,9 @@ tr:hover .compare-cb,
     margin-top: .4rem;
     will-change: max-height, opacity;
 }
+#summary-history-body:not(.collapsed) {
+    overflow: visible;
+}
 #summary-history-list {
     max-height: 45rem;
     overflow-y: auto;
@@ -6594,6 +6597,37 @@ tr:hover .compare-cb,
 [data-theme="light"] .highlight-impact .highlight-label { color: #4f46e5; }
 [data-theme="light"] .highlight-hof { border-color: rgba(180, 140, 0, .2); }
 [data-theme="light"] .highlight-impact { border-color: rgba(59, 130, 246, .2); }
+
+.highlight-einstein-winner {
+    border-color: rgba(168, 85, 247, .25);
+}
+.highlight-einstein-winner::after {
+    background: #a855f7;
+}
+.highlight-einstein-winner:hover {
+    border-color: rgba(168, 85, 247, .35);
+}
+.highlight-einstein-winner .highlight-label {
+    color: #a855f7;
+}
+
+.highlight-einstein-contender {
+    border-color: rgba(99, 102, 241, .2);
+}
+.highlight-einstein-contender::after {
+    background: var(--primary);
+}
+.highlight-einstein-contender:hover {
+    border-color: rgba(99, 102, 241, .3);
+}
+.highlight-einstein-contender .highlight-label {
+    color: var(--primary-hover);
+}
+
+[data-theme="light"] .highlight-einstein-winner { border-color: rgba(126, 34, 206, .2); }
+[data-theme="light"] .highlight-einstein-winner .highlight-label { color: #7e22ce; }
+[data-theme="light"] .highlight-einstein-contender { border-color: rgba(99, 102, 241, .2); }
+[data-theme="light"] .highlight-einstein-contender .highlight-label { color: #4f46e5; }
 
 /* Prestige entry rows inside highlight cards */
 .prestige-entry {
@@ -7356,6 +7390,12 @@ tr:hover .compare-cb,
     color: var(--purple, #a855f7);
     border: 1px solid rgba(168, 85, 247, .2);
     font-variant-numeric: tabular-nums;
+}
+.conn-chip-h2h-leader {
+    background: rgba(148, 163, 184, .12);
+    color: var(--text-secondary);
+    border: 1px solid rgba(148, 163, 184, .28);
+    font-size: .7rem;
 }
 .conn-detail-h2h {
     font-size: .68rem;

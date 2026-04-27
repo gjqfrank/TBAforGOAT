@@ -3754,23 +3754,9 @@ function _renderChampsSummaryAwards(data) {
         if (einsteinContsEl) einsteinContsEl.classList.add('hidden');
     }
 
-    // ── Right card: Award-Winning Teams (current season only, no year toggle) ──
-    awardsEl.querySelector('h3').textContent = 'Award-Winning Teams';
-    const seasonToggle = $('award-season-toggle');
-    if (seasonToggle) seasonToggle.classList.add('hidden');
-    const awardsFilterBar = awardsEl.querySelector('.past-awards-filter-bar');
-    if (awardsFilterBar) awardsFilterBar.classList.remove('hidden');
-
-    if (summaryData.season_awards && summaryData.season_awards.length > 0) {
-        renderPastSeasonAwards(summaryData.season_awards);
-        awardsEl.classList.remove('hidden');
-    } else if (!summaryData.season_awards) {
-        // Not yet fetched — trigger lazy load (toggle stays hidden)
-        awardsEl.classList.add('hidden');
-        loadSeasonAwards();
-    } else {
-        awardsEl.classList.add('hidden');
-    }
+    // Championship divisions: hide the Award-Winning Teams card — season winners
+    // and impact are already shown in the left card.
+    awardsEl.classList.add('hidden');
 }
 
 /** Filter championship Season Winners & Impact rows by type */
