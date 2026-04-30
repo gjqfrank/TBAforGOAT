@@ -316,38 +316,89 @@ function buildRow(
 // ── FRC Events API fallback (for events not managed by Nexus) ─────────
 
 /**
+ * Maps TBA 3-letter championship division suffixes to their full FRC API
+ * event codes.  These names are stable across seasons (named after famous
+ * scientists/engineers).  Unrecognised suffixes fall back to uppercased as-is.
+ */
+const CHAMPS_DIVISION_MAP: Record<string, string> = {
+  arc: "ARCHIMEDES",
+  car: "CARSON",
+  cur: "CURIE",
+  dal: "DALY",
+  dar: "DARWIN",
+  ein: "EINSTEIN",
+  gal: "GALILEO",
+  haw: "HAWKING",
+  hop: "HOPPER",
+  joh: "JOHNSON",
+  mil: "MILSTEIN",
+  new: "NEWTON",
+  tur: "TURING",
+};
+
+/**
+ * Resolves the FRC Events API event code from a TBA-style event key.
+ * Example: "2026joh" → "JOHNSON", "2026arc" → "ARCHIMEDES", "2026wasp" → "WASP"
+ */
+function resolveFRCEventCode(eventKey: string): string {
+  const suffix = eventKey.substring(4).toLowerCase();
+  return (CHAMPS_DIVISION_MAP[suffix] ?? suffix).toUpperCase();
+}
+
+/**
  * Fetches all matches for an event from the FIRST FRC Events API.
- * Returns both played and unplayed matches (unplayed have null scores/times).
- * Returns null if the event is not found or the request fails.
+ *
+ * Championship division events require explicit tournamentLevel parameters —
+ * the bare endpoint returns an empty array. We fetch Qualification and Playoff
+ * in parallel and merge them. For regular events, the bare endpoint is enough,
+ * so we issue all three requests and deduplicate by matchNumber+level.
+ *
+ * Returns null if the event cannot be found (404 on all attempts).
  */
 async function fetchFRCEventMatches(
   eventKey: string,
   frcApiToken: string
 ): Promise<FRCMatch[] | null> {
   const year = eventKey.substring(0, 4);
-  const eventCode = eventKey.substring(4).toUpperCase();
-  const url = `${FRC_API_BASE}/${year}/matches/${eventCode}`;
-  try {
-    const res = await fetch(url, {
-      headers: {
-        "Authorization": `Basic ${frcApiToken}`,
-        "Accept": "application/json",
-      },
-    });
-    if (res.status === 404) {
-      console.warn(`sync-nexus-live: FRC API 404 for "${eventKey}" — event not found.`);
-      return null;
+  const eventCode = resolveFRCEventCode(eventKey);
+  const base = `${FRC_API_BASE}/${year}/matches/${eventCode}`;
+  const headers = {
+    "Authorization": `Basic ${frcApiToken}`,
+    "Accept": "application/json",
+  };
+  console.log(`sync-nexus-live: FRC fallback for "${eventKey}" → ${eventCode}`);
+
+  async function fetchLevel(level: string | null): Promise<FRCMatch[]> {
+    const url = level ? `${base}?tournamentLevel=${level}` : base;
+    try {
+      const res = await fetch(url, { headers });
+      if (!res.ok) return [];
+      const data = await res.json();
+      return (data.Matches ?? []) as FRCMatch[];
+    } catch {
+      return [];
     }
-    if (!res.ok) {
-      console.warn(`sync-nexus-live: FRC API ${res.status} for "${eventKey}".`);
-      return null;
-    }
-    const data = await res.json();
-    return (data.Matches ?? []) as FRCMatch[];
-  } catch (e) {
-    console.warn(`sync-nexus-live: FRC API fetch failed for "${eventKey}": ${e}`);
+  }
+
+  // Fetch bare + Qualification + Playoff in parallel.
+  const [bare, quals, playoffs] = await Promise.all([
+    fetchLevel(null),
+    fetchLevel("Qualification"),
+    fetchLevel("Playoff"),
+  ]);
+
+  // Merge, preferring explicit-level results over the bare endpoint.
+  const merged = new Map<string, FRCMatch>();
+  for (const m of [...bare, ...quals, ...playoffs]) {
+    const key = `${m.tournamentLevel}:${m.matchNumber}`;
+    merged.set(key, m);
+  }
+
+  if (merged.size === 0) {
+    console.warn(`sync-nexus-live: FRC API returned no matches for "${eventKey}" (code: ${eventCode}).`);
     return null;
   }
+  return [...merged.values()];
 }
 
 /**
