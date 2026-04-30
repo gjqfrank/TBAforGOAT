@@ -224,6 +224,17 @@ class TimeoutMiddleware(BaseHTTPMiddleware):
 
 app.add_middleware(TimeoutMiddleware)
 
+# ── Live event status endpoint ──────────────────────────────
+@app.get("/live-event-status/{event_key}", tags=["Live"])
+async def live_event_status(event_key: str):
+    """Return the current Nexus live match status for an event."""
+    from .services.supabase_client import get_supabase
+    sb = await get_supabase()
+    resp = await sb.from_("live_event_status").select("*").eq("event_key", event_key).maybe_single().execute()
+    if resp.data is None:
+        raise HTTPException(status_code=404, detail=f"No live status for event: {event_key}")
+    return resp.data
+
 # ── Auth router ────────────────────────────────────────────
 # prefix is defined inside the router itself (/auth/...)
 app.include_router(auth.router)
