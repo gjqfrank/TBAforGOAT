@@ -74,6 +74,33 @@ interface NexusEventStatus {
 /** /event/{key}/pits — team number string → pit address string */
 type NexusPitAddresses = Record<string, string>;
 
+// ── FRC Events API types (fallback for events not in Nexus) ───────────
+
+const FRC_API_BASE = "https://frc-api.firstinspires.org/v3.0";
+
+interface FRCMatchTeam {
+  teamNumber: number;
+  /** Station string: "Red1" | "Red2" | "Red3" | "Blue1" | "Blue2" | "Blue3" */
+  station: string;
+}
+
+interface FRCMatch {
+  matchNumber: number;
+  /** Human-friendly label, e.g. "Qualification 24". Present when returned
+   *  by the schedule endpoint; may be absent from match-results responses. */
+  description?: string;
+  tournamentLevel: string; // "Qualification" | "Playoff"
+  /** ISO-8601 scheduled start time, null for matches without a set time. */
+  startTime: string | null;
+  /** ISO-8601 actual start time once the match began; null if not yet played. */
+  actualStartTime: string | null;
+  /** ISO-8601 time when scores were posted; null = match not yet played. */
+  postResultTime: string | null;
+  scoreRedFinal: number | null;
+  scoreBlueFinal: number | null;
+  teams: FRCMatchTeam[];
+}
+
 /** Row we write into `live_event_status`. */
 interface LiveEventStatusRow {
   event_key: string;
@@ -286,6 +313,135 @@ function buildRow(
   };
 }
 
+// ── FRC Events API fallback (for events not managed by Nexus) ─────────
+
+/**
+ * Fetches all matches for an event from the FIRST FRC Events API.
+ * Returns both played and unplayed matches (unplayed have null scores/times).
+ * Returns null if the event is not found or the request fails.
+ */
+async function fetchFRCEventMatches(
+  eventKey: string,
+  frcApiToken: string
+): Promise<FRCMatch[] | null> {
+  const year = eventKey.substring(0, 4);
+  const eventCode = eventKey.substring(4).toUpperCase();
+  const url = `${FRC_API_BASE}/${year}/matches/${eventCode}`;
+  try {
+    const res = await fetch(url, {
+      headers: {
+        "Authorization": `Basic ${frcApiToken}`,
+        "Accept": "application/json",
+      },
+    });
+    if (res.status === 404) {
+      console.warn(`sync-nexus-live: FRC API 404 for "${eventKey}" — event not found.`);
+      return null;
+    }
+    if (!res.ok) {
+      console.warn(`sync-nexus-live: FRC API ${res.status} for "${eventKey}".`);
+      return null;
+    }
+    const data = await res.json();
+    return (data.Matches ?? []) as FRCMatch[];
+  } catch (e) {
+    console.warn(`sync-nexus-live: FRC API fetch failed for "${eventKey}": ${e}`);
+    return null;
+  }
+}
+
+/**
+ * Builds a `live_event_status` row from FRC Events API match data.
+ *
+ * Strategy:
+ *  - Sort matches: Qualifications first, then Playoffs, each by matchNumber.
+ *  - Find the last match with a posted result (postResultTime ≠ null).
+ *  - The next unplayed match becomes "current_match_name" (on-field / up next).
+ *  - If all matches are played, report the final match.
+ *  - Schedule offset: compare startTime vs actualStartTime of recent played matches.
+ */
+function buildRowFromFRC(
+  eventKey: string,
+  matches: FRCMatch[]
+): LiveEventStatusRow {
+  const levelRank = (t: string) =>
+    t.toLowerCase().startsWith("qual") ? 0 : 1;
+
+  const sorted = [...matches].sort((a, b) => {
+    const lr = levelRank(a.tournamentLevel) - levelRank(b.tournamentLevel);
+    if (lr !== 0) return lr;
+    return a.matchNumber - b.matchNumber;
+  });
+
+  // Last match whose result has been posted.
+  let lastPlayedIdx = -1;
+  for (let i = sorted.length - 1; i >= 0; i--) {
+    if (sorted[i].postResultTime != null || sorted[i].scoreRedFinal != null) {
+      lastPlayedIdx = i;
+      break;
+    }
+  }
+
+  // Next unplayed match is the "current" one; fall back to last match if all played.
+  const currentIdx =
+    lastPlayedIdx + 1 < sorted.length
+      ? lastPlayedIdx + 1
+      : sorted.length > 0
+      ? sorted.length - 1
+      : -1;
+
+  const current = currentIdx >= 0 ? sorted[currentIdx] : null;
+
+  let currentMatchName: string | null = null;
+  let redAlliance: number[] | null = null;
+  let blueAlliance: number[] | null = null;
+
+  if (current) {
+    const levelLabel = levelRank(current.tournamentLevel) === 0
+      ? "Qualification"
+      : "Playoff";
+    currentMatchName =
+      current.description ?? `${levelLabel} ${current.matchNumber}`;
+
+    const reds = current.teams
+      .filter((t) => t.station.startsWith("Red"))
+      .sort((a, b) => a.station.localeCompare(b.station))
+      .map((t) => t.teamNumber);
+    const blues = current.teams
+      .filter((t) => t.station.startsWith("Blue"))
+      .sort((a, b) => a.station.localeCompare(b.station))
+      .map((t) => t.teamNumber);
+
+    redAlliance = reds.length > 0 ? reds : null;
+    blueAlliance = blues.length > 0 ? blues : null;
+  }
+
+  // Schedule offset: average offset from up to 3 most-recent played matches
+  // that have both scheduled and actual start times.
+  let scheduleOffsetMins = 0;
+  const withTimes = sorted
+    .filter((m) => m.startTime && m.actualStartTime && m.postResultTime != null)
+    .slice(-3);
+  if (withTimes.length > 0) {
+    const last = withTimes[withTimes.length - 1];
+    const sched = new Date(last.startTime!).getTime();
+    const actual = new Date(last.actualStartTime!).getTime();
+    if (!isNaN(sched) && !isNaN(actual)) {
+      scheduleOffsetMins = Math.round((actual - sched) / 60_000);
+    }
+  }
+
+  return {
+    event_key: eventKey,
+    current_match_name: currentMatchName,
+    red_alliance: redAlliance,
+    blue_alliance: blueAlliance,
+    schedule_offset_mins: scheduleOffsetMins,
+    pit_locations: {}, // FRC API has no pit-location data
+    updated_at: new Date().toISOString(),
+  };
+}
+
 // ── Event discovery ────────────────────────────────────────────────────
 
 /**
@@ -389,6 +545,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   const nexusApiKey = Deno.env.get("NEXUS_API_KEY");
+  // FRC Events API token — used as fallback for events not managed by Nexus
+  // (e.g. FRC Championship division events).  Optional: if not set, those
+  // events are skipped rather than crashing the function.
+  const frcApiToken = Deno.env.get("FRC_EVENTS_API_TOKEN") ?? null;
 
   if (!supabaseUrl || !serviceRoleKey) {
     console.error("sync-nexus-live: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY not set.");
@@ -470,8 +630,39 @@ Deno.serve(async (req: Request): Promise<Response> => {
       ]);
 
       if (!statusData) {
-        // 404 from Nexus — event exists in our DB but isn't managed by Nexus.
-        return { eventKey, skipped: true };
+        // 404 from Nexus — event isn't managed by Nexus (e.g. championship divisions).
+        // Try the FRC Events API as a fallback to still provide match status.
+        if (!frcApiToken) {
+          console.warn(
+            `sync-nexus-live: "${eventKey}" not in Nexus; FRC_EVENTS_API_TOKEN not set — skipping.`
+          );
+          return { eventKey, skipped: true };
+        }
+
+        const frcMatches = await fetchFRCEventMatches(eventKey, frcApiToken);
+        if (!frcMatches || frcMatches.length === 0) {
+          console.warn(
+            `sync-nexus-live: "${eventKey}" not found in FRC API either — skipping.`
+          );
+          return { eventKey, skipped: true };
+        }
+
+        const frcRow = buildRowFromFRC(eventKey, frcMatches);
+        const { error: frcDbError } = await supabase
+          .from("live_event_status")
+          .upsert(frcRow, { onConflict: "event_key", ignoreDuplicates: false });
+
+        if (frcDbError) {
+          throw new Error(
+            `DB upsert failed for "${eventKey}" (FRC fallback): ${frcDbError.message}`
+          );
+        }
+
+        console.log(
+          `sync-nexus-live: upserted "${eventKey}" via FRC fallback — ` +
+            `match: "${frcRow.current_match_name ?? "none"}", offset: ${frcRow.schedule_offset_mins}m`
+        );
+        return { eventKey, ok: true, source: "frc" };
       }
 
       const row = buildRow(eventKey, statusData, pitData);
