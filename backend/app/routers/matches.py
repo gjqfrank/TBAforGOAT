@@ -925,9 +925,12 @@ async def get_team_performance(event_key: str, team_number: int):
                 end_tower = alliance_data.get(f"endGameTowerRobot{robot_idx}", "None")
 
         # Determine W/L/T
+        # TBA uses -1 as a sentinel for unplayed matches; treat any negative
+        # score the same as None (i.e. the match hasn't been played yet).
         red_score = mr.get("scoreRedFinal")
         blue_score = mr.get("scoreBlueFinal")
-        if red_score is not None and blue_score is not None:
+        if (red_score is not None and blue_score is not None
+                and red_score >= 0 and blue_score >= 0):
             my_score = red_score if alliance_color == "Red" else blue_score
             opp_score = blue_score if alliance_color == "Red" else red_score
             if my_score > opp_score:
