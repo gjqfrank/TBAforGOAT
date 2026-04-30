@@ -199,7 +199,7 @@ function computeScheduleOffset(matches: NexusMatch[]): number {
   // Field names to try for scheduled start time (in preference order).
   const SCHED_FIELDS = ["scheduledStartTime", "scheduledTime"];
   // Field names to try for estimated start time (in preference order).
-  const EST_FIELDS = ["estimatedStartTime", "estimatedStartTime"];
+  const EST_FIELDS = ["estimatedStartTime", "estimatedTime"];
 
   // Prefer "On field" first, then pipeline order.
   const STATUS_PRIORITY = [
@@ -209,9 +209,10 @@ function computeScheduleOffset(matches: NexusMatch[]): number {
     "Queuing soon",
   ];
 
+  const safeMatches = Array.isArray(matches) ? matches : [];
   let candidate: NexusMatch | undefined;
   for (const status of STATUS_PRIORITY) {
-    candidate = matches.find((m) => m.status === status);
+    candidate = safeMatches.find((m) => m.status === status);
     if (candidate) break;
   }
   if (!candidate) return 0;
@@ -242,11 +243,13 @@ function buildRow(
   status: NexusEventStatus,
   pits: NexusPitAddresses
 ): LiveEventStatusRow {
-  const { matches, nowQueuing } = status;
+  const { nowQueuing } = status;
+  // Guard against the API returning null/missing matches (e.g. schedule not
+  // yet published, or an unexpected response shape for championship events).
+  const matches: NexusMatch[] = Array.isArray(status.matches) ? status.matches : [];
 
   // Find the match currently on the field. Fall back to the most-advanced
-  // pipeline stage available, then to the `nowQueuing` label if nothing
-  // has a known stage status.
+  // pipeline stage available.
   const onField = matches.find((m) => m.status === "On field");
   const mostAdvanced =
     onField ??
@@ -254,7 +257,15 @@ function buildRow(
     matches.find((m) => m.status === "Now queuing") ??
     matches.find((m) => m.status === "Queuing soon");
 
-  const currentMatch = mostAdvanced ?? null;
+  // When no match has a pipeline status yet, Nexus may still report
+  // `nowQueuing` at the top level before individual match statuses are
+  // updated. Correlate that label to the match object so we can extract
+  // alliance data even in that timing gap.
+  const nowQueuingMatch = (!mostAdvanced && nowQueuing)
+    ? (matches.find((m) => m.label === nowQueuing) ?? null)
+    : null;
+
+  const currentMatch = mostAdvanced ?? nowQueuingMatch ?? null;
 
   // When the full match object is available use its label; otherwise fall
   // back to the top-level `nowQueuing` field which Nexus always provides.
