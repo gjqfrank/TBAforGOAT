@@ -346,12 +346,17 @@ function resolveFRCEventCode(eventKey: string): string {
 }
 
 /**
- * Fetches all matches for an event from the FIRST FRC Events API.
+ * Fetches all matches for an event from the FIRST FRC Events API and enriches
+ * them with scheduled start times from the /schedule endpoint.
  *
  * Championship division events require explicit tournamentLevel parameters —
  * the bare endpoint returns an empty array. We fetch Qualification and Playoff
- * in parallel and merge them. For regular events, the bare endpoint is enough,
- * so we issue all three requests and deduplicate by matchNumber+level.
+ * in parallel and merge them. For regular events, the bare endpoint works.
+ *
+ * The /matches endpoint has actualStartTime but startTime=null.
+ * The /schedule endpoint has startTime (scheduled) but actualStartTime=null.
+ * We join on (tournamentLevel, matchNumber) to get both times in each match,
+ * which is required for accurate schedule offset calculation.
  *
  * Returns null if the event cannot be found (404 on all attempts).
  */
@@ -361,15 +366,17 @@ async function fetchFRCEventMatches(
 ): Promise<FRCMatch[] | null> {
   const year = eventKey.substring(0, 4);
   const eventCode = resolveFRCEventCode(eventKey);
-  const base = `${FRC_API_BASE}/${year}/matches/${eventCode}`;
   const headers = {
     "Authorization": `Basic ${frcApiToken}`,
     "Accept": "application/json",
   };
   console.log(`sync-nexus-live: FRC fallback for "${eventKey}" → ${eventCode}`);
 
-  async function fetchLevel(level: string | null): Promise<FRCMatch[]> {
-    const url = level ? `${base}?tournamentLevel=${level}` : base;
+  const matchBase = `${FRC_API_BASE}/${year}/matches/${eventCode}`;
+  const schedBase = `${FRC_API_BASE}/${year}/schedule/${eventCode}`;
+
+  async function fetchMatches(level: string | null): Promise<FRCMatch[]> {
+    const url = level ? `${matchBase}?tournamentLevel=${level}` : matchBase;
     try {
       const res = await fetch(url, { headers });
       if (!res.ok) return [];
@@ -380,14 +387,35 @@ async function fetchFRCEventMatches(
     }
   }
 
-  // Fetch bare + Qualification + Playoff in parallel.
-  const [bare, quals, playoffs] = await Promise.all([
-    fetchLevel(null),
-    fetchLevel("Qualification"),
-    fetchLevel("Playoff"),
+  // Schedule endpoint returns { Schedule: [...] } with startTime per match.
+  async function fetchScheduledTimes(level: string): Promise<Map<number, string>> {
+    const url = `${schedBase}?tournamentLevel=${level}`;
+    try {
+      const res = await fetch(url, { headers });
+      if (!res.ok) return new Map();
+      const data = await res.json();
+      const map = new Map<number, string>();
+      for (const m of (data.Schedule ?? [])) {
+        if (m.matchNumber && m.startTime) {
+          map.set(m.matchNumber, m.startTime as string);
+        }
+      }
+      return map;
+    } catch {
+      return new Map();
+    }
+  }
+
+  // Fetch matches (bare + Qual + Playoff) and scheduled times in parallel.
+  const [bare, quals, playoffs, qualTimes, playoffTimes] = await Promise.all([
+    fetchMatches(null),
+    fetchMatches("Qualification"),
+    fetchMatches("Playoff"),
+    fetchScheduledTimes("Qualification"),
+    fetchScheduledTimes("Playoff"),
   ]);
 
-  // Merge, preferring explicit-level results over the bare endpoint.
+  // Merge match results; explicit-level beats bare-endpoint duplicates.
   const merged = new Map<string, FRCMatch>();
   for (const m of [...bare, ...quals, ...playoffs]) {
     const key = `${m.tournamentLevel}:${m.matchNumber}`;
@@ -398,7 +426,20 @@ async function fetchFRCEventMatches(
     console.warn(`sync-nexus-live: FRC API returned no matches for "${eventKey}" (code: ${eventCode}).`);
     return null;
   }
-  return [...merged.values()];
+
+  // Enrich each match with the scheduled startTime from the /schedule endpoint.
+  // The /matches API returns startTime=null for championship events; the
+  // schedule endpoint has the real scheduled time.
+  const scheduledByLevel = new Map<string, Map<number, string>>([
+    ["Qualification", qualTimes],
+    ["Playoff", playoffTimes],
+  ]);
+
+  return [...merged.values()].map((m) => {
+    if (m.startTime) return m; // already has scheduled time
+    const scheduledTime = scheduledByLevel.get(m.tournamentLevel)?.get(m.matchNumber);
+    return scheduledTime ? { ...m, startTime: scheduledTime } : m;
+  });
 }
 
 /**
