@@ -3776,7 +3776,7 @@ function _renderChampsSummaryAwards(data) {
     if (einContenders.length > 0) {
         $('summary-einstein-contenders-list').innerHTML = einContenders.map(t =>
             `<div class="prestige-entry">
-                <span class="prestige-entry-num prestige-num-einstein">${t.team_number}</span>
+                <span class="prestige-entry-num prestige-num-einstein-contender">${t.team_number}</span>
                 <span class="prestige-entry-name">${t.nickname}</span>
             </div>`
         ).join('');

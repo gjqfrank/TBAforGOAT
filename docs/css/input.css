@@ -5945,12 +5945,14 @@
         font-size: .82rem;
         min-width: 2.3rem;
     }
-    .prestige-num-einstein { color: #a855f7; }
-    .prestige-num-hof      { color: #f5b731; }
-    .prestige-num-impact   { color: #60a5fa; }
-    [data-theme="light"] .prestige-num-einstein { color: #7e22ce; }
-    [data-theme="light"] .prestige-num-hof      { color: #92700a; }
-    [data-theme="light"] .prestige-num-impact   { color: #4f46e5; }
+    .prestige-num-einstein            { color: #a855f7; }
+    .prestige-num-einstein-contender  { color: var(--primary-hover); }
+    .prestige-num-hof                 { color: #f5b731; }
+    .prestige-num-impact              { color: #60a5fa; }
+    [data-theme="light"] .prestige-num-einstein            { color: #7e22ce; }
+    [data-theme="light"] .prestige-num-einstein-contender  { color: #4f46e5; }
+    [data-theme="light"] .prestige-num-hof                 { color: #92700a; }
+    [data-theme="light"] .prestige-num-impact              { color: #4f46e5; }
     .prestige-entry-name {
         font-weight: 600;
         font-size: .8rem;
