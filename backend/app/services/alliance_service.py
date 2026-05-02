@@ -190,6 +190,23 @@ async def get_alliances_with_stats(event_key: str) -> dict:
         except Exception:
             avatar_map = {}
 
+        # Supplement missing team data from TBA for any alliance pick not in
+        # Supabase event_teams (e.g. late additions, sync gaps).
+        missing_picks = [tk for tk in all_alliance_keys if not name_map.get(tk)]
+        if missing_picks:
+            client = get_tba_client()
+            missing_team_results = await asyncio.gather(
+                *[_safe(client.get(f"/team/{tk}")) for tk in missing_picks]
+            )
+            for tk, team in zip(missing_picks, missing_team_results):
+                if team and isinstance(team, dict):
+                    name_map[tk] = team.get("nickname", "") or ""
+                    country_map.setdefault(tk, team.get("country", "") or "")
+                    school_map.setdefault(tk, team.get("school_name", "") or "")
+                    rookie_year_map.setdefault(tk, team.get("rookie_year"))
+                else:
+                    name_map[tk] = ""
+
         # Playoff matches: Supabase first (stored by match_poller in FRC format),
         # then fall back to FRC API direct call
         frc_playoff_matches = None

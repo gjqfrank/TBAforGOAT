@@ -2748,6 +2748,17 @@ async function loadEvent(eventKey) {
                     allianceData = allianceResult;
                     autoCacheTab('alliances', allianceResult);
                 }
+                // If the user is already viewing a playoff match, re-render so that
+                // the bench team card (which requires allianceData) is shown.
+                if (allianceData?.is_championship && pbpData?.matches) {
+                    const _activeTab = document.querySelector('.tab.active');
+                    if (_activeTab && _activeTab.dataset.tab === 'pbp') {
+                        const _curMatch = pbpData.matches[pbpIndex];
+                        if (_curMatch && _curMatch.comp_level && _curMatch.comp_level !== 'qm') {
+                            renderPbpMatch();
+                        }
+                    }
+                }
             }
         }).catch(async (err) => {
             // Offline fallback for alliances
@@ -7279,10 +7290,10 @@ async function _injectPlayoffFirsts(teams, matchIdx, compLevel) {
     const isEinstein = !!(allianceData && allianceData.is_einstein);
     const isChampDiv  = !!(allianceData && allianceData.is_championship && !allianceData.is_einstein);
 
-    // Build Einstein contenders lookup for champ division events
+    // Build Einstein contenders lookup for champ division events AND Einstein itself
     // summaryData.einstein_contenders = [{team_number, nickname, einstein_winner}, ...]
     const einsteinContenderMap = new Map(); // team_number → entry
-    if (isChampDiv && summaryData && summaryData.einstein_contenders) {
+    if ((isChampDiv || isEinstein) && summaryData && summaryData.einstein_contenders) {
         for (const ec of summaryData.einstein_contenders) {
             einsteinContenderMap.set(ec.team_number, ec);
         }
@@ -7301,12 +7312,14 @@ async function _injectPlayoffFirsts(teams, matchIdx, compLevel) {
         }
 
         // ── Championship division: Returning Einstein badges ───────────────
-        if (isChampDiv) {
+        // On Einstein itself: only show "Einstein Winner" (not "Returning" — everyone there is a contender).
+        // On division events: show both winner and contender badges.
+        if (isChampDiv || isEinstein) {
             const ec = einsteinContenderMap.get(t.team_number);
             if (ec) {
                 if (ec.einstein_winner) {
                     badges.push(`<span class="pbp-first-badge pbp-einstein-winner" title="Previous Einstein Winner">Einstein Winner</span>`);
-                } else {
+                } else if (isChampDiv) {
                     badges.push(`<span class="pbp-first-badge pbp-einstein-contender" title="Returning Einstein Contender">Returning Einstein</span>`);
                 }
             }
