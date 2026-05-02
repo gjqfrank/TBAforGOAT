@@ -5841,6 +5841,9 @@
         margin-top: .4rem;
         will-change: max-height, opacity;
     }
+    #summary-history-body:not(.collapsed) {
+        overflow: visible;
+    }
     #summary-history-list {
         max-height: 45rem;
         overflow-y: auto;
@@ -5894,7 +5897,7 @@
     [data-theme="light"] .highlight-impact .highlight-label { color: #4f46e5; }
     [data-theme="light"] .highlight-hof { border-color: rgba(180, 140, 0, .2); }
     [data-theme="light"] .highlight-impact { border-color: rgba(59, 130, 246, .2); }
-
+    
     .highlight-einstein-winner {
         border-color: rgba(168, 85, 247, .25);
     }
@@ -5907,7 +5910,7 @@
     .highlight-einstein-winner .highlight-label {
         color: #a855f7;
     }
-
+    
     .highlight-einstein-contender {
         border-color: rgba(99, 102, 241, .2);
     }
@@ -5920,7 +5923,7 @@
     .highlight-einstein-contender .highlight-label {
         color: var(--primary-hover);
     }
-
+    
     [data-theme="light"] .highlight-einstein-winner { border-color: rgba(126, 34, 206, .2); }
     [data-theme="light"] .highlight-einstein-winner .highlight-label { color: #7e22ce; }
     [data-theme="light"] .highlight-einstein-contender { border-color: rgba(99, 102, 241, .2); }
@@ -5942,6 +5945,12 @@
         font-size: .82rem;
         min-width: 2.3rem;
     }
+    .prestige-num-einstein { color: #a855f7; }
+    .prestige-num-hof      { color: #f5b731; }
+    .prestige-num-impact   { color: #60a5fa; }
+    [data-theme="light"] .prestige-num-einstein { color: #7e22ce; }
+    [data-theme="light"] .prestige-num-hof      { color: #92700a; }
+    [data-theme="light"] .prestige-num-impact   { color: #4f46e5; }
     .prestige-entry-name {
         font-weight: 600;
         font-size: .8rem;
@@ -5992,7 +6001,7 @@
         will-change: max-height, opacity;
     }
     .summary-collapse-body:not(.collapsed) {
-        overflow: hidden;
+        overflow: visible;
     }
     .summary-collapse-body.collapsed {
         max-height: 0;

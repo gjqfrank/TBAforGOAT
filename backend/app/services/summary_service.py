@@ -23,7 +23,7 @@ _ADVANCEMENT_TTL = 300   # 5 min — moderate cost
 
 # Bump this whenever the championship awards payload format changes in a way
 # that requires existing Supabase cache entries to be invalidated and rebuilt.
-_EINSTEIN_CACHE_VERSION = 2  # v2: switched to static einstein_history.json lookup
+_EINSTEIN_CACHE_VERSION = 3  # v3: include all-time Einstein winners regardless of year-1 filter
 
 
 def invalidate_event_caches(event_key: str) -> None:
@@ -1009,15 +1009,18 @@ async def _build_champs_awards(
         entry = (_EINSTEIN_BY_NUM or {}).get(num)
         if not entry:
             continue
-        # Only surface teams whose most recent Einstein appearance was the
-        # year before this championship (keeps the list relevant).
         contender_years = entry.get("contender_years", [])
-        if not contender_years or max(contender_years) != year - 1:
+        winner_years = entry.get("winner_years", [])
+        if not contender_years:
+            continue
+        # Include teams who competed on Einstein last year (year-1) OR
+        # who have ever won Einstein — winners are always historically relevant.
+        if max(contender_years) != year - 1 and not winner_years:
             continue
         einstein_contenders.append({
             "team_number": num,
             "nickname": name_map.get(num, "") or entry.get("nickname", ""),
-            "einstein_winner": bool(entry.get("winner_years")),
+            "einstein_winner": bool(winner_years),
         })
 
     return {

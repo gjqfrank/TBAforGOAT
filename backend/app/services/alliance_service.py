@@ -202,6 +202,7 @@ async def get_alliances_with_stats(event_key: str) -> dict:
             sb_alliances_raw, name_map, country_map, school_map,
             rookie_year_map, frc_org_map, rank_map, opr_map, avatar_map,
             frc_playoff_matches, year, event_key,
+            event_type=sb_event_type,
         )
 
     # ── Fallback: TBA + FRC API + Statbotics ────────────────

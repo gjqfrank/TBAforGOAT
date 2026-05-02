@@ -3490,6 +3490,27 @@ async function loadSummaryAwards() {
             const champToggle = $('award-season-toggle');
             if (champToggle) champToggle.classList.add('hidden');
             autoCacheTab('summary', summaryData);
+            // Re-inject PBP Einstein badges if user is already viewing a playoff match.
+            // The firsts cache may have loaded before einstein_contenders was available,
+            // so badges wouldn't have been added on the initial render.
+            if (_playoffFirstsCache !== null && pbpData && pbpData.matches) {
+                const _pbpM = pbpData.matches[pbpIndex];
+                if (_pbpM && _pbpM.comp_level && _pbpM.comp_level !== 'qm') {
+                    const _pbpTeams = [...(_pbpM.red?.teams || []), ...(_pbpM.blue?.teams || [])];
+                    if (allianceData && allianceData.is_championship && allianceData.alliances) {
+                        for (const _side of [_pbpM.red, _pbpM.blue]) {
+                            const _alNum = _side?.alliance_number;
+                            if (!_alNum) continue;
+                            const _fullAl = allianceData.alliances.find(a => a.number === _alNum);
+                            if (!_fullAl || _fullAl.teams.length < 4) continue;
+                            const _playing = new Set((_side.teams || []).map(t => t.team_number));
+                            const _bench = _fullAl.teams.find(t => !_playing.has(t.team_number));
+                            if (_bench) _pbpTeams.push(_bench);
+                        }
+                    }
+                    _injectPlayoffFirsts(_pbpTeams, pbpIndex, _pbpM.comp_level);
+                }
+            }
             return;
         }
 
