@@ -9478,7 +9478,6 @@ tr:hover .compare-cb,
   border-radius: var(--radius-lg);
   padding: .7rem .9rem;
   margin-bottom: .7rem;
-  overflow: hidden;
 }
 
 .summary-card h3 {
@@ -9549,6 +9548,10 @@ tr:hover .compare-cb,
   opacity: 1;
   margin-top: .4rem;
   will-change: max-height, opacity;
+}
+
+#summary-history-body:not(.collapsed) {
+  overflow: visible;
 }
 
 #summary-history-list {
@@ -9692,12 +9695,14 @@ tr:hover .compare-cb,
   font-size: .82rem;
   min-width: 2.3rem;
 }
-.prestige-num-einstein { color: #a855f7; }
-.prestige-num-hof      { color: #f5b731; }
-.prestige-num-impact   { color: #60a5fa; }
-[data-theme="light"] .prestige-num-einstein { color: #7e22ce; }
-[data-theme="light"] .prestige-num-hof      { color: #92700a; }
-[data-theme="light"] .prestige-num-impact   { color: #4f46e5; }
+.prestige-num-einstein            { color: #a855f7; }
+.prestige-num-einstein-contender  { color: var(--primary-hover); }
+.prestige-num-hof                 { color: #f5b731; }
+.prestige-num-impact              { color: #60a5fa; }
+[data-theme="light"] .prestige-num-einstein            { color: #7e22ce; }
+[data-theme="light"] .prestige-num-einstein-contender  { color: #4f46e5; }
+[data-theme="light"] .prestige-num-hof                 { color: #92700a; }
+[data-theme="light"] .prestige-num-impact              { color: #4f46e5; }
 
 .prestige-entry-name {
   font-weight: 600;
