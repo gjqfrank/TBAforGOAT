@@ -24,6 +24,8 @@ def _sb_teams_valid(sb_rows: list[dict]) -> bool:
         rd = r.get("raw_data") or {}
         if isinstance(rd, str):
             rd = json.loads(rd)
+        if not isinstance(rd, dict):
+            continue
         if rd.get("rank") is not None or rd.get("opr") is not None:
             return True
     return False
@@ -136,12 +138,18 @@ async def get_alliances_with_stats(event_key: str) -> dict:
             rd = r.get("raw_data") or {}
             if isinstance(rd, str):
                 rd = json.loads(rd)
+            if not isinstance(rd, dict):
+                rd = {}
             tims = r.get("tims_data") or {}
             if isinstance(tims, str):
                 tims = json.loads(tims)
+            if not isinstance(tims, dict):
+                tims = {}
             frc_d = r.get("frc_data") or {}
             if isinstance(frc_d, str):
                 frc_d = json.loads(frc_d)
+            if not isinstance(frc_d, dict):
+                frc_d = {}
 
             name_map[tk] = r.get("nickname", "")
             country_map[tk] = tims.get("country", "")

@@ -38,6 +38,8 @@ def _sb_teams_valid(sb_rows: list[dict]) -> bool:
         rd = r.get("raw_data") or {}
         if isinstance(rd, str):
             rd = json.loads(rd)
+        if not isinstance(rd, dict):
+            continue
         if rd.get("rank") is not None or rd.get("opr") is not None:
             return True
     return False
@@ -463,12 +465,18 @@ async def _get_event_teams_with_stats_impl(event_key: str) -> list[dict]:
             raw = r.get("raw_data") or {}
             if isinstance(raw, str):
                 raw = json.loads(raw)
+            if not isinstance(raw, dict):
+                raw = {}
             tims = r.get("tims_data") or {}
             if isinstance(tims, str):
                 tims = json.loads(tims)
+            if not isinstance(tims, dict):
+                tims = {}
             frc_d = r.get("frc_data") or {}
             if isinstance(frc_d, str):
                 frc_d = json.loads(frc_d)
+            if not isinstance(frc_d, dict):
+                frc_d = {}
             epa_block = raw.get("epa") or {}
 
             # Use TBA rankings backfill if Supabase has no rank data
