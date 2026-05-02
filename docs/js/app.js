@@ -6884,6 +6884,14 @@ function renderPbpMatch() {
                 if (benchTeamData) allTeams.push(benchTeamData);
             }
         }
+        // Proactively load Einstein contenders when on a champ event playoff match.
+        // loadSummaryAwards() is normally only called from renderSummary(), so if the
+        // user goes directly to the PBP tab, einstein_contenders is never populated.
+        // Use summaryData.is_championship as fallback when allianceData hasn't loaded yet.
+        const _isChampEvent = _isChampPlayoff || !!(summaryData && summaryData.is_championship);
+        if (_isChampEvent && !summaryData?.einstein_contenders) {
+            loadSummaryAwards();
+        }
         _injectPlayoffFirsts(allTeams, pbpIndex, m.comp_level);
     }
 
