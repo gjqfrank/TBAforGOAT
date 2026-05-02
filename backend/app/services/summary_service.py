@@ -290,9 +290,13 @@ async def _build_event_summary_awards(event_key: str) -> dict:
         _safe(client.get_event(event_key)),
     )
     current_event_type = (event_info or {}).get("event_type", -1)
+    _is_champ = current_event_type in _CHAMPIONSHIP_EVENT_TYPES
 
     if not teams:
-        return {"is_championship": False, "past_event_champions": [], "past_season_awards": []}
+        # Preserve the correct championship flag even when teams aren't available
+        # yet (e.g. cached before team registration opens).  Omitting einstein_v
+        # ensures the cache-validation logic forces a rebuild once teams arrive.
+        return {"is_championship": _is_champ, "past_event_champions": [], "past_season_awards": []}
 
     # ── Championship division: specialised payload ──────────
     if current_event_type in _CHAMPIONSHIP_EVENT_TYPES:
