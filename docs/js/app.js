@@ -2794,6 +2794,12 @@ async function loadEvent(eventKey) {
                         const sc = $('summary-container');
                         if (sc) sc.classList.remove('hidden');
                     }
+                    // For championship events, proactively load the awards payload
+                    // (einstein_contenders etc.) regardless of the active tab, so
+                    // Einstein Winner badges are ready when the user opens PBP.
+                    if (data.is_championship && !data.einstein_contenders) {
+                        loadSummaryAwards();
+                    }
                 }
             }).catch(async () => {
                 // Offline fallback for summary pre-fetch
@@ -2809,6 +2815,10 @@ async function loadEvent(eventKey) {
                         renderSummary(cached);
                         const sc = $('summary-container');
                         if (sc) sc.classList.remove('hidden');
+                    }
+                    // Same proactive awards load for offline/cached path
+                    if (cached.is_championship && !cached.einstein_contenders) {
+                        loadSummaryAwards();
                     }
                 }
             });
@@ -3501,25 +3511,27 @@ async function loadSummaryAwards() {
             const champToggle = $('award-season-toggle');
             if (champToggle) champToggle.classList.add('hidden');
             autoCacheTab('summary', summaryData);
-            // Re-inject PBP Einstein badges if user is already viewing a playoff match.
-            // The firsts cache may have loaded before einstein_contenders was available,
-            // so badges wouldn't have been added on the initial render.
-            if (_playoffFirstsCache !== null && pbpData && pbpData.matches) {
+            // Re-render the PBP match now that einstein_contenders is available,
+            // so Einstein Winner / Returning Einstein badges appear on any
+            // already-visible playoff match card.
+            if (pbpData?.matches) {
                 const _pbpM = pbpData.matches[pbpIndex];
-                if (_pbpM && _pbpM.comp_level && _pbpM.comp_level !== 'qm') {
-                    const _pbpTeams = [...(_pbpM.red?.teams || []), ...(_pbpM.blue?.teams || [])];
-                    if (allianceData && allianceData.is_championship && allianceData.alliances) {
-                        for (const _side of [_pbpM.red, _pbpM.blue]) {
-                            const _alNum = _side?.alliance_number;
-                            if (!_alNum) continue;
-                            const _fullAl = allianceData.alliances.find(a => a.number === _alNum);
-                            if (!_fullAl || _fullAl.teams.length < 4) continue;
-                            const _playing = new Set((_side.teams || []).map(t => t.team_number));
-                            const _bench = _fullAl.teams.find(t => !_playing.has(t.team_number));
-                            if (_bench) _pbpTeams.push(_bench);
+                if (_pbpM?.comp_level && _pbpM.comp_level !== 'qm') {
+                    const _activeTab = document.querySelector('.tab.active');
+                    if (_activeTab?.dataset.tab === 'pbp') {
+                        // Full re-render: simplest and most reliable way to
+                        // ensure badges (and bench cards) are injected with
+                        // both allianceData and einstein_contenders ready.
+                        renderPbpMatch();
+                    } else {
+                        // User is on a different tab — inject badges directly into
+                        // the existing (hidden) slots if we can. If _playoffFirstsCache
+                        // hasn't loaded yet, skip — renderPbpMatch() will handle it
+                        // when the user switches to PBP.
+                        if (_playoffFirstsCache !== null) {
+                            _injectPlayoffFirsts(_pbpTeams, pbpIndex, _pbpM.comp_level);
                         }
                     }
-                    _injectPlayoffFirsts(_pbpTeams, pbpIndex, _pbpM.comp_level);
                 }
             }
             return;
