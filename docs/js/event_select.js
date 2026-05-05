@@ -1085,12 +1085,16 @@ async function _fetchWithCache(fetchFn, eventKey, tabName) {
     }
 }
 
-let teamsData = null;      // cached teams list for sorting
-let teamsSortCol = 'rank';  // current sort column
-let teamsSortAsc = true;    // sort direction
+// `var` (not `let`) — read by app.js / mobile_ux.js loaded after this script
+// but also touched by handlers that may fire during initial mount.
+var teamsData = null;      // cached teams list for sorting
+var teamsSortCol = 'rank';  // current sort column
+var teamsSortAsc = true;    // sort direction
 
 // ── TIMS overrides in-memory cache ──────────────────────
-let _timsCache = {};  // { teamNumber: { nickname, organization, location, top_sponsors, ... } }
+// `var` — referenced by editor.js (loaded BEFORE event_select.js); using
+// `let` would put it in TDZ for any editor.js handler firing early.
+var _timsCache = {};  // { teamNumber: { nickname, organization, location, top_sponsors, ... } }
 
 async function _loadTimsOverrides() {
     if (!teamsData) return;

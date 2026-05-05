@@ -217,7 +217,7 @@ function closeMobilePbpPicker() {
 }
 
 /* ── Mobile unified panel (Lookup / Settings / Editor / Match Picker) ──── */
-let _mobUtilMode = null; // 'lookup' | 'settings' | 'editor' | 'matches'
+var _mobUtilMode = null; // var: read by breakdown.js
 
 function openMobUtilPanel(mode) {
     const scrim = document.getElementById('mob-util-scrim');

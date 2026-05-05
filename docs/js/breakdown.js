@@ -919,7 +919,7 @@ function renderRpProgress(bd) {
 //  TEAM SPOTLIGHT — Focus on a single team in breakdown
 // ═══════════════════════════════════════════════════════════
 
-let _spotlightTeam = null;  // currently spotlighted team number
+var _spotlightTeam = null;  // var: read by comparison.js / mobile_ux.js
 
 function toggleSpotlight(teamNum, color) {
     if (_spotlightTeam === teamNum) { closeSpotlight(); return; }

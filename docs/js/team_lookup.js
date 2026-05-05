@@ -250,7 +250,7 @@ function renderTeamStats(d) {
 // ═══════════════════════════════════════════════════════════
 // 5. HEAD TO HEAD
 // ═══════════════════════════════════════════════════════════
-let _h2hAllTime = false;
+var _h2hAllTime = false;  // var: read by event_select.js
 
 async function loadH2H() {
     const a = parseInt($('h2h-team-a').value, 10);

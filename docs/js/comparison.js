@@ -11,7 +11,7 @@
 // 8. TEAM COMPARISON
 // ═══════════════════════════════════════════════════════════
 
-let compareSelection = new Set();  // team_keys selected from rankings table
+var compareSelection = new Set();  // var: referenced by event_select.js / editor.js (loaded before this file)
 
 
 // ── Open / Close ───────────────────────────────────────────
@@ -69,7 +69,7 @@ document.addEventListener('keydown', e => {
 });
 
 // ── Auto-compare from PBP match ────────────────────────────
-let _pendingBdIndex = null;  // set by goToBreakdownFromPbp before tab click
+var _pendingBdIndex = null;  // var: read by app.js / breakdown.js
 
 function goToBreakdownFromPbp() {
     if (!pbpData || !pbpData.matches.length) return;

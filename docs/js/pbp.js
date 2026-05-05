@@ -404,7 +404,7 @@ function _flashPbpArena() {
 // fast path can patch text nodes from the very first render, and the
 // slow path only has to swap children inside .pbp-team-cards instead
 // of rebuilding the whole arena innerHTML on every match update.
-let _pbpShellMounted = false;
+var _pbpShellMounted = false;  // var: read by event_select.js
 const _PBP_ARENA_SHELL = `
     <div class="pbp-alliance red-side">
         <div class="pbp-alliance-header">
@@ -439,7 +439,7 @@ function _pbpMountShell() {
 // Captured at the end of every full render so the next call can decide
 // whether a cheap text-node patch is sufficient (the common case during
 // a live match: only the alliance scores tick).
-let _pbpLastSig = null;
+var _pbpLastSig = null;  // var: read by event_select.js
 function _pbpSig(m) {
     return [
         m.key,
@@ -673,8 +673,9 @@ function renderPbpMatch() {
     _pbpLastSig = sig;
 }
 
-let _pbpConnCache = {};           // keyed by "teamA,teamB,...,teamF|allTime" → connections array
-let _pbpConnAllTime = false;      // current range toggle state
+// var: read by event_select.js (loaded before pbp.js)
+var _pbpConnCache = {};           // keyed by "teamA,teamB,...,teamF|allTime" → connections array
+var _pbpConnAllTime = false;      // current range toggle state
 
 // Hoisted SVG markup — these strings used to be re-allocated on every
 // renderPbpConnections() call (twice per match update during live play).
@@ -1011,7 +1012,7 @@ function renderPbpTeam(t, sideCls, opts = {}) {
 
 // ── PBP Playoff-firsts injection ───────────────────────────
 
-let _playoffFirstsCache = null;  // {team_number: {first_playoff, first_finals, rookie}} or null
+var _playoffFirstsCache = null;  // var: read by event_select.js / summary.js
 
 async function _injectPlayoffFirsts(teams, matchIdx, compLevel) {
     // Lazy-load once per event

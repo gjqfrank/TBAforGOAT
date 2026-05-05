@@ -233,7 +233,7 @@ async function loadSummary() {
 }
 
 /** Lazy-load prior playoff connections for the summary tab */
-let _loadingConnections = false;
+var _loadingConnections = false;  // var: read by event_select.js
 async function loadSummaryConnections() {
     if (!currentEvent || !summaryData || _loadingConnections) return;
     _loadingConnections = true;
@@ -268,7 +268,7 @@ async function loadSummaryConnections() {
 }
 
 /** Lazy-load returning event champions & previous-season award winners */
-let _loadingAwards = false;
+var _loadingAwards = false;  // var: read by event_select.js
 async function loadSummaryAwards() {
     if (!currentEvent || !summaryData || _loadingAwards) return;
     _loadingAwards = true;
@@ -898,7 +898,7 @@ function renderPastEventChampions(champions) {
     }).join('');
 }
 
-let currentAwardFilter = 'all';
+var currentAwardFilter = 'all';  // var: read by event_select.js
 
 function filterPastAwards(filter, btn) {
     currentAwardFilter = filter;

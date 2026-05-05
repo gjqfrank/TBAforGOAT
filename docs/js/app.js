@@ -258,64 +258,71 @@ document.addEventListener('dblclick', e => {
     if (e.target.closest('.pbp-team-number')) clearTimeout(_pbpTeamClickTimer);
 }, true);
 
-let currentEvent = null;   // event_key once loaded
-let currentEventYear = null; // numeric year of the loaded event
-let eventInfoData = null;  // cached event info for saving
-let playoffData  = null;   // cached playoff matches
-let allianceData = null;   // cached alliance data
-let summaryData  = null;   // cached event summary
-let _summaryRevalidatedAt = 0; // timestamp of last background revalidation
-const _SUMMARY_REVALIDATE_COOLDOWN = 5 * 60_000; // 5 minutes
-let pbpData      = null;   // cached play-by-play data
-let pbpIndex     = 0;      // current match index
-let highlightForeign = false; // settings: highlight international teams
-let highlightRookie = false;   // settings: highlight rookie teams
-let showOffseason = false;     // settings: show offseason events
-let rankingsCompact = window.innerWidth <= 768;  // default compact on mobile
-let rankingsShowSchool = false;   // toggle: show school/org column
-let rankingsShowAutoTele = false; // toggle: show Auto/TeleOp columns (FTC)
-let rankingsCardView = window.innerWidth <= 768;  // card view default on mobile
-let allianceShowEpa = false;      // toggle: show EPA breakdown in alliance cards
-let allianceShowPlayoff = false;  // toggle: show playoff ribbons/status
-let allianceShowAvatars = true;  // toggle: show team avatars
-let allianceShowNames = false;    // toggle: show team nicknames
-let allianceShowAttrs = false;    // toggle: show team attribute tags in alliances
-let pbpShowAwards = false;        // toggle: show blue banners + awards in PBP
-let showPredictions = false;       // settings: show Statbotics win predictions in PBP
-let showGatoolSponsors = false;    // settings: show GATool cloud sponsors in PBP
-let _storylineAvailable = false;   // AI storylines feature flag (checked on load)
-let eventCountry = '';         // home country of the currently loaded event
-let eventRegion  = '';         // resolved region name for the loaded event
-let historyData  = null;       // cached event history data
-let regionData   = null;       // cached region facts
-let bdData       = null;   // cached breakdown match list (same as pbpData)
-let bdIndex      = 0;      // current breakdown match index
-let bdCache      = {};     // match_key -> breakdown data
-let bdPollTimer  = null;   // auto-poll timer for pending breakdowns
-let bdListTimer  = null;   // timer for refreshing match list has_breakdown flags
-let lastTeamData = null;   // cached last team lookup data for re-render
-const BD_POLL_INTERVAL = 5_000;       // 5s — poll for breakdown availability
-const BD_LIST_REFRESH  = 20_000;      // 20s — refresh match list flags
+// ── Cross-file shared state ────────────────────────────────
+// IMPORTANT: declared with `var` (not `let`/`const`) so other classic
+// scripts (event_select.js, region_history.js, alliances.js, ...) loaded
+// BEFORE app.js can safely reference these names without hitting a
+// temporal-dead-zone ReferenceError ("Cannot access uninitialized
+// variable" in Safari/WebKit). `var` at script top level hoists AND
+// initializes the binding to `undefined` at script-instantiation time.
+var currentEvent = null;   // event_key once loaded
+var currentEventYear = null; // numeric year of the loaded event
+var eventInfoData = null;  // cached event info for saving
+var playoffData  = null;   // cached playoff matches
+var allianceData = null;   // cached alliance data
+var summaryData  = null;   // cached event summary
+var _summaryRevalidatedAt = 0; // timestamp of last background revalidation
+var _SUMMARY_REVALIDATE_COOLDOWN = 5 * 60_000; // 5 minutes
+var pbpData      = null;   // cached play-by-play data
+var pbpIndex     = 0;      // current match index
+var highlightForeign = false; // settings: highlight international teams
+var highlightRookie = false;   // settings: highlight rookie teams
+var showOffseason = false;     // settings: show offseason events
+var rankingsCompact = window.innerWidth <= 768;  // default compact on mobile
+var rankingsShowSchool = false;   // toggle: show school/org column
+var rankingsShowAutoTele = false; // toggle: show Auto/TeleOp columns (FTC)
+var rankingsCardView = window.innerWidth <= 768;  // card view default on mobile
+var allianceShowEpa = false;      // toggle: show EPA breakdown in alliance cards
+var allianceShowPlayoff = false;  // toggle: show playoff ribbons/status
+var allianceShowAvatars = true;  // toggle: show team avatars
+var allianceShowNames = false;    // toggle: show team nicknames
+var allianceShowAttrs = false;    // toggle: show team attribute tags in alliances
+var pbpShowAwards = false;        // toggle: show blue banners + awards in PBP
+var showPredictions = false;       // settings: show Statbotics win predictions in PBP
+var showGatoolSponsors = false;    // settings: show GATool cloud sponsors in PBP
+var _storylineAvailable = false;   // AI storylines feature flag (checked on load)
+var eventCountry = '';         // home country of the currently loaded event
+var eventRegion  = '';         // resolved region name for the loaded event
+var historyData  = null;       // cached event history data
+var regionData   = null;       // cached region facts
+var bdData       = null;   // cached breakdown match list (same as pbpData)
+var bdIndex      = 0;      // current breakdown match index
+var bdCache      = {};     // match_key -> breakdown data
+var bdPollTimer  = null;   // auto-poll timer for pending breakdowns
+var bdListTimer  = null;   // timer for refreshing match list has_breakdown flags
+var lastTeamData = null;   // cached last team lookup data for re-render
+var BD_POLL_INTERVAL = 5_000;       // 5s — poll for breakdown availability
+var BD_LIST_REFRESH  = 20_000;      // 20s — refresh match list flags
 
 // PBP auto-refresh
-let pbpRefreshTimer = null;         // setInterval id for PBP live refresh
-const PBP_REFRESH_INTERVAL = 15_000; // 15s — poll for score/match updates
+var pbpRefreshTimer = null;         // setInterval id for PBP live refresh
+var PBP_REFRESH_INTERVAL = 15_000; // 15s — poll for score/match updates
 
 // Playoff auto-refresh
-let playoffRefreshTimer = null;
-const PLAYOFF_REFRESH_INTERVAL = 30_000; // 30s — poll for bracket updates
+var playoffRefreshTimer = null;
+var PLAYOFF_REFRESH_INTERVAL = 30_000; // 30s — poll for bracket updates
 
 // Season events
-let seasonEventsRaw = [];          // full list from backend
-let seasonEventsFiltered = [];     // after applying region/week/search
-let seasonDropdownIdx = -1;        // keyboard-highlighted index in dropdown
+var seasonEventsRaw = [];          // full list from backend
+var seasonEventsFiltered = [];     // after applying region/week/search
+var seasonDropdownIdx = -1;        // keyboard-highlighted index in dropdown
 
 // Auto-refresh polling
-let rankingsRefreshTimer = null;   // setInterval id for rankings polling
-let currentEventStatus = null;     // 'ongoing' | 'completed' | 'upcoming' | null
+var rankingsRefreshTimer = null;   // setInterval id for rankings polling
+var currentEventStatus = null;     // 'ongoing' | 'completed' | 'upcoming' | null
 
 // Track which tabs have been rendered from preloaded data
-let renderedTabs = { playoff: false, alliance: false, playbyplay: false, breakdown: false, history: false };
+var renderedTabs = { playoff: false, alliance: false, playbyplay: false, breakdown: false, history: false };
 
 // ── Realtime event handlers (replace setInterval polling) ──
 let _rtRankDebounce = null;   // debounce timer for batched team changes
