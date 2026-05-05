@@ -109,6 +109,7 @@
         color: var(--text);
         min-height: 100vh;
         line-height: 1.6;
+        overflow-x: hidden;
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
         display: flex;
