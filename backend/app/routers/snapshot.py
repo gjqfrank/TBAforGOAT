@@ -25,15 +25,21 @@ from fastapi import APIRouter, HTTPException
 
 from ..services.cache_service import CACHE_DIR
 from ..services.error_utils import raise_api_error
+from ..services.inflight import coalesce
 
 log = logging.getLogger(__name__)
 router = APIRouter()
 
-# Snapshot TTL — stale after this many seconds (auto-refresh on next request)
-_SNAPSHOT_TTL = 300       # 5 min — serve from cache; live-refresh timers handle updates
-_SNAPSHOT_STALE = 600     # 10 min — serve stale while rebuilding in background
+# Snapshot TTL — stale after this many seconds (auto-refresh on next request).
+# Realtime push updates already drive live UI refreshes, so the snapshot only
+# needs to stay fresh for *cold loaders* (newly-opened tabs / shared links).
+# Bumping this from 5 min → 30 min dramatically reduces the rebuild churn that
+# previously fired on every match-poller / event-sync write.
+_SNAPSHOT_TTL = 1800      # 30 min — serve from cache
+_SNAPSHOT_STALE = 7200    # 2 hr — serve stale while rebuilding in background
 
-# In-flight locks to prevent thundering herd on the same event
+# In-flight locks to prevent thundering herd on the same event.
+# (Kept for backwards compat; new build path uses inflight.coalesce instead.)
 _build_locks: dict[str, asyncio.Lock] = {}
 
 
@@ -125,13 +131,33 @@ async def _safe(coro):
 
 
 async def _background_rebuild(event_key: str):
-    """Rebuild snapshot in background (stale-while-revalidate)."""
+    """Rebuild snapshot in background (stale-while-revalidate).
+
+    Wrapped in coalesce() so concurrent stale reads don't kick off N parallel
+    rebuilds for the same event \u2014 one rebuild fans out to all waiters.
+    """
     try:
-        payload = await _build_snapshot(event_key)
+        payload = await coalesce(
+            f"snapshot_build:{event_key}", _build_snapshot, event_key,
+        )
         _write_snapshot(event_key, payload)
         log.info("Background rebuild of %s snapshot complete", event_key)
     except Exception:
         log.warning("Background rebuild of %s snapshot failed", event_key, exc_info=True)
+
+
+async def _ingest_and_build(event_key: str) -> dict:
+    """Cold-miss path: ensure ingestion, then build the snapshot.
+
+    Lives behind coalesce() so a cmptx-style burst of cold loaders that all
+    arrive in the same second collapses to a single TBA fan-out.
+    """
+    from ..services import ingestion_service
+    if not await ingestion_service.is_ingested(event_key):
+        await ingestion_service.ingest_event(event_key)
+    payload = await _build_snapshot(event_key)
+    _write_snapshot(event_key, payload)
+    return payload
 
 
 @router.get("/{event_key}/snapshot")
@@ -143,42 +169,36 @@ async def event_snapshot(event_key: str):
         cached["_cached"] = True
         return cached
 
-    # Stale-while-revalidate: serve stale data and rebuild in background
+    # Stale-while-revalidate: serve stale data and rebuild in background.
+    # The rebuild itself is coalesced, so multiple stale-readers don't
+    # trigger multiple rebuilds.
     if cached and not fresh:
         asyncio.create_task(_background_rebuild(event_key))
         cached["_cached"] = True
         cached["_stale"] = True
         return cached
 
-    # Cold miss — ingest into Supabase, then build snapshot
-    if event_key not in _build_locks:
-        _build_locks[event_key] = asyncio.Lock()
+    # Cold miss \u2014 single-flight the whole ingest + build under one key so
+    # a burst of N concurrent first-time loaders only does one upstream sweep.
+    try:
+        # Re-check disk inside the coalesced call (another request may have
+        # written it between our miss and our turn at the future).
+        cached_again, _ = _read_snapshot(event_key)
+        if cached_again:
+            cached_again["_cached"] = True
+            return cached_again
 
-    lock = _build_locks[event_key]
-    async with lock:
-        # Double-check after acquiring lock (another request may have built it)
-        cached, _ = _read_snapshot(event_key)
-        if cached:
-            cached["_cached"] = True
-            return cached
-
-        try:
-            # Step 1: Ensure the event is ingested into Supabase
-            from ..services import ingestion_service
-            if not await ingestion_service.is_ingested(event_key):
-                await ingestion_service.ingest_event(event_key)
-
-            # Step 2: Build enriched snapshot from service layer
-            # (hits TBA in-memory cache warmed by ingestion)
-            payload = await _build_snapshot(event_key)
-            _write_snapshot(event_key, payload)
-            payload["_cached"] = False
-            return payload
-        except HTTPException:
-            raise
-        except Exception as e:
-            log.exception("Snapshot build failed for %s", event_key)
-            raise_api_error(
-                e,
-                fallback_detail=f"Could not build snapshot for '{event_key}'.",
-            )
+        payload = await coalesce(
+            f"snapshot_build:{event_key}", _ingest_and_build, event_key,
+        )
+        payload = dict(payload)  # don't mutate cached future result
+        payload["_cached"] = False
+        return payload
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.exception("Snapshot build failed for %s", event_key)
+        raise_api_error(
+            e,
+            fallback_detail=f"Could not build snapshot for '{event_key}'.",
+        )

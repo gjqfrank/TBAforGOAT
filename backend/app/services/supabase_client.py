@@ -27,8 +27,39 @@ _cb_open_until: float = 0.0
 _CB_THRESHOLD = 3       # consecutive 5xx failures before opening
 _CB_COOLDOWN  = 30.0    # seconds to pause after circuit opens
 
-# ── Serialisation lock for merge_event_teams ────────────────
-_merge_lock = asyncio.Lock()
+# ── Per-event serialisation locks for merge_event_teams ────
+# A single global lock previously serialised every event_teams write across
+# the entire BFF, which became the dominant bottleneck during championship
+# season (8 cmp divisions + cmptx merging into the same lock). Per-event
+# locks let writes for different events proceed in parallel while still
+# preventing intra-event deadlocks (overlapping team sets within one event).
+_merge_locks: dict[str, asyncio.Lock] = {}
+_merge_locks_guard = asyncio.Lock()
+_MERGE_LOCKS_MAX = 256  # cap to prevent unbounded growth across a season
+
+
+async def _get_merge_lock(event_key: str) -> asyncio.Lock:
+    """Return (and lazily create) the per-event merge lock.
+
+    Uses a tiny guard lock around dict mutation so two concurrent calls
+    can't create two distinct lock objects for the same event_key.
+    Opportunistically GCs entries when the dict grows past the cap.
+    """
+    lock = _merge_locks.get(event_key)
+    if lock is not None:
+        return lock
+    async with _merge_locks_guard:
+        lock = _merge_locks.get(event_key)
+        if lock is None:
+            if len(_merge_locks) >= _MERGE_LOCKS_MAX:
+                # Drop a few unlocked entries (FIFO-ish via dict iteration)
+                for k in list(_merge_locks)[: _MERGE_LOCKS_MAX // 4]:
+                    other = _merge_locks[k]
+                    if not other.locked():
+                        del _merge_locks[k]
+            lock = asyncio.Lock()
+            _merge_locks[event_key] = lock
+        return lock
 
 
 def _is_circuit_open() -> bool:
@@ -231,18 +262,29 @@ async def merge_event_teams(rows: list[dict[str, Any]]) -> None:
     Each row should have: ``{event_key, team_key, data: {...fields to merge...}}``.
     Uses the ``merge_event_teams_batch`` Postgres function from migration 05.
 
-    Serialised via an asyncio.Lock to prevent deadlocks when multiple
-    workers merge overlapping team sets concurrently.  Retries on 40P01
-    if a deadlock still occurs (e.g. from external concurrent writes).
+    Serialised via a *per-event* asyncio.Lock so that overlapping team sets
+    within the same event don't deadlock, while writes targeting different
+    events run in parallel. Retries on 40P01 if a deadlock still occurs
+    (e.g. from external concurrent writers hitting the same rows).
     """
     if not rows:
         return
+
+    # All rows in a single batch should target the same event_key (workers
+    # always group by event). If they don't, fall back to a synthetic key so
+    # we still serialise the call rather than risk cross-event interleaving.
+    event_keys = {r.get("event_key") for r in rows if r.get("event_key")}
+    if len(event_keys) == 1:
+        lock_key = next(iter(event_keys))
+    else:
+        lock_key = "__multi__"
 
     async def _do():
         sb = await get_supabase()
         await sb.rpc("merge_event_teams_batch", {"p_rows": rows}).execute()
 
-    async with _merge_lock:
+    lock = await _get_merge_lock(lock_key)
+    async with lock:
         await _retry_on_deadlock(f"merge_event_teams({len(rows)} rows)", _do)
 
 

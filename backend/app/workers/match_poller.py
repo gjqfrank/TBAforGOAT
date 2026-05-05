@@ -19,6 +19,7 @@ log = logging.getLogger(__name__)
 
 POLL_INTERVAL = 5       # seconds between sweeps
 RANKINGS_INTERVAL = 15  # seconds between ranking refreshes
+ORPHAN_SWEEP_INTERVAL = 300  # seconds between ghost-match purges (per event)
 
 
 def _strip_nulls(d: dict) -> dict:
@@ -27,12 +28,15 @@ def _strip_nulls(d: dict) -> dict:
 
 
 def _invalidate_snapshot(event_key: str) -> None:
-    """Remove disk-cached snapshot + summary caches so they rebuild."""
-    try:
-        from ..routers.snapshot import invalidate_snapshot
-        invalidate_snapshot(event_key)
-    except Exception:
-        pass
+    """Invalidate disk-cached summary caches.
+
+    NOTE: We deliberately do NOT delete the event snapshot here anymore.
+    The snapshot TTL (30 min) plus stale-while-revalidate is enough for
+    cold-loaders, and Realtime push handles live UI updates without
+    needing a snapshot rebuild on every 5-second poll. Deleting it on
+    every poll caused a steady rebuild loop that wasted TBA quota and
+    CPU during championship weekends.
+    """
     try:
         from ..services import payload_cache
         payload_cache.invalidate("summary", event_key)
@@ -44,7 +48,7 @@ _active_event_keys: set[str] = set()
 _watched_event_keys: dict[str, float] = {}   # user-triggered events → last-access timestamp
 _WATCHED_TTL = 7200  # 2 hours — prune events not re-requested
 _last_rankings_poll: float = 0
-
+_last_orphan_sweep: dict[str, float] = {}   # event_key → last orphan-purge ts
 
 def set_active_events(keys: set[str]) -> None:
     """Called by event_sync when it discovers ongoing events."""
@@ -158,11 +162,20 @@ async def _poll_matches(event_key: str) -> None:
     if rows:
         try:
             await upsert_rows("matches", rows)
-            # Purge ghost matches (deleted from live schedule by event operator)
-            valid_keys = {r["match_key"] for r in rows}
-            orphan_count = await delete_orphaned_matches(event_key, valid_keys)
-            if orphan_count:
-                log.info("Purged %d ghost matches from %s", orphan_count, event_key)
+            # Purge ghost matches (deleted from live schedule by event operator).
+            # Throttled to once per ORPHAN_SWEEP_INTERVAL per event — schedule
+            # regeneration happens at most a few times per event per day, so
+            # checking every 5 s wasted ~one Supabase query per active event
+            # per tick during championship weekends.
+            import time as _t
+            now = _t.time()
+            last = _last_orphan_sweep.get(event_key, 0.0)
+            if now - last >= ORPHAN_SWEEP_INTERVAL:
+                _last_orphan_sweep[event_key] = now
+                valid_keys = {r["match_key"] for r in rows}
+                orphan_count = await delete_orphaned_matches(event_key, valid_keys)
+                if orphan_count:
+                    log.info("Purged %d ghost matches from %s", orphan_count, event_key)
             log.debug("Upserted %d matches for %s", len(rows), event_key)
             _invalidate_snapshot(event_key)
         except Exception as e:

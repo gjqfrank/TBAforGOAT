@@ -470,7 +470,24 @@
                     <button class="pbp-nav-btn" onclick="pbpNext()" title="Next Match">Next ▶</button>
                 </div>
                 <div id="pbp-arena" class="pbp-arena"></div>
-                <div id="pbp-footer" class="pbp-footer"></div>
+                <div id="pbp-footer" class="pbp-footer">
+                    <!-- Static action buttons — no longer rebuilt on every match render. -->
+                    <div class="pbp-footer-actions">
+                        <button class="pbp-compare-btn" onclick="compareCurrentMatch()" title="Compare all 6 teams side by side">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 16l4-8 4 4 4-6"/></svg>
+                            Compare Teams <kbd class="kbd-desktop">C</kbd>
+                        </button>
+                        <button class="pbp-breakdown-btn" onclick="goToBreakdownFromPbp()" title="View score breakdown for this match">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                            Breakdown <kbd class="kbd-desktop">B</kbd>
+                        </button>
+                        <button id="pbp-storyline-btn" class="pbp-storyline-btn hidden" onclick="generateMatchStoryline()" title="Generate AI broadcast storyline for this match">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+                            Storyline <kbd class="kbd-desktop">S</kbd>
+                        </button>
+                    </div>
+                    <span id="pbp-footer-highscore" class="pbp-footer-text hidden"></span>
+                </div>
                 <div id="pbp-storyline" class="pbp-storyline-container"></div>
             </div>
         </section>
@@ -905,6 +922,23 @@
     <script src="js/battle_station.js"></script>
     <script src="js/global_notes.js"></script>
     <script src="js/editor.js"></script>
+
+    <!-- App tab modules — extracted from app.js, loaded before it so
+         their top-level functions are available when app.js init runs.
+         All files are classic scripts sharing one global declarative
+         environment, so cross-file references work as before. -->
+    <script src="js/event_select.js"></script>
+    <script src="js/summary.js"></script>
+    <script src="js/playoffs.js"></script>
+    <script src="js/alliances.js"></script>
+    <script src="js/team_lookup.js"></script>
+    <script src="js/pbp.js"></script>
+    <script src="js/breakdown.js"></script>
+    <script src="js/comparison.js"></script>
+    <script src="js/match_history.js"></script>
+    <script src="js/floating_lookup.js"></script>
+    <script src="js/region_history.js"></script>
+    <script src="js/mobile_ux.js"></script>
 
     <script src="js/app.js"></script>
 

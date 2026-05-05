@@ -162,12 +162,16 @@ const Realtime = (() => {
     // ── Automatic resubscribe on persistent failure ────────
     function _scheduleResubscribe(eventKey) {
         if (_reconnectTimer) return; // already scheduled
+        // Capture the connected-state BEFORE subscribe()→unsubscribe() wipes it,
+        // so the next SUBSCRIBED status is recognised as a reconnect and
+        // _fireReconnect() actually runs (state-reconciliation fix).
+        const wasConnected = _wasConnected;
         _reconnectTimer = setTimeout(() => {
             _reconnectTimer = null;
-            // Only resubscribe if we're still supposed to be watching this event
             if (_eventKey === eventKey && !_isHealthy) {
                 console.info('[Realtime] Attempting resubscribe for', eventKey);
                 subscribe(eventKey);
+                if (wasConnected) _wasConnected = true;
             }
         }, _RECONNECT_DELAY);
     }
@@ -196,10 +200,19 @@ const Realtime = (() => {
     }
 
     // ── Listener registration ──────────────────────────────
-    function onTeamChange(cb)  { _teamListeners.push(cb); }
-    function onMatchChange(cb) { _matchListeners.push(cb); }
-    function onNoteInsert(cb)  { _notesListeners.push(cb); }
-    function onReconnect(cb)   { _reconnectListeners.push(cb); }
+    // Each registrar returns an unsubscribe function so views can clean up
+    // (prevents duplicate handlers on HMR / re-init / view re-mount).
+    function _register(arr, cb) {
+        arr.push(cb);
+        return () => {
+            const i = arr.indexOf(cb);
+            if (i >= 0) arr.splice(i, 1);
+        };
+    }
+    function onTeamChange(cb)  { return _register(_teamListeners,      cb); }
+    function onMatchChange(cb) { return _register(_matchListeners,     cb); }
+    function onNoteInsert(cb)  { return _register(_notesListeners,     cb); }
+    function onReconnect(cb)   { return _register(_reconnectListeners, cb); }
 
     // ── Public API ─────────────────────────────────────────
     return {

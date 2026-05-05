@@ -33,12 +33,13 @@ def _strip_nulls(d: dict) -> dict:
 
 
 def _invalidate_snapshot(event_key: str) -> None:
-    """Remove disk-cached snapshot + summary/awards caches so they rebuild."""
-    try:
-        from ..routers.snapshot import invalidate_snapshot
-        invalidate_snapshot(event_key)
-    except Exception:
-        pass
+    """Invalidate disk-cached summary/awards caches for an event.
+
+    NOTE: We deliberately do NOT delete the event snapshot here anymore.
+    The snapshot TTL (30 min) plus stale-while-revalidate is enough for
+    cold-loaders, and Realtime push handles live UI updates without
+    needing a snapshot rebuild every time event-sync runs (every 120s).
+    """
     try:
         from ..services import payload_cache
         payload_cache.invalidate("summary", event_key)
