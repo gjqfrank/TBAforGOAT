@@ -9,6 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap">
     <link rel="stylesheet" href="css/tailwind.css">
+    <link rel="stylesheet" href="css/styles.css">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 </head>
@@ -913,6 +914,13 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+    <!-- Pre-defined globals: must load BEFORE any section script that calls them at top-level.
+         (event_select.js calls $('season-search')?.addEventListener at module top.) -->
+    <script>
+      // Lightweight DOM helpers used by every script, defined as window globals
+      // so classic-script load-order doesn't matter.
+      window.$ = function (id) { return document.getElementById(id); };
+    </script>
     <script src="js/api.js"></script>
     <script src="js/ftc-api.js"></script>
     <script src="js/db.js"></script>

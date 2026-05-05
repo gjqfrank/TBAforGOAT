@@ -274,6 +274,9 @@ function clearSeasonSelection() {
 }
 
 // Keyboard navigation in season dropdown
+// NOTE: wrapped in DOMContentLoaded so $() (defined inline + as const in app.js)
+// is guaranteed available regardless of script load order.
+document.addEventListener('DOMContentLoaded', () => {
 $('season-search')?.addEventListener('keydown', e => {
     const dropdown = $('season-dropdown');
 
@@ -306,14 +309,6 @@ $('season-search')?.addEventListener('keydown', e => {
     }
 });
 
-function highlightDropdownItem(items) {
-    items.forEach(el => el.classList.remove('highlighted'));
-    if (items[seasonDropdownIdx]) {
-        items[seasonDropdownIdx].classList.add('highlighted');
-        items[seasonDropdownIdx].scrollIntoView({ block: 'nearest' });
-    }
-}
-
 // Show dropdown on focus, hide on outside click
 $('season-search')?.addEventListener('focus', () => {
     if (seasonEventsFiltered.length) {
@@ -325,10 +320,20 @@ document.addEventListener('click', e => {
         $('season-dropdown')?.classList.add('hidden');
     }
 });
+}); // end DOMContentLoaded
 
-// Load season events on page init
-loadSeasonEvents();
-// loadRegionalPool() is called after its variable declarations below
+function highlightDropdownItem(items) {
+    items.forEach(el => el.classList.remove('highlighted'));
+    if (items[seasonDropdownIdx]) {
+        items[seasonDropdownIdx].classList.add('highlighted');
+        items[seasonDropdownIdx].scrollIntoView({ block: 'nearest' });
+    }
+}
+
+// loadSeasonEvents() and loadRegionalPool() are kicked off from app.js's
+// init block (search 'typeof loadSeasonEvents'); top-level invocations
+// here would crash because they call isFTCMode() which is defined in
+// app.js (loaded LAST).
 
 /** Unified collapse toggle helper. Updates body, header class, and pill label/arrow. */
 function _toggleCollapse(bodyId, toggleId, headerEl) {
@@ -362,8 +367,9 @@ let _regionalPoolAllTeams = null;  // ALL teams from pool endpoint (for pre-qual
 let _regionalPoolFiltered = null;  // filtered view
 let _loadingRegionalPool = false;
 
-// Kick off regional pool load now that variables are declared
-loadRegionalPool();
+// loadRegionalPool() is invoked from app.js init (typeof check);
+// calling it here at top-level crashes because it calls isFTCMode()
+// which is defined in app.js (loaded LAST).
 
 async function loadRegionalPool() {
     if (isFTCMode() || _loadingRegionalPool) return;  // FRC-only feature, deduplicate

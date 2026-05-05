@@ -1520,7 +1520,10 @@ window.addEventListener('popstate', () => {
 
 
 // ── Helpers ────────────────────────────────────────────────
-const $ = id => document.getElementById(id);
+// `$` is defined as `window.$` via an inline <script> in index.html so it's
+// available to section scripts loaded BEFORE app.js. Re-export to local
+// `const` aliases for the rest of this file's call sites.
+const $ = window.$ || (id => document.getElementById(id));
 const show = (id) => $(id)?.classList.remove('hidden');
 const hide = (id) => $(id)?.classList.add('hidden');
 
