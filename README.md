@@ -308,9 +308,8 @@ casters-tool/
 │   ├── index.html                      # SPA shell
 │   ├── about.html                      # About / Guide page
 │   ├── css/
-│   │   ├── tailwind.css                # Compiled Tailwind output
-│   │   ├── input.css                   # Tailwind source
-│   │   └── styles.css                  # Legacy stylesheet
+│   │   ├── tailwind.css                # Compiled Tailwind output (minified)
+│   │   └── input.css                   # Tailwind source
 │   ├── js/
 │   │   ├── app.js                      # Main UI controller (~11k lines)
 │   │   ├── api.js                      # FRC API wrapper

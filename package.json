@@ -1,13 +1,14 @@
 {
   "name": "casters-tool",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "description": "A read-only **FIRST Robotics Competition (FRC)** and **FIRST Tech Challenge (FTC)** event dashboard, built for broadcasters, commentators and FIRST Community. Displays team stats, alliance breakdowns, playoff brackets, play-by-play data, AI-generated broadcast storylines, and historical context. All a caster needs at a glance!",
   "main": "index.js",
   "directories": {
     "doc": "docs"
   },
   "scripts": {
-    "css": "tailwindcss -i docs/css/input.css -o docs/css/tailwind.css",
+    "css": "tailwindcss -i docs/css/input.css -o docs/css/tailwind.css --minify",
+    "css:dev": "tailwindcss -i docs/css/input.css -o docs/css/tailwind.css",
     "css:watch": "tailwindcss -i docs/css/input.css -o docs/css/tailwind.css --watch",
     "css:min": "tailwindcss -i docs/css/input.css -o docs/css/tailwind.css --minify",
     "test": "echo \"Error: no test specified\" && exit 1"
