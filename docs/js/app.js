@@ -1920,3 +1920,22 @@ if (isFTCMode()) loadFtcAvatarMap();
 // ═══════════════════════════════════════════════════════════
 // MOBILE UX IMPROVEMENTS (extracted to docs/js/mobile_ux.js)
 // ═══════════════════════════════════════════════════════════
+
+// ── Initial event-list bootstrap ───────────────────────────
+// Pre-v3.0.0, event_select.js called loadSeasonEvents() and
+// loadRegionalPool() at top-level. Those calls were removed because
+// they ran before app.js parsed (so isFTCMode was undefined).
+// Bring the boot back here, where every helper is guaranteed defined.
+(function bootstrapEventList() {
+    const boot = () => {
+        if (typeof loadSeasonEvents === 'function') loadSeasonEvents();
+        if (typeof loadRegionalPool === 'function' && competitionMode === 'frc') {
+            loadRegionalPool();
+        }
+    };
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', boot);
+    } else {
+        boot();
+    }
+})();

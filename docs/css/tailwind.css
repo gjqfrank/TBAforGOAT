@@ -18062,3 +18062,159 @@ body.epa-breakdown-active .stat-opr {
 [data-theme="light"] .gn-match-group {
   border-color: rgba(0,0,0,.06);
 }
+
+/* ── Surgical post-revert patches (added after pre-P0 restore) ──── */
+/* PBP arena: prediction slot must span both grid columns and disappear when empty. */
+.pbp-prediction-slot {
+  grid-column: 1 / -1;
+}
+.pbp-prediction-slot:empty {
+  display: none;
+}
+
+/* ═══ Prior Connections — redesigned (team-number header + sectioned body) ═══ */
+.pbp-conn-item {
+  /* Override: stack header above sections instead of inline horizontal layout. */
+  display: block;
+  padding: .55rem .8rem .65rem;
+  font-size: .78rem;
+}
+.pbp-conn-teams-header {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--text);
+  margin-bottom: .35rem;
+  letter-spacing: .01em;
+}
+.pbp-conn-team-num {
+  color: var(--text);
+}
+.pbp-conn-red .pbp-conn-team-num { color: var(--red); }
+.pbp-conn-blue .pbp-conn-team-num { color: var(--blue, #3b82f6); }
+.pbp-conn-cross .pbp-conn-team-num { color: var(--text); }
+.pbp-conn-amp,
+.pbp-conn-vs {
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: .85em;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.pbp-conn-vs {
+  padding: 0 .15rem;
+  color: var(--text-secondary);
+}
+.pbp-conn-h2h-wins {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: .72rem;
+  font-weight: 700;
+  padding: .15rem .5rem;
+  border-radius: 100px;
+  background: rgba(99,102,241,.12);
+  color: var(--primary-hover, #818cf8);
+  border: 1px solid rgba(99,102,241,.25);
+  letter-spacing: .03em;
+}
+
+.pbp-conn-sections {
+  display: flex;
+  flex-direction: column;
+  gap: .35rem;
+  padding-left: .5rem;
+}
+.pbp-conn-section {
+  display: flex;
+  flex-direction: column;
+  gap: .15rem;
+}
+.pbp-conn-section-label {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  font-size: .68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text-muted);
+}
+.pbp-conn-section-label .conn-svg {
+  width: .85em;
+  height: .85em;
+}
+.pbp-conn-partners .pbp-conn-section-label { color: var(--green, #22c55e); }
+.pbp-conn-opponents .pbp-conn-section-label { color: var(--red, #f87171); }
+.pbp-conn-section-count {
+  font-family: var(--mono);
+  font-size: .65rem;
+  font-weight: 700;
+  padding: 0 .35rem;
+  border-radius: 100px;
+  background: rgba(255,255,255,.06);
+  color: var(--text-muted);
+  border: 1px solid var(--border-subtle);
+  margin-left: .15rem;
+}
+
+.pbp-conn-evt-list {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 .25rem;
+  display: flex;
+  flex-direction: column;
+  gap: .15rem;
+}
+.pbp-conn-evt {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .35rem;
+  font-size: .74rem;
+  color: var(--text-secondary);
+}
+.pbp-conn-evt::before {
+  content: "•";
+  color: var(--text-muted);
+  font-weight: 700;
+  margin-right: .15rem;
+}
+.pbp-conn-evt-name {
+  color: var(--text);
+  font-weight: 500;
+}
+.pbp-conn-evt-year {
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: .7rem;
+}
+
+/* Inline "+N more" toggle button */
+.pbp-conn-more {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  font-size: .68rem;
+  color: var(--primary-hover, #818cf8);
+  font-style: italic;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  padding: .15rem 0 0;
+}
+.pbp-conn-more:hover {
+  color: var(--primary, #6366f1);
+}
+
+@media (max-width: 640px) {
+  .pbp-conn-teams-header {
+    font-size: .9rem;
+    flex-wrap: wrap;
+  }
+  .pbp-conn-h2h-wins {
+    margin-left: 0;
+  }
+}

@@ -805,6 +805,34 @@ async function renderPbpConnections(match) {
     const svgPartner = _SVG_PARTNER;
     const svgOpponent = _SVG_OPPONENT;
 
+    // Helper: format a single past-event row.
+    const _renderEvtRow = (e) => {
+        const resultTag = e.result === 'winner' ? ' <span class="pbp-conn-winner">Winner</span>'
+            : e.result === 'finalist' ? ' <span class="pbp-conn-finalist">Finalist</span>' : '';
+        return `<li class="pbp-conn-evt">
+            <span class="pbp-conn-evt-name">${e.event_name || e.event_key}</span>
+            <span class="pbp-conn-evt-year">${e.year}</span>
+            <span class="pbp-conn-stage">${e.stage}</span>${resultTag}
+        </li>`;
+    };
+
+    // Helper: render a labeled section ("Partners" / "Opponents") with collapsible overflow.
+    const _renderEvtSection = (events, label, icon, extraClass) => {
+        if (!events || !events.length) return '';
+        const sorted = [...events].sort((a, b) => b.year - a.year);
+        const visible = sorted.slice(0, 3).map(_renderEvtRow).join('');
+        const hidden = sorted.slice(3).map(_renderEvtRow).join('');
+        const more = sorted.length > 3
+            ? `<button type="button" class="pbp-conn-more" data-action="toggle-more" data-count="${sorted.length - 3}">+${sorted.length - 3} more</button>
+               <ul class="pbp-conn-evt-list pbp-conn-extra hidden">${hidden}</ul>`
+            : '';
+        return `<div class="pbp-conn-section ${extraClass}">
+            <div class="pbp-conn-section-label">${icon}<span>${label}</span><span class="pbp-conn-section-count">${sorted.length}</span></div>
+            <ul class="pbp-conn-evt-list">${visible}</ul>
+            ${more}
+        </div>`;
+    };
+
     // Find relevant connections
     const allNums = new Set(allTeamNums);
     const items = [];
@@ -817,47 +845,41 @@ async function renderPbpConnections(match) {
         const sideClass = sameSide
             ? (redNums.has(c.team_a) ? 'pbp-conn-red' : 'pbp-conn-blue')
             : 'pbp-conn-cross';
+        const isCross = sideClass === 'pbp-conn-cross';
 
-        // Build summary of prior history — pick the most notable entry
-        const allEvents = [...(c.partnered_at || []), ...(c.opponents_at || [])];
-        allEvents.sort((a, b) => b.year - a.year);
+        const partnered = c.partnered_at || [];
+        const opposed   = c.opponents_at || [];
 
-        const highlights = [];
-        for (const e of allEvents) {
-            const isPartner = (c.partnered_at || []).includes(e);
-            const icon = isPartner ? svgPartner : svgOpponent;
-            const typeLabel = isPartner ? 'Partners' : 'Opponents';
-            const resultTag = e.result === 'winner' ? ' <span class="pbp-conn-winner">Winner</span>'
-                : e.result === 'finalist' ? ' <span class="pbp-conn-finalist">Finalist</span>' : '';
-            highlights.push(`${icon} <span class="pbp-conn-type">${typeLabel}</span> at ${e.event_name || e.event_key} ${e.year} <span class="pbp-conn-stage">${e.stage}</span>${resultTag}`);
+        // ── Header: team numbers (+ H2H record for cross-alliance) ──
+        let headerHtml;
+        if (isCross) {
+            const winsA = c.h2h_wins_a != null ? c.h2h_wins_a : null;
+            const winsB = c.h2h_wins_b != null ? c.h2h_wins_b : null;
+            const record = (winsA != null && winsB != null)
+                ? `<span class="pbp-conn-h2h-wins" title="Head-to-head match record">${winsA}–${winsB} H2H</span>`
+                : '';
+            headerHtml = `<div class="pbp-conn-teams-header">
+                <span class="pbp-conn-team-num">${c.team_a}</span>
+                <span class="pbp-conn-vs">vs</span>
+                <span class="pbp-conn-team-num">${c.team_b}</span>
+                ${record}
+            </div>`;
+        } else {
+            headerHtml = `<div class="pbp-conn-teams-header">
+                <span class="pbp-conn-team-num">${c.team_a}</span>
+                <span class="pbp-conn-amp">&amp;</span>
+                <span class="pbp-conn-team-num">${c.team_b}</span>
+            </div>`;
         }
 
-        const visibleHtml = highlights.slice(0, 2).join('<span class="pbp-conn-sep">·</span>');
-        const extraCount = highlights.length - 2;
-        let extraHtml = '';
-        if (extraCount > 0) {
-            const hiddenEntries = highlights.slice(2).join('<span class="pbp-conn-sep">·</span>');
-            extraHtml = ` <span class="pbp-conn-more" data-action="toggle-more" data-count="${extraCount}">+${extraCount} more</span><span class="pbp-conn-extra hidden"><span class="pbp-conn-sep">·</span>${hiddenEntries}</span>`;
-        }
+        // ── Body: Partners section + Opponents section, stacked beneath header ──
+        const bodyHtml = `${_renderEvtSection(partnered, 'Partners', svgPartner, 'pbp-conn-partners')}${_renderEvtSection(opposed, 'Opponents', svgOpponent, 'pbp-conn-opponents')}`;
 
         const groupOrder = sideClass === 'pbp-conn-red' ? 0 : sideClass === 'pbp-conn-blue' ? 1 : 2;
-        const isCross = sideClass === 'pbp-conn-cross';
-        // For cross-alliance items: show VS separator + H2H win counts in brackets
-        let teamsLabel;
-        if (isCross) {
-                const winsA = c.h2h_wins_a != null ? c.h2h_wins_a : null;
-                const winsB = c.h2h_wins_b != null ? c.h2h_wins_b : null;
-                const record = (winsA != null && winsB != null)
-                    ? ` <span class="pbp-conn-h2h-wins">(${winsA}–${winsB})</span>`
-                    : '';
-                teamsLabel = `${c.team_a} <span class="pbp-conn-vs">vs</span> ${c.team_b}${record}`;
-            } else {
-            teamsLabel = `${c.team_a} &amp; ${c.team_b}`;
-        }
         items.push({ order: groupOrder, html: `
             <div class="pbp-conn-item ${sideClass}">
-                <span class="pbp-conn-teams">${teamsLabel}</span>
-                <div class="pbp-conn-highlights">${visibleHtml}${extraHtml}</div>
+                ${headerHtml}
+                <div class="pbp-conn-sections">${bodyHtml}</div>
             </div>` });
     }
 
