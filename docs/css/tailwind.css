@@ -11762,6 +11762,14 @@ tr:hover .compare-cb,
   color: var(--primary);
 }
 
+/* Year-by-year cells contain raw team#s wrapped in .has-tooltip — bolden
+   them for parity with the team# columns elsewhere in History. */
+.history-table tbody td .has-tooltip {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
 .history-table .years-cell {
   font-size: .7rem;
   color: var(--muted);
@@ -11821,8 +11829,11 @@ tr:hover .compare-cb,
 
 .lb-team {
   font-weight: 700;
-  color: #fff;
+  color: var(--text);
   min-width: 2.5rem;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: .82rem;
 }
 
 .lb-count {
