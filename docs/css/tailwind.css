@@ -3558,12 +3558,12 @@ input.input-loading {
 }
 
 .alliance-card.alliance-winner {
-  border-color: rgba(251,191,36,.35);
-  box-shadow: var(--shadow-sm), 0 0 12px rgba(251,191,36,.08);
+  border-color: rgba(245, 158, 11, .45);
+  box-shadow: var(--shadow-sm), 0 0 14px rgba(245, 158, 11, .12);
 }
 
 .alliance-card.alliance-finalist {
-  border-color: rgba(192,192,210,.25);
+  border-color: rgba(192, 192, 210, .35);
 }
 
 .alliance-card:hover {
