@@ -569,6 +569,7 @@ video {
   --text-secondary:  #b0b8cc;
   --text-muted:      #6b7394;
   --muted:           #6b7394; /* alias — historic var name used in many places */
+  --bg-tertiary:     #1a1a3a; /* alias — used by RP progress tracks */
   --primary:         #6366f1;
   --primary-glow:    rgba(99, 102, 241, .25);
   --primary-hover:   #818cf8;
@@ -619,6 +620,7 @@ video {
   --text-secondary:  #4a4a6a;
   --text-muted:      #8888a8;
   --muted:           #8888a8;
+  --bg-tertiary:     #e8eaf0;
   --primary:         #5b5ef0;
   --primary-glow:    rgba(91, 94, 240, .18);
   --primary-hover:   #6366f1;
