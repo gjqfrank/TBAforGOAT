@@ -3245,8 +3245,8 @@ input.input-loading {
 }
 
 .bkt-row.bkt-won {
-  background: rgba(34,197,94,.08) !important;
-  box-shadow: inset 3px 0 0 var(--green);
+  background: rgba(34,197,94,.10) !important;
+  box-shadow: inset 4px 0 0 var(--green);
 }
 
 .bkt-row.bkt-won .bkt-score {
