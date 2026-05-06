@@ -5821,13 +5821,9 @@ body.show-team-attrs .pbp-hardware-tag {
 }
 
 .pbp-conn-stage {
-  font-weight: 600;
-  font-size: .68rem;
-  padding: .05rem .35rem;
-  border-radius: 100px;
-  background: rgba(100,116,139,.1);
+  font-size: .71rem;
   color: var(--text-muted);
-  border: 1px solid rgba(100,116,139,.2);
+  font-weight: 400;
 }
 
 .pbp-conn-winner {
@@ -5868,6 +5864,9 @@ body.show-team-attrs .pbp-hardware-tag {
 }
 
 .pbp-conn-more:hover {
+  background: none;
+  box-shadow: none;
+  transform: none;
   color: var(--accent-hover, #60b0ff);
 }
 
@@ -18109,7 +18108,6 @@ body.epa-breakdown-active .stat-opr {
   color: var(--text-secondary);
 }
 .pbp-conn-h2h-wins {
-  margin-left: auto;
   font-family: var(--mono);
   font-size: .72rem;
   font-weight: 700;
@@ -18154,10 +18152,15 @@ body.epa-breakdown-active .stat-opr {
   font-weight: 700;
   padding: 0 .35rem;
   border-radius: 100px;
-  background: rgba(255,255,255,.06);
-  color: var(--text-muted);
-  border: 1px solid var(--border-subtle);
+  background: rgba(34,197,94,.12);
+  color: var(--green, #22c55e);
+  border: 1px solid rgba(34,197,94,.25);
   margin-left: .15rem;
+}
+.pbp-conn-opponents .pbp-conn-section-count {
+  background: rgba(248,113,113,.12);
+  color: var(--red, #f87171);
+  border-color: rgba(248,113,113,.25);
 }
 
 .pbp-conn-evt-list {
@@ -18197,6 +18200,7 @@ body.epa-breakdown-active .stat-opr {
   align-self: flex-start;
   background: none;
   border: none;
+  box-shadow: none;
   font-size: .68rem;
   color: var(--primary-hover, #818cf8);
   font-style: italic;
@@ -18204,8 +18208,12 @@ body.epa-breakdown-active .stat-opr {
   text-decoration: underline;
   text-decoration-style: dotted;
   padding: .15rem 0 0;
+  transform: none;
 }
 .pbp-conn-more:hover {
+  background: none;
+  box-shadow: none;
+  transform: none;
   color: var(--primary, #6366f1);
 }
 
@@ -18213,8 +18221,5 @@ body.epa-breakdown-active .stat-opr {
   .pbp-conn-teams-header {
     font-size: .9rem;
     flex-wrap: wrap;
-  }
-  .pbp-conn-h2h-wins {
-    margin-left: 0;
   }
 }
