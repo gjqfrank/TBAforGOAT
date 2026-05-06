@@ -18340,6 +18340,39 @@ body.epa-breakdown-active .stat-opr {
   outline-offset: 1px;
 }
 
+/* ── Reusable panel close button (.panel-close) ─────────────────────
+   Canonical glass-pill close used by all floating/dialog panels.
+   Lookup, notes, and login already use bespoke equivalents — new panels
+   should adopt this class instead of duplicating the pattern. */
+.panel-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, .08);
+  border: 1px solid rgba(255, 255, 255, .12);
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 0;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.panel-close:hover {
+  background: rgba(255, 255, 255, .14);
+  border-color: rgba(255, 255, 255, .20);
+  color: #fff;
+}
+[data-theme="light"] .panel-close {
+  background: rgba(0, 0, 0, .06);
+  border-color: rgba(0, 0, 0, .10);
+  color: #64748b;
+}
+[data-theme="light"] .panel-close:hover {
+  background: rgba(0, 0, 0, .10);
+  color: #1e293b;
+}
+
 /* ── Mobile touch-target safety net ─────────────────────────────────
    Ensure interactive controls hit a 36px minimum tap target on phones.
    Selectors are conservative: only apply where buttons/anchors lack
