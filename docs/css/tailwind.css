@@ -4122,7 +4122,7 @@ input.input-loading {
 .hof-badge {
   background: linear-gradient(135deg, rgba(251, 191, 36, .13), rgba(245, 158, 11, .13));
   border: 1px solid rgba(251, 191, 36, .35);
-  color: #f5b731;
+  color: var(--prestige-hof);
 }
 
 .hof-badge:hover {
@@ -4133,7 +4133,7 @@ input.input-loading {
 .einstein-badge {
   background: linear-gradient(135deg, rgba(168, 85, 247, .13), rgba(139, 92, 246, .13));
   border: 1px solid rgba(168, 85, 247, .35);
-  color: #c084fc;
+  color: var(--prestige-einstein);
 }
 
 .einstein-badge:hover {
@@ -4142,14 +4142,14 @@ input.input-loading {
 }
 
 .impact-badge {
-  background: linear-gradient(135deg, rgba(59, 130, 246, .13), rgba(37, 99, 235, .13));
-  border: 1px solid rgba(59, 130, 246, .35);
-  color: #60a5fa;
+  background: linear-gradient(135deg, rgba(96, 165, 250, .13), rgba(59, 130, 246, .13));
+  border: 1px solid rgba(96, 165, 250, .35);
+  color: var(--prestige-impact);
 }
 
 .impact-badge:hover {
-  border-color: rgba(59, 130, 246, .55);
-  background: linear-gradient(135deg, rgba(59, 130, 246, .2), rgba(37, 99, 235, .2));
+  border-color: rgba(96, 165, 250, .55);
+  background: linear-gradient(135deg, rgba(96, 165, 250, .2), rgba(59, 130, 246, .2));
 }
 
 /* Accent top-bar glow for prestige teams */
@@ -9719,7 +9719,7 @@ tr:hover .compare-cb,
 [data-theme="light"] .prestige-num-einstein            { color: #7e22ce; }
 [data-theme="light"] .prestige-num-einstein-contender  { color: #4f46e5; }
 [data-theme="light"] .prestige-num-hof                 { color: #92700a; }
-[data-theme="light"] .prestige-num-impact              { color: #4f46e5; }
+[data-theme="light"] .prestige-num-impact              { color: var(--prestige-impact); }
 
 .prestige-entry-name {
   font-weight: 600;
@@ -9844,6 +9844,11 @@ tr:hover .compare-cb,
   color: var(--prestige-hof);
 }
 
+/* Impact-row team numbers match the impact-chip color (blue) for visual cohesion */
+.summary-hof-team[data-champs-type="impact"] .summary-hof-num {
+  color: var(--prestige-impact);
+}
+
 .summary-hof-name {
   font-weight: 600;
   font-size: .82rem;
@@ -9874,20 +9879,20 @@ tr:hover .compare-cb,
 }
 
 .past-champ-winner {
-  background: linear-gradient(135deg, rgba(255, 215, 0, .13), rgba(245, 183, 0, .13));
-  border: 1px solid rgba(255, 215, 0, .35);
-  color: #d4a017;
+  background: linear-gradient(135deg, rgba(245, 158, 11, .13), rgba(217, 119, 6, .13));
+  border: 1px solid rgba(245, 158, 11, .35);
+  color: var(--prestige-hof);
 }
 
 .past-champ-winner:hover {
-  border-color: rgba(255, 215, 0, .55);
-  background: linear-gradient(135deg, rgba(255, 215, 0, .2), rgba(245, 183, 0, .2));
+  border-color: rgba(245, 158, 11, .55);
+  background: linear-gradient(135deg, rgba(245, 158, 11, .2), rgba(217, 119, 6, .2));
 }
 
 .past-champ-finalist {
   background: linear-gradient(135deg, rgba(192, 192, 192, .13), rgba(156, 163, 175, .13));
   border: 1px solid rgba(192, 192, 192, .35);
-  color: #9ca3af;
+  color: var(--prestige-finalist);
 }
 
 .past-champ-finalist:hover {
@@ -9898,13 +9903,13 @@ tr:hover .compare-cb,
 [data-theme="light"] .past-champ-winner {
   background: linear-gradient(135deg, rgba(180, 140, 0, .1), rgba(180, 140, 0, .06));
   border-color: rgba(180, 140, 0, .3);
-  color: #92700a;
+  color: var(--prestige-hof);
 }
 
 [data-theme="light"] .past-champ-finalist {
   background: linear-gradient(135deg, rgba(120, 120, 120, .08), rgba(120, 120, 120, .04));
   border-color: rgba(120, 120, 120, .25);
-  color: #6b7280;
+  color: var(--prestige-finalist);
 }
 
 /* Past Season Awards filter bar */
@@ -10005,20 +10010,20 @@ tr:hover .compare-cb,
 }
 
 .past-award-chip-winner {
-  background: linear-gradient(135deg, rgba(255, 215, 0, .13), rgba(245, 183, 0, .13));
-  border: 1px solid rgba(255, 215, 0, .35);
-  color: #d4a017;
+  background: linear-gradient(135deg, rgba(245, 158, 11, .13), rgba(217, 119, 6, .13));
+  border: 1px solid rgba(245, 158, 11, .35);
+  color: var(--prestige-hof);
 }
 
 .past-award-chip-winner:hover {
-  border-color: rgba(255, 215, 0, .55);
-  background: linear-gradient(135deg, rgba(255, 215, 0, .2), rgba(245, 183, 0, .2));
+  border-color: rgba(245, 158, 11, .55);
+  background: linear-gradient(135deg, rgba(245, 158, 11, .2), rgba(217, 119, 6, .2));
 }
 
 .past-award-chip-finalist {
   background: linear-gradient(135deg, rgba(192, 192, 192, .13), rgba(156, 163, 175, .13));
   border: 1px solid rgba(192, 192, 192, .35);
-  color: #9ca3af;
+  color: var(--prestige-finalist);
 }
 
 .past-award-chip-finalist:hover {
@@ -10028,33 +10033,33 @@ tr:hover .compare-cb,
 
 .past-award-chip-impact,
     .past-award-chip-inspire {
-  background: linear-gradient(135deg, rgba(59, 130, 246, .13), rgba(37, 99, 235, .13));
-  border: 1px solid rgba(59, 130, 246, .35);
-  color: #60a5fa;
+  background: linear-gradient(135deg, rgba(96, 165, 250, .13), rgba(59, 130, 246, .13));
+  border: 1px solid rgba(96, 165, 250, .35);
+  color: var(--prestige-impact);
 }
 
 .past-award-chip-impact:hover,
     .past-award-chip-inspire:hover {
-  border-color: rgba(59, 130, 246, .55);
-  background: linear-gradient(135deg, rgba(59, 130, 246, .2), rgba(37, 99, 235, .2));
+  border-color: rgba(96, 165, 250, .55);
+  background: linear-gradient(135deg, rgba(96, 165, 250, .2), rgba(59, 130, 246, .2));
 }
 
 [data-theme="light"] .past-award-chip-winner {
   background: linear-gradient(135deg, rgba(180, 140, 0, .1), rgba(180, 140, 0, .06));
   border-color: rgba(180, 140, 0, .3);
-  color: #92700a;
+  color: var(--prestige-hof);
 }
 
 [data-theme="light"] .past-award-chip-finalist {
   background: linear-gradient(135deg, rgba(120, 120, 120, .08), rgba(120, 120, 120, .04));
   border-color: rgba(120, 120, 120, .25);
-  color: #6b7280;
+  color: var(--prestige-finalist);
 }
 
 [data-theme="light"] .past-award-chip-impact {
-  background: linear-gradient(135deg, rgba(99, 102, 241, .08), rgba(99, 102, 241, .04));
-  border-color: rgba(99, 102, 241, .25);
-  color: #4f46e5;
+  background: linear-gradient(135deg, rgba(37, 99, 235, .08), rgba(37, 99, 235, .04));
+  border-color: rgba(37, 99, 235, .25);
+  color: var(--prestige-impact);
 }
 
 /* ── Advancement card ────────────────────────────────── */
