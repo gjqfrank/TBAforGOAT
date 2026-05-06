@@ -887,7 +887,9 @@ async function loadEvent(eventKey) {
         $('pbp-container')?.classList.add('hidden');
         hideSkeleton('pbp-loading');
         if ($('pbp-arena')) $('pbp-arena').innerHTML = '';
-        if ($('pbp-footer')) $('pbp-footer').innerHTML = '';
+        // NOTE: do NOT clear #pbp-footer — it holds static action buttons
+        // (Compare/Breakdown/Storyline) that are never re-injected by JS.
+        // Wiping innerHTML here left an empty bordered box above prior connections.
         if ($('pbp-match-select')) $('pbp-match-select').innerHTML = '';
         if ($('pbp-match-label')) $('pbp-match-label').textContent = '';
         const _oldConn = $('pbp-connections');
