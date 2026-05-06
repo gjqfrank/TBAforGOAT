@@ -947,6 +947,7 @@ input[type="checkbox"] {
 /* ── FTC load-event buttons — gradient accent ── */
 
 [data-mode="ftc"] #btn-load-event,
+[data-mode="ftc"] #ssb-load-btn,
     [data-mode="ftc"] .ssb-load-btn {
   background: linear-gradient(135deg, #f97316 0%, #fb923c 100%);
   color: #fff;
@@ -955,6 +956,7 @@ input[type="checkbox"] {
 }
 
 [data-mode="ftc"] #btn-load-event:hover,
+[data-mode="ftc"] #ssb-load-btn:hover,
     [data-mode="ftc"] .ssb-load-btn:hover {
   background: linear-gradient(135deg, #fb923c 0%, #fbbf24 100%);
   border: none;
@@ -964,6 +966,7 @@ input[type="checkbox"] {
 }
 
 [data-mode="ftc"] #btn-load-event:active,
+[data-mode="ftc"] #ssb-load-btn:active,
     [data-mode="ftc"] .ssb-load-btn:active {
   transform: translateY(0);
   box-shadow: 0 1px 6px rgba(249,115,22,.15);
@@ -1335,6 +1338,7 @@ input[type="checkbox"] {
 }
 
 [data-mode="ftc"][data-theme="light"] #btn-load-event,
+[data-mode="ftc"][data-theme="light"] #ssb-load-btn,
     [data-mode="ftc"][data-theme="light"] .ssb-load-btn {
   background: linear-gradient(135deg, #ea580c 0%, #f97316 100%);
   border: none;
@@ -1343,6 +1347,7 @@ input[type="checkbox"] {
 }
 
 [data-mode="ftc"][data-theme="light"] #btn-load-event:hover,
+[data-mode="ftc"][data-theme="light"] #ssb-load-btn:hover,
     [data-mode="ftc"][data-theme="light"] .ssb-load-btn:hover {
   background: linear-gradient(135deg, #f97316 0%, #fb923c 100%);
   box-shadow: 0 4px 14px rgba(234,88,12,.25);

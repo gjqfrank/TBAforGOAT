@@ -263,6 +263,7 @@
     
     /* ── FTC load-event buttons — gradient accent ── */
     [data-mode="ftc"] #btn-load-event,
+    [data-mode="ftc"] #ssb-load-btn,
     [data-mode="ftc"] .ssb-load-btn {
         background: linear-gradient(135deg, #f97316 0%, #fb923c 100%);
         color: #fff;
@@ -270,6 +271,7 @@
         box-shadow: 0 2px 10px rgba(249,115,22,.25);
     }
     [data-mode="ftc"] #btn-load-event:hover,
+    [data-mode="ftc"] #ssb-load-btn:hover,
     [data-mode="ftc"] .ssb-load-btn:hover {
         background: linear-gradient(135deg, #fb923c 0%, #fbbf24 100%);
         border: none;
@@ -278,6 +280,7 @@
         transform: translateY(-1px);
     }
     [data-mode="ftc"] #btn-load-event:active,
+    [data-mode="ftc"] #ssb-load-btn:active,
     [data-mode="ftc"] .ssb-load-btn:active {
         transform: translateY(0);
         box-shadow: 0 1px 6px rgba(249,115,22,.15);
