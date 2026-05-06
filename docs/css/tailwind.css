@@ -564,7 +564,7 @@ video {
   --card:            #12122a;
   --card-hover:      #16163a;
   --border:          rgba(99, 102, 241, .12);
-  --border-subtle:   rgba(255, 255, 255, .04);
+  --border-subtle:   rgba(255, 255, 255, .08);
   --text:            #e8ecf4;
   --text-secondary:  #b0b8cc;
   --text-muted:      #6b7394;
