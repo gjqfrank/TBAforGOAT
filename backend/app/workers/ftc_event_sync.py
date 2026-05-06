@@ -63,28 +63,30 @@ def _event_status(start_str: str | None, end_str: str | None) -> str:
 # ── Sync helpers ────────────────────────────────────────────
 
 
-async def _sync_ftc_event_metadata(year: int) -> set[str]:
+async def _sync_ftc_event_metadata(year: int) -> tuple[set[str], set[str]]:
     """Fetch all FTC events for *year*, upsert into `events` table.
 
-    Returns the set of event_keys that are currently ongoing.
+    Returns ``(ongoing, recently_completed)`` where *recently_completed*
+    contains events that ended within the last 7 days.  Team identity data
+    (city/state/school) is re-synced for both sets so that teams that update
+    their FTC profile after an event still get fresh location data.
     """
     client = get_ftc_client()
     try:
         raw_events = await client.get_events(year)
     except CircuitOpenError:
         log.debug("Circuit open — skipping FTC event metadata sync")
-        return _ftc_active_events
-    except Exception as e:
-        log.warning("FTC event metadata fetch failed: %s", e)
-        return _ftc_active_events
-
-    ongoing: set[str] = set()
+            return _ftc_active_events, set()
+        except Exception as e:
+            log.warning("FTC event metadata fetch failed: %s", e)
+            return _ftc_active_events, set()
+    recently_completed: set[str] = set()
     rows: list[dict[str, Any]] = []
 
     valid_events = validate_list(FTCEvent, raw_events, "ftc_events")
     if not valid_events:
         log.warning("All FTC events failed validation — skipping")
-        return _ftc_active_events
+        return _ftc_active_events, set()
 
     for ev_model in valid_events:
         ev = ev_model.model_dump()
@@ -98,6 +100,16 @@ async def _sync_ftc_event_metadata(year: int) -> set[str]:
 
         if status == "ongoing":
             ongoing.add(event_key)
+        elif status == "completed":
+            # Re-sync team identity for 7 days after end so that teams that
+            # complete their FTC registration profile post-event still get
+            # fresh city/state/school data stored in Supabase.
+            try:
+                ed = date.fromisoformat(end[:10]) if end else None
+                if ed and (date.today() - ed).days <= 7:
+                    recently_completed.add(event_key)
+            except (ValueError, TypeError):
+                pass
 
         rows.append({
             "event_key": event_key,
@@ -129,7 +141,7 @@ async def _sync_ftc_event_metadata(year: int) -> set[str]:
         except Exception as e:
             log.warning("FTC event metadata upsert failed: %s", e)
 
-    return ongoing
+    return ongoing, recently_completed
 
 
 async def _sync_ftc_teams(event_key: str) -> None:
@@ -386,8 +398,8 @@ async def run_ftc_event_sync(year: int | None = None) -> None:
 
     while True:
         try:
-            # 1) Sync all FTC event metadata and discover ongoing events
-            ongoing = await _sync_ftc_event_metadata(season)
+            # 1) Sync all FTC event metadata and discover ongoing/recent events
+            ongoing, recently_completed = await _sync_ftc_event_metadata(season)
             global _ftc_active_events
             _ftc_active_events = ongoing
 
@@ -397,11 +409,17 @@ async def run_ftc_event_sync(year: int | None = None) -> None:
                 log.debug("No active FTC events found")
 
             # 2) For ongoing events, sync teams, alliances first (upsert-only),
-            #    then stats + rankings (merge-heavy, serialised by _merge_lock)
+            #    then stats + rankings (merge-heavy, serialised by _merge_lock).
+            #    Also re-sync team identity (city/state/school) for recently
+            #    completed events — FTC teams often complete their profiles
+            #    after the event ends, so a 7-day refresh window ensures
+            #    Supabase always has fresh location data.
             seed_tasks: list = []
             for ek in ongoing:
                 seed_tasks.append(_sync_ftc_teams(ek))
                 seed_tasks.append(_sync_ftc_alliances(ek))
+            for ek in recently_completed - ongoing:
+                seed_tasks.append(_sync_ftc_teams(ek))
 
             if seed_tasks:
                 await asyncio.gather(*seed_tasks, return_exceptions=True)
