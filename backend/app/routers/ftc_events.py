@@ -1,6 +1,7 @@
 """FTC Event endpoints — info, teams, summary, season list."""
 from fastapi import APIRouter, HTTPException, Query, Response
 from ..services import ftc_event_service
+from ..services.ftc_event_service import current_ftc_season
 from ..services.ftc_client import get_ftc_client
 from ..services.gatool_client import get_gatool_client
 from ..services.error_utils import raise_api_error
@@ -28,6 +29,12 @@ async def ftc_team_awards_summary(teams: str = Query(..., description="Comma-sep
         raise
     except Exception as e:
         raise_api_error(e, fallback_detail="Could not load FTC awards summary.")
+
+
+@router.get("/season/current")
+async def current_season():
+    """Return the active FTC kickoff year (e.g. 2025 for DECODE 2025-2026)."""
+    return {"season": current_ftc_season()}
 
 
 @router.get("/season/{year}")
@@ -187,8 +194,9 @@ async def ftc_season_awards(event_key: str):
 
 
 @router.get("/team/{team_number}")
-async def team_lookup(team_number: int, season: int = Query(2025)):
+async def team_lookup(team_number: int, season: int | None = Query(None)):
     """FTC individual team lookup using FTC Events API + FTC Scout."""
+    season = season or current_ftc_season()
     try:
         return await ftc_event_service.get_team_lookup(team_number, season)
     except HTTPException:
@@ -198,8 +206,9 @@ async def team_lookup(team_number: int, season: int = Query(2025)):
 
 
 @router.get("/team/{team_number}/opr-history")
-async def team_opr_history(team_number: int, season: int = Query(2025)):
+async def team_opr_history(team_number: int, season: int | None = Query(None)):
     """FTC team OPR history across seasons."""
+    season = season or current_ftc_season()
     try:
         return await ftc_event_service.get_team_opr_history(team_number, season)
     except HTTPException:

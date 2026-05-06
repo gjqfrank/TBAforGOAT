@@ -2,6 +2,14 @@
    ftc-api.js — FTC Events API fetch wrapper
    ═══════════════════════════════════════════════════════════ */
 
+// FTC seasons are named by their kickoff year (e.g. DECODE 2025-2026 = 2025).
+// New season launches in early September; we roll over in August so things
+// don't sit on a stale year for too long once the new game ships.
+function currentFtcSeason(now) {
+    const d = now || new Date();
+    return d.getMonth() >= 7 ? d.getFullYear() : d.getFullYear() - 1;
+}
+
 const FTC_API = {
     async get(path) {
         const resp = await fetch(`/api/ftc${path}`);
@@ -46,7 +54,7 @@ const FTC_API = {
     clearCache:         (ek) => FTC_API.get(`/events/${ek}/clear-cache`),
     refreshRankings:    (ek) => FTC_API.get(`/events/${ek}/refresh-rankings`),
     fastRankings:       (ek) => FTC_API.get(`/events/${ek}/fast-rankings`),
-    worldRecord:        (season) => FTC_API.get(`/events/world-record/${season || 2025}`),
+    worldRecord:        (season) => FTC_API.get(`/events/world-record/${season || currentFtcSeason()}`),
     gatoolUpdates:      (ek) => FTC_API.get(`/events/${ek}/gatool-updates`),
     eventConnections:   (ek, allTime, teams) => {
         let url = `/events/${ek}/summary/connections?all_time=${allTime ? 'true' : 'false'}`;
@@ -56,8 +64,8 @@ const FTC_API = {
 
     // ── Teams ────────────────────────────────────────────
     teamAwardsSummary:  (teamNums) => FTC_API.get(`/events/teams/awards-summary?teams=${teamNums.join(',')}`),
-    teamLookup:         (num, season) => FTC_API.get(`/events/team/${num}?season=${season || 2025}`),
-    teamOprHistory:     (num, season) => FTC_API.get(`/events/team/${num}/opr-history?season=${season || 2025}`),
+    teamLookup:         (num, season) => FTC_API.get(`/events/team/${num}?season=${season || currentFtcSeason()}`),
+    teamOprHistory:     (num, season) => FTC_API.get(`/events/team/${num}/opr-history?season=${season || currentFtcSeason()}`),
 
     // ── Matches ─────────────────────────────────────────
     allMatches:     (ek) => FTC_API.get(`/matches/${ek}/all`),

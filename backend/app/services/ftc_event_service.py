@@ -15,8 +15,26 @@ from .supabase_client import get_cached_summary, set_cached_summary
 
 log = logging.getLogger(__name__)
 
-# Current FTC season (kickoff year — "DECODE" 2025-2026)
-FTC_CURRENT_SEASON = 2025
+# FTC seasons are named by their kickoff year. A new game launches each year
+# in early September (e.g. "DECODE" = 2025-2026 = season 2025). We treat the
+# kickoff month as August onward so championships in late summer roll over
+# slightly early rather than late.
+_FTC_SEASON_ROLLOVER_MONTH = 8
+
+
+def current_ftc_season(today: date | None = None) -> int:
+    """Return the active FTC kickoff year for today's date."""
+    today = today or date.today()
+    return today.year if today.month >= _FTC_SEASON_ROLLOVER_MONTH else today.year - 1
+
+
+# Backwards-compatible module-level alias used by callers below. Computed at
+# import time and refreshed on each access via __getattr__ so workers picking
+# up the value after a season rollover don't keep a stale year.
+def __getattr__(name: str):  # PEP 562
+    if name == "FTC_CURRENT_SEASON":
+        return current_ftc_season()
+    raise AttributeError(name)
 
 
 def _event_status(start_date: str, end_date: str) -> str:
@@ -1190,7 +1208,7 @@ async def get_ftc_world_record(season: int | None = None) -> dict | None:
     """Return the FTC world record match from FTC Scout, with resolved event name."""
     scout = get_ftcscout_client()
     client = get_ftc_client()
-    year = season or FTC_CURRENT_SEASON
+    year = season or current_ftc_season()
     rec = await scout.get_world_record(year)
     if not rec:
         return None
@@ -1546,7 +1564,7 @@ async def get_ftc_head_to_head(
     seasons; ``all_time=True`` checks from 2019 to the current season.
     """
     client = get_ftc_client()
-    current = FTC_CURRENT_SEASON
+    current = current_ftc_season()
 
     if all_time:
         year_range = list(range(_FTC_FIRST_SEASON, current + 1))
@@ -1666,7 +1684,7 @@ async def get_ftc_head_to_head(
     # Collect team nicknames
     team_nicknames: dict[str, str] = {}
     for tn in (team_a, team_b):
-        info = await _safe(client.get_team_info(FTC_CURRENT_SEASON, tn))
+        info = await _safe(client.get_team_info(current_ftc_season(), tn))
         if info:
             name = info.get("nameShort") or info.get("nameFull") or ""
             if name:

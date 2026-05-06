@@ -431,7 +431,7 @@ function renderH2H(d) {
 // ═══════════════════════════════════════════════════════════
 
 async function _buildFtcTeamLookup(teamNumber, year) {
-    const season = year || 2025;
+    const season = year || (typeof currentFtcSeason === 'function' ? currentFtcSeason() : new Date().getFullYear());
     const data = await FTC_API.teamLookup(teamNumber, season);
     // Patch avatar from the FTC scoring server CSS map
     if (!data.avatar && _ftcAvatarMap) {
@@ -563,7 +563,7 @@ function renderFtcTeamStats(d) {
     } else if (eventsThisSeason.length) {
         // Fallback: simple events list if no results data
         eventResultsSection = `
-        <h3>Events \u00b7 ${d.season || 2025} Season</h3>
+        <h3>Events \u00b7 ${d.season || (typeof currentFtcSeason === 'function' ? currentFtcSeason() : '')} Season</h3>
         <table class="data-table compact">
             <thead><tr><th>Event</th><th>Type</th><th>Location</th></tr></thead>
             <tbody>${eventsThisSeason.map(e => {
@@ -608,7 +608,7 @@ function renderFtcTeamStats(d) {
         </table>`;
     } else if (currentAwards.length) {
         awardsSection = `
-        <h3>Awards (${d.season || 2025} Season)</h3>
+        <h3>Awards (${d.season || (typeof currentFtcSeason === 'function' ? currentFtcSeason() : '')} Season)</h3>
         <table class="data-table compact">
             <thead><tr><th>Award</th><th>Event</th></tr></thead>
             <tbody>${currentAwards.map(a => `<tr><td>${a.name}</td><td class="muted">${a.event || ''}</td></tr>`).join('')}</tbody>

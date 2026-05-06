@@ -588,7 +588,11 @@ function toggleCompetitionMode() {
     });
 
     // Show FTC toast
-    showToast(competitionMode === 'ftc' ? 'Switched to FTC Mode — DECODE 2025-2026' : 'Switched to FRC Mode', 'info', 2500);
+    const _ftcSeasonY = (typeof currentFtcSeason === 'function') ? currentFtcSeason() : 2025;
+    const _ftcSeasonLabel = `${_ftcSeasonY}-${_ftcSeasonY + 1}`;
+    const _ftcGameByYear = { 2025: 'DECODE' };
+    const _ftcGameSuffix = _ftcGameByYear[_ftcSeasonY] ? ` — ${_ftcGameByYear[_ftcSeasonY]} ${_ftcSeasonLabel}` : ` — ${_ftcSeasonLabel}`;
+    showToast(competitionMode === 'ftc' ? `Switched to FTC Mode${_ftcGameSuffix}` : 'Switched to FRC Mode', 'info', 2500);
 
     // Hide Regional Pool in FTC mode, show in FRC
     const rpCard = $('regional-pool-card');
@@ -632,7 +636,14 @@ function toggleCompetitionMode() {
 
     // ── Update season events title for mode ──
     const seasonTitle = document.querySelector('.event-section-card .event-section-title');
-    if (seasonTitle) seasonTitle.textContent = competitionMode === 'ftc' ? '2025-2026 Season Events' : '2026 Season Events';
+    if (seasonTitle) {
+        if (competitionMode === 'ftc') {
+            const y = (typeof currentFtcSeason === 'function') ? currentFtcSeason() : 2025;
+            seasonTitle.textContent = `${y}-${y + 1} Season Events`;
+        } else {
+            seasonTitle.textContent = '2026 Season Events';
+        }
+    }
     const seasonRefresh = document.getElementById('season-refresh-btn');
     if (seasonRefresh) seasonRefresh.title = competitionMode === 'ftc' ? 'Refresh event list from FIRST' : 'Refresh event list from TBA';
 
@@ -769,7 +780,10 @@ function toggleCompetitionMode() {
             if (playoffToggle) { const row = playoffToggle.closest('label'); if (row) row.style.display = 'none'; }
             // Update season events title for FTC
             const seasonTitle = document.querySelector('.event-section-card .event-section-title');
-            if (seasonTitle) seasonTitle.textContent = '2025-2026 Season Events';
+            if (seasonTitle) {
+                const y = (typeof currentFtcSeason === 'function') ? currentFtcSeason() : 2025;
+                seasonTitle.textContent = `${y}-${y + 1} Season Events`;
+            }
             const seasonRefresh = document.getElementById('season-refresh-btn');
             if (seasonRefresh) seasonRefresh.title = 'Refresh event list from FIRST';
             // Update range toggle labels for FTC
@@ -1652,7 +1666,7 @@ async function fetchWorldRecord() {
 
         let rec;
         if (isFTCMode()) {
-            rec = await FTC_API.worldRecord(2025);
+            rec = await FTC_API.worldRecord();
         } else {
             rec = await API.worldRecord();
         }

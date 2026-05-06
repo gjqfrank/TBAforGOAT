@@ -14,15 +14,27 @@
 // ── Season events loader ──────────────────────────────────
 async function loadSeasonEvents() {
     const status = $('season-status');
-    const seasonYear = isFTCMode() ? 2025 : 2026;
-    const label = isFTCMode() ? 'FTC' : '';
-    const staticFile = isFTCMode() ? 'data/season_2025_ftc.json' : 'data/season_2026.json';
+    const ftc = isFTCMode();
+    const seasonYear = ftc ? currentFtcSeason() : 2026;
+    const label = ftc ? 'FTC' : '';
+    // Try the year-specific static file first, then the previous-year file as a
+    // grace period during the September rollover, then fall back to the live API.
+    const staticCandidates = ftc
+        ? [`data/season_${seasonYear}_ftc.json`, `data/season_${seasonYear - 1}_ftc.json`]
+        : [`data/season_${seasonYear}.json`];
     status.textContent = `Loading ${seasonYear} ${label} events…`;
     try {
-        // Both FRC and FTC: try static JSON first, then API fallback
-        const resp = await fetch(staticFile);
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        seasonEventsRaw = await resp.json();
+        let loaded = false;
+        for (const file of staticCandidates) {
+            try {
+                const resp = await fetch(file);
+                if (!resp.ok) continue;
+                seasonEventsRaw = await resp.json();
+                loaded = true;
+                break;
+            } catch (_) { /* try next */ }
+        }
+        if (!loaded) throw new Error('No static season file');
         populateSeasonFilters();
         filterSeasonEvents();
         status.textContent = '';
@@ -49,7 +61,7 @@ async function refreshSeasonEventsFromAPI() {
     const btn = $('season-refresh-btn');
     btn.classList.add('spinning');
     const label = isFTCMode() ? 'FTC Events API' : 'TBA';
-    const seasonYear = isFTCMode() ? 2025 : 2026;
+    const seasonYear = isFTCMode() ? currentFtcSeason() : 2026;
     status.textContent = `Refreshing from ${label}…`;
     try {
         const api = getActiveAPI();
