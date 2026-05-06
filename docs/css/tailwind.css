@@ -18274,3 +18274,21 @@ body.epa-breakdown-active .stat-opr {
 .pbp-team-number:focus-visible {
   outline-offset: 1px;
 }
+
+/* ── Mobile touch-target safety net ─────────────────────────────────
+   Ensure interactive controls hit a 36px minimum tap target on phones.
+   Selectors are conservative: only apply where buttons/anchors lack
+   explicit sizing. Inline numeric chips (.team-num etc.) are excluded
+   because they live inside dense table rows. */
+@media (max-width: 640px) {
+  button:not(.team-num):not(.adv-team-num):not(.conn-team-num):not(.history-chip-more):not(.season-dropdown-item):not(.tab-button):not(.subtab-button),
+  [role="button"]:not(.team-num) {
+    min-height: 36px;
+  }
+  .pbp-conn-more,
+  .history-chip-more {
+    min-height: 28px;
+    padding-top: .35rem;
+    padding-bottom: .35rem;
+  }
+}
