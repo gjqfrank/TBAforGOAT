@@ -2707,6 +2707,7 @@ input.input-loading {
 
 .sortable-th.sorted {
   color: var(--primary);
+  background: var(--primary-soft);
 }
 
 .data-table td {
@@ -2718,6 +2719,14 @@ input.input-loading {
 .data-table tbody tr {
   transition: background var(--transition);
   cursor: pointer;
+}
+
+/* Subtle zebra striping for readability on long lists. */
+.data-table tbody tr:nth-child(even) {
+  background: rgba(255, 255, 255, .015);
+}
+[data-theme="light"] .data-table tbody tr:nth-child(even) {
+  background: rgba(0, 0, 0, .02);
 }
 
 .data-table tbody tr:hover {
