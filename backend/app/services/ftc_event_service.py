@@ -7,11 +7,19 @@ import re
 from datetime import date, timedelta
 from typing import Any
 
+import json
+
 from .ftc_client import get_ftc_client
 from .ftcscout_client import get_ftcscout_client
 from .gatool_client import get_gatool_client
 from .payload_cache import read_payload, write_payload
-from .supabase_client import get_cached_summary, set_cached_summary
+from .supabase_client import (
+    get_cached_summary,
+    set_cached_summary,
+    read_event,
+    read_event_teams_full,
+    read_matches,
+)
 
 log = logging.getLogger(__name__)
 
@@ -50,6 +58,24 @@ def _event_status(start_date: str, end_date: str) -> str:
     if today >= sd:
         return "ongoing"
     return "upcoming"
+
+
+def _sb_ftc_teams_valid(sb_rows: list[dict]) -> bool:
+    """Return True if Supabase event_teams rows are rich enough to serve.
+
+    Requires at least one row with rank or opr_total in raw_data — the same
+    bar FRC uses.  Pure stub rows (only the team_key upserted by _sync_ftc_teams
+    before stats/rankings arrive) are skipped so we fall through to the API.
+    """
+    for r in sb_rows:
+        rd = r.get("raw_data") or {}
+        if isinstance(rd, str):
+            rd = json.loads(rd)
+        if not isinstance(rd, dict):
+            continue
+        if rd.get("rank") is not None or rd.get("opr_total") is not None:
+            return True
+    return False
 
 
 async def get_season_events(year: int, *, include_offseason: bool = False) -> list[dict]:
@@ -201,7 +227,64 @@ def _normalise_event(ev: dict, year: int) -> dict:
 
 
 async def get_event_info(event_key: str) -> dict:
-    """Return event info for an FTC event key like '2025ftcabc'."""
+    """Return event info for an FTC event key like '2025ftcabc'.
+
+    Reads from Supabase first (populated by ftc_event_sync worker every 120 s);
+    falls back to the FTC Events API on a cold miss.
+    """
+    # ── Try Supabase first ──────────────────────────────────
+    try:
+        row = await read_event(event_key)
+    except Exception:
+        row = None
+
+    if row:
+        raw = row.get("raw_data") or {}
+        if isinstance(raw, str):
+            raw = json.loads(raw)
+        start = str(row.get("start_date", ""))
+        end = str(row.get("end_date", ""))
+        raw_type = str(raw.get("type", ""))
+        type_code_map = {
+            "0": 0, "1": 1, "2": 2, "3": 3, "4": 4, "6": 6,
+            "7": 5, "10": 99, "12": 100, "14": 100, "15": 100, "17": 3,
+        }
+        type_label_map = {
+            "0": "Scrimmage", "1": "League Meet", "2": "Qualifier",
+            "3": "League Tournament", "4": "Championship",
+            "6": "FIRST Championship", "7": "Super Qualifier",
+            "10": "Off-Season", "12": "Kickoff", "14": "Practice Day",
+            "15": "Volunteer Event", "17": "Premier",
+        }
+        month = int(start[5:7]) if start and len(start) >= 7 else None
+        state_prov = raw.get("stateprov", "")
+        return {
+            "key": event_key,
+            "event_code": raw.get("code", ""),
+            "name": row.get("name", ""),
+            "short_name": row.get("name", ""),
+            "event_type": type_code_map.get(raw_type, 2),
+            "event_type_string": type_label_map.get(raw_type, "Qualifier"),
+            "city": raw.get("city", ""),
+            "state_prov": state_prov,
+            "country": raw.get("country", ""),
+            "start_date": start,
+            "end_date": end,
+            "year": int(event_key[:4]) if event_key[:4].isdigit() else None,
+            "week": None,
+            "month": month,
+            "district": None,
+            "division_code": raw.get("divisionCode"),
+            "region_code": raw.get("regionCode", ""),
+            "league_code": raw.get("leagueCode", ""),
+            "region": raw.get("regionCode", "") or state_prov or raw.get("country", ""),
+            "status": raw.get("status") or _event_status(start, end),
+            "avatar": None,
+            "program": "FTC",
+            "webcasts": [],
+        }
+
+    # ── Fallback: FTC Events API ────────────────────────────
     year, event_code = _parse_ftc_key(event_key)
     client = get_ftc_client()
     ev = await client.get_event(year, event_code)
@@ -209,18 +292,95 @@ async def get_event_info(event_key: str) -> dict:
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail=f"FTC event '{event_key}' not found.")
     info = _normalise_event(ev, year)
-    # Add webcasts if present
     info["webcasts"] = []
     return info
 
 
 async def get_event_teams_with_stats(event_key: str) -> list[dict]:
-    """Return teams at an FTC event with rankings + FTC Scout OPR/QuickStats."""
+    """Return teams at an FTC event with rankings + FTC Scout OPR/QuickStats.
+
+    Reads from Supabase first (populated by ftc_event_sync + ftc_match_poller
+    workers); falls back to FTC Events API + FTC Scout on a cold miss.
+    """
+    # ── Try Supabase first ──────────────────────────────────
+    try:
+        sb_rows = await read_event_teams_full(event_key)
+    except Exception as e:
+        log.warning("Supabase FTC event_teams read failed for %s: %s", event_key, e)
+        sb_rows = []
+
+    if sb_rows and _sb_ftc_teams_valid(sb_rows):
+        results: list[dict] = []
+        for r in sb_rows:
+            tk = r["team_key"]
+            raw = r.get("raw_data") or {}
+            if isinstance(raw, str):
+                raw = json.loads(raw)
+            if not isinstance(raw, dict):
+                raw = {}
+            tims = r.get("tims_data") or {}
+            if isinstance(tims, str):
+                tims = json.loads(tims)
+            if not isinstance(tims, dict):
+                tims = {}
+
+            opr_val = raw.get("opr_total")
+            sort_orders = raw.get("sort_orders") or []
+            rp_val = sort_orders[0] if sort_orders else None
+            wins = raw.get("wins", 0) or 0
+            losses = raw.get("losses", 0) or 0
+            ties = raw.get("ties", 0) or 0
+            mp = raw.get("matches_played", 0) or 0
+
+            results.append({
+                "team_number": r.get("team_number", 0),
+                "team_key": tk,
+                "nickname": r.get("nickname", ""),
+                "name": tims.get("full_name") or r.get("nickname", ""),
+                "city": tims.get("city", ""),
+                "state_prov": tims.get("state_prov", ""),
+                "country": tims.get("country", ""),
+                "rookie_year": tims.get("rookie_year"),
+                "school_name": tims.get("school_name", ""),
+                "avatar": None,
+                "rank": raw.get("rank"),
+                "wins": wins,
+                "losses": losses,
+                "ties": ties,
+                "record": {"wins": wins, "losses": losses, "ties": ties},
+                "qual_average": raw.get("qual_average"),
+                "matches_played": mp,
+                "sort_orders": sort_orders,
+                "ranking_points": rp_val,
+                "rp": rp_val,
+                "tb": sort_orders[1] if len(sort_orders) > 1 else None,
+                # OPR / averages / max / min / dev — stored verbatim by worker
+                "opr": round(opr_val, 2) if opr_val is not None else 0,
+                "opr_auto": raw.get("opr_auto"),
+                "opr_dc": raw.get("opr_dc"),
+                "opr_np": raw.get("opr_np"),
+                "avg_total": raw.get("avg_total"),
+                "avg_auto": raw.get("avg_auto"),
+                "avg_dc": raw.get("avg_dc"),
+                "avg_np": raw.get("avg_np"),
+                "max_total": raw.get("max_total"),
+                "max_auto": raw.get("max_auto"),
+                "max_dc": raw.get("max_dc"),
+                "min_total": raw.get("min_total"),
+                "dev_total": raw.get("dev_total"),
+                "quick_stats": raw.get("quick_stats"),
+                "epa": None,
+                "program": "FTC",
+            })
+
+        results.sort(key=lambda t: (t["rank"] or 9999, t["team_number"]))
+        return results
+
+    # ── Fallback: FTC Events API + FTC Scout ────────────────
     year, event_code = _parse_ftc_key(event_key)
     client = get_ftc_client()
     scout = get_ftcscout_client()
 
-    # Fetch teams + rankings + FTC Scout stats in parallel
     teams_task = client.get_event_teams(year, event_code)
     rankings_task = client.get_rankings(year, event_code)
     scout_task = scout.get_event_team_stats(year, event_code)
@@ -230,10 +390,6 @@ async def get_event_teams_with_stats(event_key: str) -> list[dict]:
     )
 
     # Note: FTC Events API returns 501 for /avatars — skip batch avatar fetching.
-    # Individual avatar lookups (team lookup) use bypass_breaker=True so they
-    # don't trip the circuit breaker.
-    avatar_map: dict[int, str | None] = {}
-
     if isinstance(raw_teams, Exception):
         log.warning("FTC teams fetch failed for %s: %s", event_key, raw_teams)
         raw_teams = []
@@ -258,7 +414,7 @@ async def get_event_teams_with_stats(event_key: str) -> list[dict]:
         if num:
             scout_map[num] = s
 
-    results: list[dict] = []
+    api_results: list[dict] = []
     for t in raw_teams:
         num = t.get("teamNumber", 0)
         ranking = rank_map.get(num, {})
@@ -268,12 +424,10 @@ async def get_event_teams_with_stats(event_key: str) -> list[dict]:
         losses = ranking.get("losses", 0)
         ties = ranking.get("ties", 0)
         opr_val = sdata.get("opr_total")
-
-        # RP: first sort order (FTC Events API)
         sort_orders = ranking.get("sortOrders", [])
         rp_val = sort_orders[0] if sort_orders else None
 
-        team_data = {
+        api_results.append({
             "team_number": num,
             "team_key": f"ftc{num}",
             "nickname": t.get("nameShort") or t.get("nameFull") or f"Team {num}",
@@ -283,8 +437,7 @@ async def get_event_teams_with_stats(event_key: str) -> list[dict]:
             "country": t.get("country", ""),
             "rookie_year": t.get("rookieYear"),
             "school_name": t.get("schoolName", ""),
-            "avatar": avatar_map.get(num),
-            # Rankings — flat properties to match FRC frontend format
+            "avatar": None,
             "rank": ranking.get("rank"),
             "wins": wins,
             "losses": losses,
@@ -316,12 +469,10 @@ async def get_event_teams_with_stats(event_key: str) -> list[dict]:
             "quick_stats": sdata.get("quick_stats"),
             "epa": None,
             "program": "FTC",
-        }
-        results.append(team_data)
+        })
 
-    # Sort by rank (unranked at end)
-    results.sort(key=lambda t: (t["rank"] or 9999, t["team_number"]))
-    return results
+    api_results.sort(key=lambda t: (t["rank"] or 9999, t["team_number"]))
+    return api_results
 
 
 async def get_fast_rankings(event_key: str) -> list[dict]:
@@ -351,95 +502,204 @@ async def get_all_matches(event_key: str) -> dict:
     """Return all matches (qual + playoff) with enriched team data for PbP.
 
     Returns dict with {event_key, matches, event_high_score} matching FRC format.
+
+    Reads team identity, rankings, and OPR from Supabase first.  Reads the
+    match schedule from Supabase when the poller has stored it, otherwise
+    falls back to the FTC Events API.  All six parallel API calls are reduced
+    to zero when both datasets are already in Supabase.
     """
     year, event_code = _parse_ftc_key(event_key)
-    client = get_ftc_client()
-    scout = get_ftcscout_client()
 
-    # Fetch everything in parallel
-    qual_task = client.get_schedule_hybrid(year, event_code, "qual")
-    playoff_task = client.get_schedule_hybrid(year, event_code, "playoff")
-    teams_task = client.get_event_teams(year, event_code)
-    rankings_task = client.get_rankings(year, event_code)
-    scout_task = scout.get_event_team_stats(year, event_code)
-    alliances_task = client.get_alliances(year, event_code)
+    # ── Supabase-first: load team data ──────────────────────
+    sb_team_rows: list[dict] = []
+    try:
+        sb_team_rows = await read_event_teams_full(event_key)
+    except Exception:
+        pass
 
-    qual_raw, playoff_raw, raw_teams, raw_rankings, scout_stats, raw_alliances = (
-        await asyncio.gather(
-            qual_task, playoff_task, teams_task, rankings_task, scout_task,
-            alliances_task, return_exceptions=True,
-        )
-    )
-
-    # Graceful fallbacks
-    if isinstance(qual_raw, Exception):
-        log.warning("FTC qual schedule failed for %s: %s", event_key, qual_raw)
-        qual_raw = []
-    if isinstance(playoff_raw, Exception):
-        log.warning("FTC playoff schedule failed for %s: %s", event_key, playoff_raw)
-        playoff_raw = []
-    if isinstance(raw_teams, Exception):
-        raw_teams = []
-    if isinstance(raw_rankings, Exception):
-        raw_rankings = []
-    if isinstance(scout_stats, Exception):
-        scout_stats = []
-    if isinstance(raw_alliances, Exception):
-        raw_alliances = []
-
-    # ── Build lookups ──
     team_info: dict[int, dict] = {}
-    for t in raw_teams:
-        num = t.get("teamNumber", 0)
-        if num:
+    rank_map_sb: dict[int, dict] = {}
+    scout_map_sb: dict[int, dict] = {}
+
+    if sb_team_rows and _sb_ftc_teams_valid(sb_team_rows):
+        for r in sb_team_rows:
+            num = r.get("team_number", 0)
+            if not num:
+                continue
+            raw = r.get("raw_data") or {}
+            if isinstance(raw, str):
+                raw = json.loads(raw)
+            if not isinstance(raw, dict):
+                raw = {}
+            tims = r.get("tims_data") or {}
+            if isinstance(tims, str):
+                tims = json.loads(tims)
+            if not isinstance(tims, dict):
+                tims = {}
+
             team_info[num] = {
                 "team_number": num,
-                "nickname": t.get("nameShort") or t.get("nameFull") or f"Team {num}",
-                "school_name": t.get("schoolName", ""),
-                "city": t.get("city", ""),
-                "state_prov": t.get("stateProv", ""),
-                "country": t.get("country", ""),
-                "rookie_year": t.get("rookieYear"),
+                "nickname": r.get("nickname", f"Team {num}"),
+                "school_name": tims.get("school_name", ""),
+                "city": tims.get("city", ""),
+                "state_prov": tims.get("state_prov", ""),
+                "country": tims.get("country", ""),
+                "rookie_year": tims.get("rookie_year"),
             }
+            rank_map_sb[num] = raw   # raw_data holds both rankings + OPR
+            scout_map_sb[num] = raw  # same row — workers merged into one JSONB
 
-    rank_map: dict[int, dict] = {}
-    for r in raw_rankings:
-        num = r.get("teamNumber", 0)
-        if num:
-            rank_map[num] = r
+    # ── Supabase-first: load match schedule ─────────────────
+    sb_matches: list[dict] = []
+    try:
+        sb_matches = await read_matches(event_key)
+    except Exception:
+        pass
 
-    scout_map: dict[int, dict] = {}
-    for s in scout_stats:
-        num = s.get("team_number", 0)
-        if num:
-            scout_map[num] = s
-
-    # Alliance-number lookup (team_number → alliance #)
+    # Determine alliances from Supabase events.raw_data (stored by _sync_ftc_alliances)
     alliance_lookup: dict[int, int] = {}
-    for a in raw_alliances:
-        anum = a.get("number", 0)
-        for role in ("captain", "round1", "round2", "round3", "backup"):
-            slot = a.get(role)
-            if isinstance(slot, dict):
-                tnum = slot.get("teamNumber", 0)
-            elif isinstance(slot, (int, float)):
-                tnum = int(slot)
-            else:
+    try:
+        ev_row = await read_event(event_key)
+        if ev_row:
+            ev_raw = ev_row.get("raw_data") or {}
+            if isinstance(ev_raw, str):
+                ev_raw = json.loads(ev_raw)
+            for a in ev_raw.get("alliances") or []:
+                anum = a.get("number", 0)
+                for tnum in a.get("pick_numbers") or []:
+                    if tnum:
+                        alliance_lookup[tnum] = anum
+    except Exception:
+        pass
+
+    # ── Build source: Supabase matches + Supabase teams ─────
+    qual_raw: list[dict] = []
+    playoff_raw: list[dict] = []
+    raw_alliances: list[dict] = []
+    raw_teams: list[dict] = []
+    raw_rankings: list[dict] = []
+    scout_stats: list[dict] = []
+
+    use_sb_matches = bool(sb_matches)
+    use_sb_teams = bool(team_info)
+
+    if use_sb_matches:
+        for m in sb_matches:
+            # raw_data is the original FTC API hybrid schedule object
+            rd = m.get("raw_data") or {}
+            if isinstance(rd, str):
+                rd = json.loads(rd)
+            if not isinstance(rd, dict):
                 continue
-            if tnum:
-                alliance_lookup[tnum] = anum
+            cl = m.get("comp_level", "qm")
+            if cl == "qm":
+                qual_raw.append(rd)
+            else:
+                playoff_raw.append(rd)
+
+    if not use_sb_matches or not use_sb_teams:
+        # Need to go to FTC API — fetch what's missing
+        client = get_ftc_client()
+        scout = get_ftcscout_client()
+
+        fetch_tasks = []
+        task_labels: list[str] = []
+        if not use_sb_matches:
+            fetch_tasks += [
+                client.get_schedule_hybrid(year, event_code, "qual"),
+                client.get_schedule_hybrid(year, event_code, "playoff"),
+            ]
+            task_labels += ["qual", "playoff"]
+        if not use_sb_teams:
+            fetch_tasks += [
+                client.get_event_teams(year, event_code),
+                client.get_rankings(year, event_code),
+                scout.get_event_team_stats(year, event_code),
+                client.get_alliances(year, event_code),
+            ]
+            task_labels += ["teams", "rankings", "scout", "alliances"]
+
+        results_api = await asyncio.gather(*fetch_tasks, return_exceptions=True)
+        api_map = dict(zip(task_labels, results_api))
+
+        if not use_sb_matches:
+            q = api_map.get("qual", [])
+            p = api_map.get("playoff", [])
+            qual_raw = [] if isinstance(q, Exception) else q
+            playoff_raw = [] if isinstance(p, Exception) else p
+
+        if not use_sb_teams:
+            raw_teams = api_map.get("teams") or []
+            raw_rankings = api_map.get("rankings") or []
+            scout_stats = api_map.get("scout") or []
+            raw_alliances = api_map.get("alliances") or []
+            if isinstance(raw_teams, Exception):
+                raw_teams = []
+            if isinstance(raw_rankings, Exception):
+                raw_rankings = []
+            if isinstance(scout_stats, Exception):
+                scout_stats = []
+            if isinstance(raw_alliances, Exception):
+                raw_alliances = []
+
+            for t in raw_teams:
+                num = t.get("teamNumber", 0)
+                if num:
+                    team_info[num] = {
+                        "team_number": num,
+                        "nickname": t.get("nameShort") or t.get("nameFull") or f"Team {num}",
+                        "school_name": t.get("schoolName", ""),
+                        "city": t.get("city", ""),
+                        "state_prov": t.get("stateProv", ""),
+                        "country": t.get("country", ""),
+                        "rookie_year": t.get("rookieYear"),
+                    }
+
+            for r in raw_rankings:
+                num = r.get("teamNumber", 0)
+                if num:
+                    rank_map_sb[num] = r  # reuse same dict; callers use consistent keys below
+
+            for s in scout_stats:
+                num = s.get("team_number", 0)
+                if num:
+                    scout_map_sb[num] = s
+
+            # Rebuild alliance lookup from API alliances
+            for a in raw_alliances:
+                anum = a.get("number", 0)
+                for role in ("captain", "round1", "round2", "round3", "backup"):
+                    slot = a.get(role)
+                    if isinstance(slot, dict):
+                        tnum = slot.get("teamNumber", 0)
+                    elif isinstance(slot, (int, float)):
+                        tnum = int(slot)
+                    else:
+                        continue
+                    if tnum:
+                        alliance_lookup[tnum] = anum
+
+    def _rk_get(rk: dict, key_sb: str, key_api: str, default=None):
+        """Read from Supabase raw_data keys first, fall back to API keys."""
+        v = rk.get(key_sb)
+        if v is None:
+            v = rk.get(key_api, default)
+        return v
 
     def build_team(team_number: int) -> dict:
         """Build a rich team object matching the FRC PbP format."""
         info = team_info.get(team_number, {})
-        rk = rank_map.get(team_number, {})
-        sd = scout_map.get(team_number, {})
-        wins = rk.get("wins", 0)
-        losses = rk.get("losses", 0)
-        ties = rk.get("ties", 0)
-        opr_val = sd.get("opr_total")
-        sort_orders = rk.get("sortOrders", [])
-        mp = rk.get("matchesPlayed", 0)
+        rk = rank_map_sb.get(team_number, {})
+        sd = scout_map_sb.get(team_number, {})
+        wins = rk.get("wins", 0) or 0
+        losses = rk.get("losses", 0) or 0
+        ties = rk.get("ties", 0) or 0
+        opr_val = rk.get("opr_total") or sd.get("opr_total")
+        # sort_orders: Supabase stores as "sort_orders", API returns "sortOrders"
+        sort_orders = rk.get("sort_orders") or rk.get("sortOrders") or []
+        # qual_average: Supabase stores as "qual_average", API returns "qualAverage"
+        qual_avg = rk.get("qual_average") or rk.get("qualAverage") or 0
+        mp = rk.get("matches_played") or rk.get("matchesPlayed") or 0
         rp_val = sort_orders[0] if sort_orders else None
         avg_rp = round(rp_val / mp, 2) if rp_val is not None and mp > 0 else 0
         return {
@@ -457,23 +717,23 @@ async def get_all_matches(event_key: str) -> dict:
             "losses": losses,
             "ties": ties,
             "opr": round(opr_val, 2) if opr_val is not None else 0,
-            "opr_auto": sd.get("opr_auto"),
-            "opr_dc": sd.get("opr_dc"),
-            "opr_np": sd.get("opr_np"),
+            "opr_auto": rk.get("opr_auto") or sd.get("opr_auto"),
+            "opr_dc": rk.get("opr_dc") or sd.get("opr_dc"),
+            "opr_np": rk.get("opr_np") or sd.get("opr_np"),
             "epa": None,
             "avg_rp": avg_rp,
-            "qual_average": rk.get("qualAverage", 0) or 0,
+            "qual_average": qual_avg,
             "high_score": 0,
             "high_score_match": "",
-            "avg_total": sd.get("avg_total"),
-            "avg_auto": sd.get("avg_auto"),
-            "avg_dc": sd.get("avg_dc"),
-            "avg_np": sd.get("avg_np"),
-            "max_total": sd.get("max_total"),
-            "max_auto": sd.get("max_auto"),
-            "max_dc": sd.get("max_dc"),
-            "min_total": sd.get("min_total"),
-            "dev_total": sd.get("dev_total"),
+            "avg_total": rk.get("avg_total") or sd.get("avg_total"),
+            "avg_auto": rk.get("avg_auto") or sd.get("avg_auto"),
+            "avg_dc": rk.get("avg_dc") or sd.get("avg_dc"),
+            "avg_np": rk.get("avg_np") or sd.get("avg_np"),
+            "max_total": rk.get("max_total") or sd.get("max_total"),
+            "max_auto": rk.get("max_auto") or sd.get("max_auto"),
+            "max_dc": rk.get("max_dc") or sd.get("max_dc"),
+            "min_total": rk.get("min_total") or sd.get("min_total"),
+            "dev_total": rk.get("dev_total") or sd.get("dev_total"),
         }
 
     # ── Build match list ──
@@ -616,33 +876,58 @@ async def get_match_scores(event_key: str) -> dict:
 
 
 async def get_alliances(event_key: str) -> list[dict]:
-    """Return alliance selections for an FTC event."""
+    """Return alliance selections for an FTC event.
+
+    Reads from Supabase first (alliances stored in events.raw_data by
+    ftc_event_sync worker); falls back to the FTC Events API.
+    """
     year, event_code = _parse_ftc_key(event_key)
+
+    def _normalise_alliances(raw: list[dict]) -> list[dict]:
+        """Convert raw FTC API alliances to the frontend format."""
+        def _team_num(slot):
+            if isinstance(slot, dict):
+                return slot.get("teamNumber", 0)
+            if isinstance(slot, (int, float)):
+                return int(slot)
+            return 0
+
+        results: list[dict] = []
+        for i, a in enumerate(raw, 1):
+            captain = a.get("captain")
+            round1 = a.get("round1")
+            round2 = a.get("round2")
+            round3 = a.get("round3")
+            pick_nums = [
+                _team_num(p) for p in [captain, round1, round2, round3]
+                if p is not None
+            ]
+            pick_nums = [n for n in pick_nums if n]
+            results.append({
+                "number": a.get("number", i),
+                "picks": [f"ftc{n}" for n in pick_nums],
+                "pick_numbers": pick_nums,
+                "name": a.get("name", f"Alliance {i}"),
+            })
+        return results
+
+    # ── Try Supabase first ──────────────────────────────────
+    try:
+        ev_row = await read_event(event_key)
+        if ev_row:
+            ev_raw = ev_row.get("raw_data") or {}
+            if isinstance(ev_raw, str):
+                ev_raw = json.loads(ev_raw)
+            stored = ev_raw.get("alliances")
+            if stored:
+                return _normalise_alliances(stored)
+    except Exception as e:
+        log.debug("Supabase alliances read failed for %s: %s", event_key, e)
+
+    # ── Fallback: FTC Events API ────────────────────────────
     client = get_ftc_client()
     raw = await client.get_alliances(year, event_code)
-    results: list[dict] = []
-    def _team_num(slot):
-        """Extract team number from slot (dict or int)."""
-        if isinstance(slot, dict):
-            return slot.get("teamNumber", 0)
-        if isinstance(slot, (int, float)):
-            return int(slot)
-        return 0
-
-    for i, a in enumerate(raw, 1):
-        captain = a.get("captain")
-        round1 = a.get("round1")
-        round2 = a.get("round2")
-        round3 = a.get("round3")
-        pick_nums = [_team_num(p) for p in [captain, round1, round2, round3] if p is not None]
-        pick_nums = [n for n in pick_nums if n]
-        results.append({
-            "number": a.get("number", i),
-            "picks": [f"ftc{n}" for n in pick_nums],
-            "pick_numbers": pick_nums,
-            "name": a.get("name", f"Alliance {i}"),
-        })
-    return results
+    return _normalise_alliances(raw)
 
 
 async def get_event_awards(event_key: str) -> list[dict]:

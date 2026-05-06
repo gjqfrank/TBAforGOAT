@@ -772,6 +772,14 @@ async function loadEvent(eventKey) {
                 clearTimeout(_tm);
                 if (_r.ok) _snap = await _r.json();
             } catch (_) { /* snapshot unavailable — fall back */ }
+        } else {
+            try {
+                const _ac = new AbortController();
+                const _tm = setTimeout(() => _ac.abort(), 15000);
+                const _r = await fetch(`/api/ftc/events/${code}/snapshot`, { signal: _ac.signal });
+                clearTimeout(_tm);
+                if (_r.ok) _snap = await _r.json();
+            } catch (_) { /* FTC snapshot unavailable — fall back to individual calls */ }
         }
 
         const [info, teams] = _snap

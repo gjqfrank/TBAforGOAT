@@ -251,6 +251,7 @@ app.include_router(storylines.router, prefix="/api/storylines", tags=["Storyline
 app.include_router(ftc_events.router, prefix="/api/ftc/events", tags=["FTC Events"])
 app.include_router(ftc_matches.router, prefix="/api/ftc/matches", tags=["FTC Matches"])
 app.include_router(ftc_alliances.router, prefix="/api/ftc/alliances", tags=["FTC Alliances"])
+app.include_router(snapshot.ftc_router, prefix="/api/ftc/events", tags=["FTC Snapshot"])
 
 # ── Sync endpoint ───────────────────────────────────────────
 app.include_router(sync.router, prefix="/api/sync", tags=["Sync"])

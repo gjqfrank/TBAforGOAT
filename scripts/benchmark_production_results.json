@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-04-11T15:18:17",
+  "timestamp": "2026-05-06T20:12:58",
   "server": "http://127.0.0.1:8000",
   "events": {
     "frc": [
@@ -10,77 +10,79 @@
     ],
     "ftc": [
       "2024ftcftccmp1edis",
-      "2025ftctrcmp"
+      "2025ftctrcmp",
+      "2026tuak2",
+      "2025tuis2"
     ]
   },
-  "total_users": 12,
-  "total_requests": 214,
-  "successful": 185,
-  "failed": 29,
-  "wall_clock_ms": 10934,
-  "throughput_rps": 16.9,
+  "total_users": 16,
+  "total_requests": 279,
+  "successful": 244,
+  "failed": 35,
+  "wall_clock_ms": 171100,
+  "throughput_rps": 1.4,
   "latency": {
-    "mean_ms": 660,
-    "median_ms": 175,
-    "p95_ms": 3104,
-    "p99_ms": 4306,
+    "mean_ms": 3727,
+    "median_ms": 123,
+    "p95_ms": 30886,
+    "p99_ms": 70717,
     "min_ms": 2,
-    "max_ms": 5919
+    "max_ms": 79010
   },
   "phases": {
     "load": {
-      "total": 36,
-      "ok": 36,
-      "mean_ms": 898,
-      "p95_ms": 4306
+      "total": 48,
+      "ok": 44,
+      "mean_ms": 7279,
+      "p95_ms": 70717
     },
     "matches": {
-      "total": 24,
-      "ok": 24,
-      "mean_ms": 1022,
-      "p95_ms": 2101
+      "total": 32,
+      "ok": 28,
+      "mean_ms": 6591,
+      "p95_ms": 44340
     },
     "summary": {
-      "total": 40,
+      "total": 56,
       "ok": 40,
-      "mean_ms": 100,
-      "p95_ms": 478
+      "mean_ms": 8079,
+      "p95_ms": 40855
     },
     "team-dive": {
-      "total": 24,
-      "ok": 24,
-      "mean_ms": 841,
-      "p95_ms": 1497
+      "total": 28,
+      "ok": 21,
+      "mean_ms": 2259,
+      "p95_ms": 4647
     },
     "notes": {
       "total": 16,
       "ok": 16,
-      "mean_ms": 68,
-      "p95_ms": 131
+      "mean_ms": 61,
+      "p95_ms": 118
     },
     "gatool": {
-      "total": 12,
-      "ok": 12,
-      "mean_ms": 2889,
-      "p95_ms": 3881
+      "total": 16,
+      "ok": 16,
+      "mean_ms": 690,
+      "p95_ms": 1674
     },
     "warm-cache": {
-      "total": 48,
-      "ok": 33,
-      "mean_ms": 157,
-      "p95_ms": 407
+      "total": 64,
+      "ok": 60,
+      "mean_ms": 341,
+      "p95_ms": 2742
     },
     "tims-persistence": {
-      "total": 2,
-      "ok": 0,
-      "mean_ms": 0,
-      "p95_ms": 0
+      "total": 7,
+      "ok": 7,
+      "mean_ms": 65,
+      "p95_ms": 137
     },
     "cross-cache": {
       "total": 12,
-      "ok": 0,
-      "mean_ms": 0,
-      "p95_ms": 0
+      "ok": 12,
+      "mean_ms": 91,
+      "p95_ms": 178
     }
   },
   "users": [
@@ -89,30 +91,30 @@
       "event": "2026tuak",
       "program": "frc",
       "requests": 17,
-      "ok": 17,
-      "failed": 0,
-      "total_ms": 9727,
-      "mean_ms": 572
+      "ok": 16,
+      "failed": 1,
+      "total_ms": 136981,
+      "mean_ms": 2936
     },
     {
       "user_id": "frc-caster-1",
       "event": "2026tuak",
       "program": "frc",
       "requests": 17,
-      "ok": 17,
-      "failed": 0,
-      "total_ms": 9819,
-      "mean_ms": 578
+      "ok": 16,
+      "failed": 1,
+      "total_ms": 136743,
+      "mean_ms": 2921
     },
     {
       "user_id": "frc-caster-2",
       "event": "2026tuis2",
       "program": "frc",
       "requests": 17,
-      "ok": 14,
-      "failed": 3,
-      "total_ms": 10252,
-      "mean_ms": 729
+      "ok": 17,
+      "failed": 0,
+      "total_ms": 155453,
+      "mean_ms": 9144
     },
     {
       "user_id": "frc-caster-3",
@@ -121,8 +123,8 @@
       "requests": 17,
       "ok": 17,
       "failed": 0,
-      "total_ms": 10526,
-      "mean_ms": 619
+      "total_ms": 153903,
+      "mean_ms": 9053
     },
     {
       "user_id": "frc-caster-4",
@@ -131,8 +133,8 @@
       "requests": 17,
       "ok": 17,
       "failed": 0,
-      "total_ms": 10155,
-      "mean_ms": 597
+      "total_ms": 157650,
+      "mean_ms": 9274
     },
     {
       "user_id": "frc-caster-5",
@@ -141,68 +143,108 @@
       "requests": 17,
       "ok": 17,
       "failed": 0,
-      "total_ms": 10007,
-      "mean_ms": 589
+      "total_ms": 155418,
+      "mean_ms": 9142
     },
     {
       "user_id": "frc-caster-6",
       "event": "2026pncmp",
       "program": "frc",
       "requests": 17,
-      "ok": 17,
-      "failed": 0,
-      "total_ms": 9769,
-      "mean_ms": 575
+      "ok": 16,
+      "failed": 1,
+      "total_ms": 170733,
+      "mean_ms": 5046
     },
     {
       "user_id": "frc-caster-7",
       "event": "2026pncmp",
       "program": "frc",
       "requests": 17,
-      "ok": 17,
-      "failed": 0,
-      "total_ms": 9771,
-      "mean_ms": 575
+      "ok": 16,
+      "failed": 1,
+      "total_ms": 167937,
+      "mean_ms": 4871
     },
     {
       "user_id": "ftc-caster-8",
       "event": "2024ftcftccmp1edis",
       "program": "ftc",
       "requests": 16,
-      "ok": 12,
-      "failed": 4,
-      "total_ms": 10551,
-      "mean_ms": 869
+      "ok": 13,
+      "failed": 3,
+      "total_ms": 5497,
+      "mean_ms": 356
     },
     {
       "user_id": "ftc-caster-9",
       "event": "2024ftcftccmp1edis",
       "program": "ftc",
       "requests": 16,
-      "ok": 12,
-      "failed": 4,
-      "total_ms": 10655,
-      "mean_ms": 877
+      "ok": 14,
+      "failed": 2,
+      "total_ms": 5742,
+      "mean_ms": 307
     },
     {
       "user_id": "ftc-caster-10",
       "event": "2025ftctrcmp",
       "program": "ftc",
       "requests": 16,
-      "ok": 16,
-      "failed": 0,
-      "total_ms": 10555,
-      "mean_ms": 660
+      "ok": 15,
+      "failed": 1,
+      "total_ms": 6437,
+      "mean_ms": 429
     },
     {
       "user_id": "ftc-caster-11",
       "event": "2025ftctrcmp",
       "program": "ftc",
       "requests": 16,
-      "ok": 12,
-      "failed": 4,
-      "total_ms": 10582,
-      "mean_ms": 878
+      "ok": 15,
+      "failed": 1,
+      "total_ms": 6536,
+      "mean_ms": 436
+    },
+    {
+      "user_id": "ftc-caster-12",
+      "event": "2026tuak2",
+      "program": "ftc",
+      "requests": 16,
+      "ok": 9,
+      "failed": 7,
+      "total_ms": 4038,
+      "mean_ms": 215
+    },
+    {
+      "user_id": "ftc-caster-13",
+      "event": "2026tuak2",
+      "program": "ftc",
+      "requests": 16,
+      "ok": 9,
+      "failed": 7,
+      "total_ms": 5088,
+      "mean_ms": 279
+    },
+    {
+      "user_id": "ftc-caster-14",
+      "event": "2025tuis2",
+      "program": "ftc",
+      "requests": 14,
+      "ok": 9,
+      "failed": 5,
+      "total_ms": 3624,
+      "mean_ms": 391
+    },
+    {
+      "user_id": "ftc-caster-15",
+      "event": "2025tuis2",
+      "program": "ftc",
+      "requests": 14,
+      "ok": 9,
+      "failed": 5,
+      "total_ms": 3376,
+      "mean_ms": 359
     }
   ]
 }

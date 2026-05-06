@@ -168,6 +168,16 @@ async def _sync_ftc_teams(event_key: str) -> None:
             "team_number": num,
             "nickname": t.get("nameShort") or t.get("nameFull") or "",
             "competition_type": "ftc",
+            # Store full identity data so the Supabase-first read path
+            # can serve city / state / school without an extra API call.
+            "raw_tims_data": _strip_nulls({
+                "full_name": t.get("nameFull"),
+                "city": t.get("city"),
+                "state_prov": t.get("stateprov") or t.get("stateProv"),
+                "country": t.get("country"),
+                "school_name": t.get("schoolName"),
+                "rookie_year": t.get("rookieYear"),
+            }),
         })
 
         et_rows.append({
@@ -209,7 +219,8 @@ async def _sync_ftc_stats(event_key: str) -> None:
 
     rows: list[dict[str, Any]] = []
     for s in stats:
-        num = s.get("teamNumber") or s.get("team", {}).get("number")
+        # ftcscout_client.get_event_team_stats() returns snake_case keys
+        num = s.get("team_number")
         if not num:
             continue
         team_key = f"ftc{num}"
@@ -217,16 +228,31 @@ async def _sync_ftc_stats(event_key: str) -> None:
             "event_key": event_key,
             "team_key": team_key,
             "data": _strip_nulls({
-                "opr": s.get("opr"),
-                "np_opr": s.get("npOpr") or s.get("np_opr"),
-                "auto_opr": s.get("autoOpr") or s.get("auto_opr"),
-                "teleop_opr": s.get("teleopOpr") or s.get("teleop_opr"),
-                "endgame_opr": s.get("endgameOpr") or s.get("endgame_opr"),
-                "rank": s.get("rank"),
+                # OPR components (names match ftcscout_client output exactly)
+                "opr_total": s.get("opr_total"),
+                "opr_auto": s.get("opr_auto"),
+                "opr_dc": s.get("opr_dc"),
+                "opr_np": s.get("opr_np"),
+                # Averages
+                "avg_total": s.get("avg_total"),
+                "avg_auto": s.get("avg_auto"),
+                "avg_dc": s.get("avg_dc"),
+                "avg_np": s.get("avg_np"),
+                # Max / min / std dev
+                "max_total": s.get("max_total"),
+                "max_auto": s.get("max_auto"),
+                "max_dc": s.get("max_dc"),
+                "min_total": s.get("min_total"),
+                "dev_total": s.get("dev_total"),
+                # Global QuickStats ranking
+                "quick_stats": s.get("quick_stats"),
+                # Ranking context
+                "rp": s.get("rp"),
+                "tb1": s.get("tb1"),
                 "wins": s.get("wins"),
                 "losses": s.get("losses"),
                 "ties": s.get("ties"),
-                "matches_played": s.get("matchesPlayed"),
+                "qual_matches_played": s.get("qual_matches_played"),
             }),
         })
 
