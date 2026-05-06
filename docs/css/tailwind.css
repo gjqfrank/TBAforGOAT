@@ -589,6 +589,9 @@ video {
   --prestige-einstein:   #a855f7;  /* purple — Einstein winners */
   --prestige-finalist:   #9ca3af;  /* silver — finalists */
   --prestige-visitor:    #06b6d4;  /* cyan — visitors */
+  --ring-color:          rgba(99, 102, 241, .55);
+  --ring-width:          2px;
+  --ring-offset:         2px;
   --radius:          10px;
   --radius-lg:       14px;
   --shadow-sm:       0 2px 8px rgba(0,0,0,.3);
@@ -635,6 +638,9 @@ video {
   --prestige-einstein:   #7e22ce;
   --prestige-finalist:   #6b7280;
   --prestige-visitor:    #0891b2;
+  --ring-color:          rgba(91, 94, 240, .55);
+  --ring-width:          2px;
+  --ring-offset:         2px;
   --shadow-sm:       0 1px 4px rgba(0,0,0,.08);
   --shadow-md:       0 2px 12px rgba(0,0,0,.08);
   --shadow-lg:       0 4px 24px rgba(0,0,0,.1);
@@ -18234,4 +18240,28 @@ body.epa-breakdown-active .stat-opr {
     font-size: .9rem;
     flex-wrap: wrap;
   }
+}
+
+/* ═══ Global keyboard-focus ring (additive, keyboard-only) ═════ */
+/* Buttons, links, inputs, and other interactive elements get a
+   consistent, branded outline only when reached via keyboard. Mouse
+   clicks remain ring-free. State outlines (foreign/rookie team) are
+   intentionally distinct from this ring. */
+:focus-visible {
+  outline: var(--ring-width) solid var(--ring-color);
+  outline-offset: var(--ring-offset);
+  border-radius: 4px;
+}
+/* Inside dense tables/cards the offset can collide; pull it inward. */
+.team-num:focus-visible,
+.adv-team-num:focus-visible,
+.top-team-num:focus-visible,
+.high-score-team:focus-visible,
+.summary-hof-num:focus-visible,
+.prestige-entry-num:focus-visible,
+.conn-team-num:focus-visible,
+.rp-team-num:focus-visible,
+.alliance-team-num:focus-visible,
+.pbp-team-number:focus-visible {
+  outline-offset: 1px;
 }
