@@ -583,6 +583,12 @@ video {
   --green:           #34d399;
   --green-deep:      #22c55e;
   --yellow:          #fbbf24;
+  /* ── Prestige category tokens (mode-agnostic; categorize team/award rows) ── */
+  --prestige-hof:        #f59e0b;  /* gold — Hall of Fame, event/award winners */
+  --prestige-impact:     #60a5fa;  /* blue — Impact / Inspire teams */
+  --prestige-einstein:   #a855f7;  /* purple — Einstein winners */
+  --prestige-finalist:   #9ca3af;  /* silver — finalists */
+  --prestige-visitor:    #06b6d4;  /* cyan — visitors */
   --radius:          10px;
   --radius-lg:       14px;
   --shadow-sm:       0 2px 8px rgba(0,0,0,.3);
@@ -623,6 +629,12 @@ video {
   --green:           #16a34a;
   --green-deep:      #15803d;
   --yellow:          #d97706;
+  /* ── Prestige category tokens (light mode — deeper for contrast) ── */
+  --prestige-hof:        #92700a;
+  --prestige-impact:     #2563eb;
+  --prestige-einstein:   #7e22ce;
+  --prestige-finalist:   #6b7280;
+  --prestige-visitor:    #0891b2;
   --shadow-sm:       0 1px 4px rgba(0,0,0,.08);
   --shadow-md:       0 2px 12px rgba(0,0,0,.08);
   --shadow-lg:       0 4px 24px rgba(0,0,0,.1);
@@ -9694,10 +9706,10 @@ tr:hover .compare-cb,
   font-size: .82rem;
   min-width: 2.3rem;
 }
-.prestige-num-einstein            { color: #a855f7; }
+.prestige-num-einstein            { color: var(--prestige-einstein); }
 .prestige-num-einstein-contender  { color: var(--primary-hover); }
-.prestige-num-hof                 { color: #f5b731; }
-.prestige-num-impact              { color: #60a5fa; }
+.prestige-num-hof                 { color: var(--prestige-hof); }
+.prestige-num-impact              { color: var(--prestige-impact); }
 [data-theme="light"] .prestige-num-einstein            { color: #7e22ce; }
 [data-theme="light"] .prestige-num-einstein-contender  { color: #4f46e5; }
 [data-theme="light"] .prestige-num-hof                 { color: #92700a; }
@@ -9804,8 +9816,8 @@ tr:hover .compare-cb,
   display: flex;
   align-items: center;
   gap: .4rem;
-  padding: .3rem 0;
-  border-bottom: 1px solid var(--border-subtle);
+  padding: .35rem 0;
+  border-bottom: 1px solid var(--border);
 }
 
 .summary-hof-team:last-child {
@@ -9816,14 +9828,14 @@ tr:hover .compare-cb,
   font-family: var(--mono);
   font-weight: 700;
   font-size: .85rem;
-  color: var(--primary);
+  color: var(--prestige-hof);
   min-width: 3rem;
 }
 
 /* Past award recipient team numbers in orange for contrast */
 
 .past-award-row .summary-hof-num {
-  color: #f59e0b;
+  color: var(--prestige-hof);
 }
 
 .summary-hof-name {
@@ -11621,10 +11633,10 @@ tr:hover .compare-cb,
   font-weight: 700;
   font-family: var(--mono);
 }
-.hof-chip .chip-team { color: #f59e0b; }
+.hof-chip .chip-team { color: var(--prestige-hof); }
 .einstein-win-chip .chip-team { color: #fbbf24; }
-.impact-chip .chip-team { color: #8b5cf6; }
-.visitor-chip .chip-team { color: #06b6d4; }
+.impact-chip .chip-team { color: var(--prestige-impact); }
+.visitor-chip .chip-team { color: var(--prestige-visitor); }
 
 .chip-years {
   font-size: .68rem;
@@ -11643,13 +11655,13 @@ tr:hover .compare-cb,
 }
 
 .hof-chip {
-  border-color: #f59e0b;
+  border-color: var(--prestige-hof);
   background: rgba(245, 158, 11, .08);
 }
 
 .impact-chip {
-  border-color: #8b5cf6;
-  background: rgba(139, 92, 246, .08);
+  border-color: var(--prestige-impact);
+  background: rgba(96, 165, 250, .08);
 }
 
 .einstein-win-chip {
@@ -11658,7 +11670,7 @@ tr:hover .compare-cb,
 }
 
 .visitor-chip {
-  border-color: #06b6d4;
+  border-color: var(--prestige-visitor);
   background: rgba(6, 182, 212, .08);
 }
 
