@@ -12078,18 +12078,34 @@ td .pick-flip-back {
   position: absolute;
   top: .75rem;
   right: .75rem;
-  background: transparent;
-  border: none;
-  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, .08);
+  border: 1px solid rgba(255, 255, 255, .12);
+  color: #94a3b8;
   cursor: pointer;
-  padding: .35rem;
-  border-radius: 6px;
-  transition: color .15s, background .15s;
+  padding: 0;
+  transition: background .15s, color .15s, border-color .15s;
 }
 
 .login-close:hover {
-  color: var(--text-primary);
-  background: rgba(255,255,255,.08);
+  background: rgba(255, 255, 255, .14);
+  border-color: rgba(255, 255, 255, .20);
+  color: #fff;
+}
+
+[data-theme="light"] .login-close {
+  background: rgba(0, 0, 0, .06);
+  border-color: rgba(0, 0, 0, .10);
+  color: #64748b;
+}
+[data-theme="light"] .login-close:hover {
+  background: rgba(0, 0, 0, .10);
+  color: #1e293b;
 }
 
 .login-state.hidden {
