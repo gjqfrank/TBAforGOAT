@@ -1560,13 +1560,17 @@ async def get_team_lookup(team_number: int, season: int, include_history: bool =
 
     # Separate alliance selections from real awards (current season)
     _ALLIANCE_AWARD_IDS = {_FTC_WINNER_ID, _FTC_FINALIST_ID}
+    # Build event code → name map from the team's events this season
+    _event_name_map = {ev.get("code", ""): ev.get("name", "") for ev in events}
     current_real_awards = [
-        {"name": a.get("name", ""), "event": a.get("eventName", ""),
+        {"name": a.get("name", ""),
+         "event": _event_name_map.get(a.get("eventCode", ""), a.get("eventCode", "")),
          "award_id": a.get("awardId")}
         for a in awards if a.get("awardId") not in _ALLIANCE_AWARD_IDS
     ]
     current_alliance_picks = [
-        {"name": a.get("name", ""), "event": a.get("eventName", ""),
+        {"name": a.get("name", ""),
+         "event": _event_name_map.get(a.get("eventCode", ""), a.get("eventCode", "")),
          "award_id": a.get("awardId")}
         for a in awards if a.get("awardId") in _ALLIANCE_AWARD_IDS
     ]
@@ -1632,14 +1636,15 @@ async def get_team_lookup(team_number: int, season: int, include_history: bool =
             if isinstance(aws, Exception):
                 aws = []
 
-            # Only include real awards (not alliance selections)
+            # Resolve event code → name for this season using the team's event list
+            _ev_name_map_y = {ev.get("code", ""): ev.get("name", "") for ev in evs}
+            # Include ALL awards (real + alliance) — prestige badge counting needs alliance picks
             for a in aws:
-                if a.get("awardId") not in _ALLIANCE_AWARD_IDS:
-                    all_awards_list.append({
-                        "name": a.get("name", ""),
-                        "event": a.get("eventName", ""),
-                        "year": y,
-                    })
+                all_awards_list.append({
+                    "name": a.get("name", ""),
+                    "event": _ev_name_map_y.get(a.get("eventCode", ""), a.get("eventCode", "")),
+                    "year": y,
+                })
 
             # Build per-event results for this season
             all_event_results.extend(_build_event_results(evs, aws, y))
@@ -1648,6 +1653,9 @@ async def get_team_lookup(team_number: int, season: int, include_history: bool =
             season_achievements.append(achievement)
 
         result["all_awards"] = all_awards_list
+        # Promote full history into event_results so the iOS season history section
+        # (which decodes event_results) shows all seasons, not just the current one.
+        result["event_results"] = all_event_results
         result["all_event_results"] = all_event_results
         result["season_achievements"] = season_achievements
 
