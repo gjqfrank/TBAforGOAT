@@ -1,10 +1,13 @@
 """FTC Event endpoints — info, teams, summary, season list."""
 from fastapi import APIRouter, HTTPException, Query, Response
-from ..services import ftc_event_service
+from ..services import ftc_event_service, payload_cache
 from ..services.ftc_event_service import current_ftc_season
 from ..services.ftc_client import get_ftc_client
+from ..services.ftcscout_client import get_ftcscout_client
 from ..services.gatool_client import get_gatool_client
+from ..services.supabase_client import get_season_record, set_season_record
 from ..services.error_utils import raise_api_error
+import asyncio
 import httpx
 
 router = APIRouter()
@@ -35,6 +38,80 @@ async def ftc_team_awards_summary(teams: str = Query(..., description="Comma-sep
 async def current_season():
     """Return the active FTC kickoff year (e.g. 2025 for DECODE 2025-2026)."""
     return {"season": current_ftc_season()}
+
+
+@router.get("/season/high-scores")
+async def ftc_season_high_scores(
+    season: int = Query(None),
+    limit: int = Query(10, ge=1, le=25),
+):
+    """Top match scores and top OPR teams for an FTC season (from FTC Scout).
+
+    Caching hierarchy:
+    1. Disk cache (``payload_cache``) — 10-min TTL, survives restarts.
+    2. Supabase ``season_records`` — persistent, served if FTC Scout is down.
+    3. Live FTC Scout GraphQL fetch — updates both caches on success.
+    """
+    season = season or current_ftc_season()
+    cache_key = f"{season}_{limit}"
+
+    try:
+        # ── 1. Disk cache ───────────────────────────────────
+        cached = payload_cache.read_payload("ftc_season_high", cache_key, 600)
+        if cached:
+            return cached
+
+        stale = payload_cache.read_stale("ftc_season_high", cache_key)
+
+        # ── 2. Supabase ─────────────────────────────────────
+        sb_row = await get_season_record(f"ftc_season_high_{season}_{limit}")
+        if sb_row and sb_row.get("payload"):
+            sb_payload = sb_row["payload"]
+            payload_cache.write_payload("ftc_season_high", cache_key, sb_payload)
+            return sb_payload
+
+        # ── 3. Live fetch from FTC Scout ────────────────────
+        try:
+            scout = get_ftcscout_client()
+            data = await scout.get_season_high_scores(season, limit=limit)
+
+            # Enrich match event_name with friendly event names from FTC API
+            event_names: dict[str, str] = {}
+            try:
+                events = await ftc_event_service.get_season_events(season)
+                for ev in events:
+                    code = (ev.get("event_code") or ev.get("code") or "").lower()
+                    if code:
+                        event_names[code] = ev.get("name") or ev.get("event_name") or code
+            except Exception:
+                pass
+
+            for m in data.get("matches", []):
+                code = m.get("event_code", "").lower()
+                if code and code in event_names:
+                    m["event_name"] = event_names[code]
+
+            # Persist to disk and Supabase
+            payload_cache.write_payload("ftc_season_high", cache_key, data)
+            asyncio.create_task(
+                set_season_record(
+                    f"ftc_season_high_{season}_{limit}",
+                    season,
+                    "ftc_season_high_scores",
+                    data,
+                )
+            )
+            return data
+
+        except Exception:
+            if stale:
+                return stale
+            raise
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise_api_error(e, fallback_detail=f"Could not load FTC season high scores for {season}.")
 
 
 @router.get("/season/{year}")
@@ -191,6 +268,24 @@ async def ftc_season_awards(event_key: str):
         raise
     except Exception as e:
         raise_api_error(e, fallback_detail=f"Could not load FTC season awards for event '{event_key}'.")
+
+
+@router.get("/teams/head-to-head/{team_a}/{team_b}")
+async def ftc_head_to_head(
+    team_a: int,
+    team_b: int,
+    all_time: bool = Query(False),
+    seasons: int = Query(3, ge=1, le=10),
+):
+    """Playoff head-to-head history between two FTC teams."""
+    try:
+        return await ftc_event_service.get_ftc_head_to_head(
+            team_a, team_b, all_time=all_time, seasons=seasons
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise_api_error(e, fallback_detail=f"Could not load H2H for FTC teams {team_a} vs {team_b}.")
 
 
 @router.get("/team/{team_number}")
