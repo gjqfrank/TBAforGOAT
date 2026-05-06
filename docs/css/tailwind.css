@@ -7208,6 +7208,19 @@ tr:hover .compare-cb,
   font-size: .73rem;
 }
 
+/* Wide tables (Event Results) overflow the narrow panel — let them scroll
+   horizontally inside the body instead of getting clipped. */
+.float-lookup-body .table-wrap,
+.float-lookup-body .data-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.float-lookup-body table.data-table {
+  display: block;
+  overflow-x: auto;
+  max-width: 100%;
+}
+
 .float-lookup-body .banner-list {
   gap: .4rem;
 }
