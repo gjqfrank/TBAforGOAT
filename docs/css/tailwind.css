@@ -3751,6 +3751,22 @@ input.input-loading {
   color: var(--text);
 }
 
+/* Captain row gets visual prominence within the alliance card. */
+.alliance-team-row.alliance-team-captain .team-num,
+.alliance-team-row[data-role="captain"] .team-num {
+  font-size: 1.08rem;
+  color: var(--primary-hover);
+}
+.alliance-team-row.alliance-team-captain .team-role,
+.alliance-team-row[data-role="captain"] .team-role {
+  color: var(--primary);
+  font-weight: 700;
+}
+.alliance-team-row.alliance-team-captain,
+.alliance-team-row[data-role="captain"] {
+  background: linear-gradient(90deg, rgba(99,102,241,.05) 0%, transparent 65%);
+}
+
 .team-nick {
   font-size: .73rem;
   color: var(--text-muted);

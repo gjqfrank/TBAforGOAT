@@ -226,7 +226,7 @@ function renderAlliances(data) {
                         : '';
 
                     return `
-                    <div class="alliance-team-row${isIntl ? ' foreign-team-row' : ''}${isRookie ? ' rookie-team-row' : ''}" data-country="${t.country || ''}" data-rookie-year="${t.rookie_year || ''}">
+                    <div class="alliance-team-row${isIntl ? ' foreign-team-row' : ''}${isRookie ? ' rookie-team-row' : ''}${/captain/i.test(t.pick_label || '') ? ' alliance-team-captain' : ''}" data-country="${t.country || ''}" data-rookie-year="${t.rookie_year || ''}" data-role="${(t.pick_label || '').toLowerCase().replace(/\s+/g, '-')}">
                         <span class="team-role">${getRoleLabel(t)}</span>
                         ${avatarHtml}
                         <span class="team-num has-tooltip">${_renderTeamNum(t)}${(_timsCache[t.team_number]?.nickname || t.nickname) ? `<span class="custom-tooltip">${_timsCache[t.team_number]?.nickname || t.nickname}</span>` : ''}</span>
