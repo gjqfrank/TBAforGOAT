@@ -221,7 +221,8 @@
       2018,
       2019,
       2022,
-      2024
+      2024,
+      2026
     ],
     "winner_years": [
       2011,
@@ -433,7 +434,8 @@
   "868": {
     "nickname": "TechHOUNDS",
     "contender_years": [
-      2018
+      2018,
+      2026
     ],
     "winner_years": []
   },
@@ -655,12 +657,14 @@
       2022,
       2023,
       2024,
-      2025
+      2025,
+      2026
     ],
     "winner_years": [
       2019,
       2023,
-      2025
+      2025,
+      2026
     ]
   },
   "1325": {
@@ -708,6 +712,15 @@
       2018
     ],
     "winner_years": []
+  },
+  "1538": {
+    "nickname": "The Holy Cows",
+    "contender_years": [
+      2026
+    ],
+    "winner_years": [
+      2026
+    ]
   },
   "1574": {
     "nickname": "MisCar",
@@ -785,7 +798,8 @@
       2019,
       2022,
       2023,
-      2024
+      2024,
+      2026
     ],
     "winner_years": [
       2015
@@ -796,7 +810,8 @@
     "contender_years": [
       2016,
       2024,
-      2025
+      2025,
+      2026
     ],
     "winner_years": [
       2024
@@ -813,6 +828,13 @@
     "nickname": "RAPTORS",
     "contender_years": [
       2015
+    ],
+    "winner_years": []
+  },
+  "1714": {
+    "nickname": "MORE Robotics",
+    "contender_years": [
+      2026
     ],
     "winner_years": []
   },
@@ -898,7 +920,8 @@
     "nickname": "Bear Metal",
     "contender_years": [
       2017,
-      2019
+      2019,
+      2026
     ],
     "winner_years": []
   },
@@ -918,7 +941,8 @@
       2017,
       2018,
       2024,
-      2025
+      2025,
+      2026
     ],
     "winner_years": []
   },
@@ -956,6 +980,13 @@
     "nickname": "The Oxford RoboCats",
     "contender_years": [
       2017
+    ],
+    "winner_years": []
+  },
+  "2337": {
+    "nickname": "EngiNERDs",
+    "contender_years": [
+      2026
     ],
     "winner_years": []
   },
@@ -999,7 +1030,8 @@
     "contender_years": [
       2014,
       2016,
-      2025
+      2025,
+      2026
     ],
     "winner_years": [
       2016
@@ -1141,7 +1173,8 @@
   "2877": {
     "nickname": "LigerBots",
     "contender_years": [
-      2025
+      2025,
+      2026
     ],
     "winner_years": []
   },
@@ -1165,7 +1198,8 @@
     "contender_years": [
       2018,
       2022,
-      2025
+      2025,
+      2026
     ],
     "winner_years": [
       2025
@@ -1193,6 +1227,13 @@
     "nickname": "Hotwire",
     "contender_years": [
       2016
+    ],
+    "winner_years": []
+  },
+  "3006": {
+    "nickname": "Red Rock Robotics",
+    "contender_years": [
+      2026
     ],
     "winner_years": []
   },
@@ -1308,6 +1349,13 @@
     "nickname": "PrepaTec - LamBot",
     "contender_years": [
       2025
+    ],
+    "winner_years": []
+  },
+  "3506": {
+    "nickname": "YETI Robotics",
+    "contender_years": [
+      2026
     ],
     "winner_years": []
   },
@@ -1444,6 +1492,15 @@
     ],
     "winner_years": []
   },
+  "4065": {
+    "nickname": "Nerds of Prey",
+    "contender_years": [
+      2026
+    ],
+    "winner_years": [
+      2026
+    ]
+  },
   "4096": {
     "nickname": "Ctrl-Z",
     "contender_years": [
@@ -1514,7 +1571,8 @@
   "4206": {
     "nickname": "Robo Vikes",
     "contender_years": [
-      2024
+      2024,
+      2026
     ],
     "winner_years": []
   },
@@ -1553,10 +1611,12 @@
     "contender_years": [
       2022,
       2023,
-      2025
+      2025,
+      2026
     ],
     "winner_years": [
-      2023
+      2023,
+      2026
     ]
   },
   "4476": {
@@ -1618,7 +1678,8 @@
     "nickname": "Barker Redbacks",
     "contender_years": [
       2024,
-      2025
+      2025,
+      2026
     ],
     "winner_years": []
   },
@@ -1643,6 +1704,13 @@
     ],
     "winner_years": []
   },
+  "4905": {
+    "nickname": "Andromeda One",
+    "contender_years": [
+      2026
+    ],
+    "winner_years": []
+  },
   "4910": {
     "nickname": "East Cobb Robotics",
     "contender_years": [
@@ -1657,6 +1725,13 @@
     ],
     "winner_years": []
   },
+  "4915": {
+    "nickname": "Spartronics",
+    "contender_years": [
+      2026
+    ],
+    "winner_years": []
+  },
   "4917": {
     "nickname": "Sir Lancerbot",
     "contender_years": [
@@ -1667,7 +1742,8 @@
   "4946": {
     "nickname": "The Alpha Dogs",
     "contender_years": [
-      2025
+      2025,
+      2026
     ],
     "winner_years": []
   },
@@ -1724,6 +1800,13 @@
     "nickname": "Fabricators",
     "contender_years": [
       2025
+    ],
+    "winner_years": []
+  },
+  "5181": {
+    "nickname": "Explorer Robotics",
+    "contender_years": [
+      2026
     ],
     "winner_years": []
   },
@@ -1825,7 +1908,8 @@
   "5940": {
     "nickname": "BREAD",
     "contender_years": [
-      2022
+      2022,
+      2026
     ],
     "winner_years": []
   },
@@ -1843,6 +1927,13 @@
     ],
     "winner_years": []
   },
+  "6324": {
+    "nickname": "The Blue Devils",
+    "contender_years": [
+      2026
+    ],
+    "winner_years": []
+  },
   "6328": {
     "nickname": "Mechanical Advantage",
     "contender_years": [
@@ -1855,7 +1946,8 @@
   "6329": {
     "nickname": "The Bucks' Wrath",
     "contender_years": [
-      2023
+      2023,
+      2026
     ],
     "winner_years": []
   },
@@ -1875,6 +1967,13 @@
     "winner_years": [
       2022
     ]
+  },
+  "6800": {
+    "nickname": "Valor",
+    "contender_years": [
+      2026
+    ],
+    "winner_years": []
   },
   "6829": {
     "nickname": "Ignite Robotics",
@@ -1911,10 +2010,24 @@
     ],
     "winner_years": []
   },
+  "7407": {
+    "nickname": "Wired Boars",
+    "contender_years": [
+      2026
+    ],
+    "winner_years": []
+  },
   "7558": {
     "nickname": "ALT-F4",
     "contender_years": [
       2024
+    ],
+    "winner_years": []
+  },
+  "7769": {
+    "nickname": "The CREW",
+    "contender_years": [
+      2026
     ],
     "winner_years": []
   },
@@ -1929,6 +2042,20 @@
     "nickname": "MOJO",
     "contender_years": [
       2023
+    ],
+    "winner_years": []
+  },
+  "8229": {
+    "nickname": "Balikbayan Bots",
+    "contender_years": [
+      2026
+    ],
+    "winner_years": []
+  },
+  "8613": {
+    "nickname": "Barker Greybacks",
+    "contender_years": [
+      2026
     ],
     "winner_years": []
   },
@@ -1954,6 +2081,13 @@
     "winner_years": [
       2024
     ]
+  },
+  "9470": {
+    "nickname": "Ctrl-Alt-Defeat",
+    "contender_years": [
+      2026
+    ],
+    "winner_years": []
   },
   "9483": {
     "nickname": "Overcharge",

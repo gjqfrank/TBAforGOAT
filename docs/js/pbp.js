@@ -1083,9 +1083,17 @@ async function _injectPlayoffFirsts(teams, matchIdx, compLevel) {
             const ec = einsteinContenderMap.get(t.team_number);
             if (ec) {
                 if (ec.einstein_winner) {
-                    badges.push(`<span class="pbp-first-badge pbp-einstein-winner" title="Previous Einstein Winner">Einstein Winner</span>`);
+                    // Always show the winner pill
+                    const winCount = ec.winner_count > 1 ? ` (${ec.winner_count}×)` : '';
+                    badges.push(`<span class="pbp-first-badge pbp-einstein-winner" title="Previous Einstein Winner${ec.winner_count > 1 ? ` — ${ec.winner_count} times` : ''}">Einstein Winner${winCount}</span>`);
+                    // Also show appearances pill when they've appeared more than once
+                    if (ec.contender_count > 1) {
+                        badges.push(`<span class="pbp-first-badge pbp-einstein-contender" title="${ec.contender_count} Einstein appearances">${ec.contender_count}× Einstein</span>`);
+                    }
                 } else if (isChampDiv) {
-                    badges.push(`<span class="pbp-first-badge pbp-einstein-contender" title="Returning Einstein Contender">Returning Einstein</span>`);
+                    const appLabel = ec.contender_count > 1 ? `Returning Einstein (${ec.contender_count}×)` : 'Returning Einstein';
+                    const appTitle = ec.contender_count > 1 ? `Returning Einstein Contender — ${ec.contender_count} appearances` : 'Returning Einstein Contender';
+                    badges.push(`<span class="pbp-first-badge pbp-einstein-contender" title="${appTitle}">${appLabel}</span>`);
                 }
             }
         }

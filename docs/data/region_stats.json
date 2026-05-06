@@ -16,8 +16,8 @@
       2026
     ],
     "total_events": 15,
-    "team_count": 61,
-    "current_season_teams": 40,
+    "team_count": 60,
+    "current_season_teams": 39,
     "active_year": 2026,
     "hof_teams": [
       {
@@ -78,7 +78,8 @@
         "years": [
           2021,
           2024,
-          2025
+          2025,
+          2026
         ]
       },
       {
@@ -102,9 +103,16 @@
         "years": [
           2021
         ]
+      },
+      {
+        "team_number": 8613,
+        "nickname": "Barker Greybacks",
+        "years": [
+          2026
+        ]
       }
     ],
-    "einstein_count": 4,
+    "einstein_count": 5,
     "top_international_visitors": [
       {
         "team_number": 6083,
@@ -131,7 +139,7 @@
       2026
     ],
     "total_events": 7,
-    "team_count": 80,
+    "team_count": 78,
     "current_season_teams": 68,
     "active_year": 2026,
     "hof_teams": [],
@@ -192,8 +200,8 @@
       2026
     ],
     "total_events": 178,
-    "team_count": 267,
-    "current_season_teams": 186,
+    "team_count": 266,
+    "current_season_teams": 185,
     "active_year": 2026,
     "hof_teams": [
       {
@@ -226,9 +234,16 @@
         "years": [
           2023
         ]
+      },
+      {
+        "team_number": 9277,
+        "nickname": "Sparkans",
+        "years": [
+          2026
+        ]
       }
     ],
-    "impact_count": 3,
+    "impact_count": 4,
     "einstein_winners": [
       {
         "team_number": 296,
@@ -322,7 +337,8 @@
           2017,
           2018,
           2024,
-          2025
+          2025,
+          2026
         ]
       },
       {
@@ -343,6 +359,14 @@
           2013,
           2017,
           2018
+        ]
+      },
+      {
+        "team_number": 4946,
+        "nickname": "The Alpha Dogs",
+        "years": [
+          2025,
+          2026
         ]
       },
       {
@@ -458,13 +482,6 @@
         ]
       },
       {
-        "team_number": 4946,
-        "nickname": "The Alpha Dogs",
-        "years": [
-          2025
-        ]
-      },
-      {
         "team_number": 5406,
         "nickname": "Celt-X",
         "years": [
@@ -484,9 +501,16 @@
         "years": [
           2024
         ]
+      },
+      {
+        "team_number": 7799,
+        "nickname": "Phat Cache",
+        "years": [
+          2020
+        ]
       }
     ],
-    "einstein_count": 23,
+    "einstein_count": 24,
     "top_international_visitors": [
       {
         "team_number": 244,
@@ -599,7 +623,7 @@
       2026
     ],
     "total_events": 9,
-    "team_count": 67,
+    "team_count": 68,
     "current_season_teams": 48,
     "active_year": 2026,
     "hof_teams": [],
@@ -683,8 +707,8 @@
       2026
     ],
     "total_events": 172,
-    "team_count": 356,
-    "current_season_teams": 298,
+    "team_count": 354,
+    "current_season_teams": 292,
     "active_year": 2026,
     "hof_teams": [
       {
@@ -762,6 +786,34 @@
         ]
       },
       {
+        "team_number": 1323,
+        "nickname": "MadTown Robotics",
+        "years": [
+          2019,
+          2023,
+          2025,
+          2026
+        ],
+        "wins": [
+          {
+            "year": 2019,
+            "division": "Newton"
+          },
+          {
+            "year": 2023,
+            "division": "Hopper"
+          },
+          {
+            "year": 2025,
+            "division": "Newton"
+          },
+          {
+            "year": 2026,
+            "division": "Daly"
+          }
+        ]
+      },
+      {
         "team_number": 973,
         "nickname": "Greybots",
         "years": [
@@ -785,29 +837,6 @@
         ]
       },
       {
-        "team_number": 1323,
-        "nickname": "MadTown Robotics",
-        "years": [
-          2019,
-          2023,
-          2025
-        ],
-        "wins": [
-          {
-            "year": 2019,
-            "division": "Newton"
-          },
-          {
-            "year": 2023,
-            "division": "Hopper"
-          },
-          {
-            "year": 2025,
-            "division": "Newton"
-          }
-        ]
-      },
-      {
         "team_number": 294,
         "nickname": "Beach Cities Robotics",
         "years": [
@@ -822,6 +851,24 @@
           {
             "year": 2010,
             "division": "Newton"
+          }
+        ]
+      },
+      {
+        "team_number": 4414,
+        "nickname": "HighTide",
+        "years": [
+          2023,
+          2026
+        ],
+        "wins": [
+          {
+            "year": 2023,
+            "division": "Hopper"
+          },
+          {
+            "year": 2026,
+            "division": "Daly"
           }
         ]
       },
@@ -896,6 +943,19 @@
         ]
       },
       {
+        "team_number": 1538,
+        "nickname": "The Holy Cows",
+        "years": [
+          2026
+        ],
+        "wins": [
+          {
+            "year": 2026,
+            "division": "Daly"
+          }
+        ]
+      },
+      {
         "team_number": 1671,
         "nickname": "Buchanan Bird Brains",
         "years": [
@@ -935,19 +995,6 @@
         ]
       },
       {
-        "team_number": 4414,
-        "nickname": "HighTide",
-        "years": [
-          2023
-        ],
-        "wins": [
-          {
-            "year": 2023,
-            "division": "Hopper"
-          }
-        ]
-      },
-      {
         "team_number": 5012,
         "nickname": "Gryffingear",
         "years": [
@@ -974,7 +1021,7 @@
         ]
       }
     ],
-    "einstein_winner_count": 15,
+    "einstein_winner_count": 16,
     "einstein_teams": [
       {
         "team_number": 254,
@@ -989,7 +1036,8 @@
           2018,
           2019,
           2022,
-          2024
+          2024,
+          2026
         ]
       },
       {
@@ -1005,7 +1053,21 @@
           2019,
           2022,
           2023,
-          2024
+          2024,
+          2026
+        ]
+      },
+      {
+        "team_number": 1323,
+        "nickname": "MadTown Robotics",
+        "years": [
+          2018,
+          2019,
+          2022,
+          2023,
+          2024,
+          2025,
+          2026
         ]
       },
       {
@@ -1018,18 +1080,6 @@
           2019,
           2022,
           2023
-        ]
-      },
-      {
-        "team_number": 1323,
-        "nickname": "MadTown Robotics",
-        "years": [
-          2018,
-          2019,
-          2022,
-          2023,
-          2024,
-          2025
         ]
       },
       {
@@ -1054,6 +1104,16 @@
         ]
       },
       {
+        "team_number": 4414,
+        "nickname": "HighTide",
+        "years": [
+          2022,
+          2023,
+          2025,
+          2026
+        ]
+      },
+      {
         "team_number": 294,
         "nickname": "Beach Cities Robotics",
         "years": [
@@ -1072,15 +1132,6 @@
         ]
       },
       {
-        "team_number": 4414,
-        "nickname": "HighTide",
-        "years": [
-          2022,
-          2023,
-          2025
-        ]
-      },
-      {
         "team_number": 971,
         "nickname": "Spartan Robotics",
         "years": [
@@ -1094,6 +1145,14 @@
         "years": [
           2019,
           2025
+        ]
+      },
+      {
+        "team_number": 5940,
+        "nickname": "BREAD",
+        "years": [
+          2022,
+          2026
         ]
       },
       {
@@ -1167,6 +1226,13 @@
         ]
       },
       {
+        "team_number": 1538,
+        "nickname": "The Holy Cows",
+        "years": [
+          2026
+        ]
+      },
+      {
         "team_number": 1671,
         "nickname": "Buchanan Bird Brains",
         "years": [
@@ -1179,23 +1245,9 @@
         "years": [
           2017
         ]
-      },
-      {
-        "team_number": 2073,
-        "nickname": "EagleForce",
-        "years": [
-          2025
-        ]
-      },
-      {
-        "team_number": 3965,
-        "nickname": "Sultan Robotics Team 3965",
-        "years": [
-          2018
-        ]
       }
     ],
-    "einstein_count": 32,
+    "einstein_count": 34,
     "top_international_visitors": [
       {
         "team_number": 4481,
@@ -1357,8 +1409,8 @@
       2026
     ],
     "total_events": 144,
-    "team_count": 169,
-    "current_season_teams": 120,
+    "team_count": 168,
+    "current_season_teams": 119,
     "active_year": 2026,
     "hof_teams": [
       {
@@ -1467,7 +1519,8 @@
           2017,
           2018,
           2024,
-          2025
+          2025,
+          2026
         ]
       },
       {
@@ -1488,6 +1541,14 @@
           2013,
           2017,
           2018
+        ]
+      },
+      {
+        "team_number": 4946,
+        "nickname": "The Alpha Dogs",
+        "years": [
+          2025,
+          2026
         ]
       },
       {
@@ -1582,13 +1643,6 @@
         ]
       },
       {
-        "team_number": 4946,
-        "nickname": "The Alpha Dogs",
-        "years": [
-          2025
-        ]
-      },
-      {
         "team_number": 5406,
         "nickname": "Celt-X",
         "years": [
@@ -1665,8 +1719,8 @@
       2026
     ],
     "total_events": 121,
-    "team_count": 140,
-    "current_season_teams": 120,
+    "team_count": 138,
+    "current_season_teams": 117,
     "active_year": 2026,
     "hof_teams": [
       {
@@ -1822,9 +1876,9 @@
       2025,
       2026
     ],
-    "total_events": 142,
-    "team_count": 244,
-    "current_season_teams": 181,
+    "total_events": 141,
+    "team_count": 245,
+    "current_season_teams": 182,
     "active_year": 2026,
     "hof_teams": [],
     "hof_count": 0,
@@ -1977,6 +2031,14 @@
         ]
       },
       {
+        "team_number": 4206,
+        "nickname": "Robo Vikes",
+        "years": [
+          2024,
+          2026
+        ]
+      },
+      {
         "team_number": 6672,
         "nickname": "Fusion Corps",
         "years": [
@@ -2048,21 +2110,21 @@
         ]
       },
       {
-        "team_number": 4206,
-        "nickname": "Robo Vikes",
-        "years": [
-          2024
-        ]
-      },
-      {
         "team_number": 5892,
         "nickname": "Energy HEROs",
         "years": [
           2017
         ]
+      },
+      {
+        "team_number": 6800,
+        "nickname": "Valor",
+        "years": [
+          2026
+        ]
       }
     ],
-    "einstein_count": 17,
+    "einstein_count": 18,
     "top_international_visitors": [],
     "official_team_count": 181
   },
@@ -2095,7 +2157,7 @@
     ],
     "total_events": 62,
     "team_count": 77,
-    "current_season_teams": 69,
+    "current_season_teams": 68,
     "active_year": 2026,
     "hof_teams": [],
     "hof_count": 0,
@@ -2174,7 +2236,8 @@
         "nickname": "TechHOUNDS",
         "years": [
           2004,
-          2018
+          2018,
+          2026
         ]
       },
       {
@@ -2317,7 +2380,8 @@
         "years": [
           2016,
           2024,
-          2025
+          2025,
+          2026
         ]
       },
       {
@@ -2406,7 +2470,7 @@
     ],
     "total_events": 168,
     "team_count": 197,
-    "current_season_teams": 173,
+    "current_season_teams": 170,
     "active_year": 2026,
     "hof_teams": [
       {
@@ -2603,13 +2667,6 @@
         ]
       },
       {
-        "team_number": 321,
-        "nickname": "RoboLancers",
-        "years": [
-          2024
-        ]
-      },
-      {
         "team_number": 5895,
         "nickname": "Peddie Robotics",
         "years": [
@@ -2643,6 +2700,13 @@
         "nickname": "The T.E.S.T. Team",
         "years": [
           2013
+        ]
+      },
+      {
+        "team_number": 321,
+        "nickname": "RoboLancers",
+        "years": [
+          2024
         ]
       },
       {
@@ -2730,6 +2794,13 @@
         ]
       },
       {
+        "team_number": 5181,
+        "nickname": "Explorer Robotics",
+        "years": [
+          2026
+        ]
+      },
+      {
         "team_number": 5401,
         "nickname": "Fightin' Robotic Owls",
         "years": [
@@ -2737,7 +2808,7 @@
         ]
       }
     ],
-    "einstein_count": 23,
+    "einstein_count": 24,
     "top_international_visitors": [],
     "official_team_count": 143
   },
@@ -2764,8 +2835,8 @@
       2026
     ],
     "total_events": 64,
-    "team_count": 117,
-    "current_season_teams": 91,
+    "team_count": 116,
+    "current_season_teams": 90,
     "active_year": 2026,
     "hof_teams": [],
     "hof_count": 0,
@@ -2825,6 +2896,13 @@
         ]
       },
       {
+        "team_number": 3506,
+        "nickname": "YETI Robotics",
+        "years": [
+          2026
+        ]
+      },
+      {
         "team_number": 4828,
         "nickname": "RoboEagles",
         "years": [
@@ -2832,7 +2910,7 @@
         ]
       }
     ],
-    "einstein_count": 5,
+    "einstein_count": 6,
     "top_international_visitors": [],
     "official_team_count": 90
   },
@@ -2918,8 +2996,8 @@
       2026
     ],
     "total_events": 34,
-    "team_count": 72,
-    "current_season_teams": 69,
+    "team_count": 73,
+    "current_season_teams": 70,
     "active_year": 2026,
     "hof_teams": [],
     "hof_count": 0,
@@ -2933,6 +3011,13 @@
         "nickname": "Mukwonago BEARs",
         "years": [
           2019
+        ]
+      },
+      {
+        "team_number": 1714,
+        "nickname": "MORE Robotics",
+        "years": [
+          2026
         ]
       },
       {
@@ -2957,7 +3042,7 @@
         ]
       }
     ],
-    "einstein_count": 4,
+    "einstein_count": 5,
     "top_international_visitors": [],
     "official_team_count": 71
   },
@@ -2997,7 +3082,7 @@
     ],
     "total_events": 408,
     "team_count": 626,
-    "current_season_teams": 531,
+    "current_season_teams": 530,
     "active_year": 2026,
     "hof_teams": [
       {
@@ -3312,15 +3397,6 @@
         ]
       },
       {
-        "team_number": 503,
-        "nickname": "Frog Force",
-        "years": [
-          2005,
-          2006,
-          2021
-        ]
-      },
-      {
         "team_number": 33,
         "nickname": "Killer Bees",
         "years": [
@@ -3336,6 +3412,15 @@
           2003,
           2017,
           2023
+        ]
+      },
+      {
+        "team_number": 503,
+        "nickname": "Frog Force",
+        "years": [
+          2005,
+          2006,
+          2021
         ]
       },
       {
@@ -3477,7 +3562,7 @@
         ]
       }
     ],
-    "einstein_count": 25,
+    "einstein_count": 52,
     "top_international_visitors": [],
     "official_team_count": 531
   },
@@ -3564,8 +3649,8 @@
       2026
     ],
     "total_events": 220,
-    "team_count": 504,
-    "current_season_teams": 439,
+    "team_count": 501,
+    "current_season_teams": 432,
     "active_year": 2026,
     "hof_teams": [
       {
@@ -3749,29 +3834,22 @@
         ]
       },
       {
+        "team_number": 2481,
+        "nickname": "Roboteers",
+        "years": [
+          2014,
+          2016,
+          2025,
+          2026
+        ]
+      },
+      {
         "team_number": 144,
         "nickname": "Operation Orange",
         "years": [
           2001,
           2002,
           2015
-        ]
-      },
-      {
-        "team_number": 2052,
-        "nickname": "KnightKrawler",
-        "years": [
-          2016,
-          2019
-        ]
-      },
-      {
-        "team_number": 2481,
-        "nickname": "Roboteers",
-        "years": [
-          2014,
-          2016,
-          2025
         ]
       },
       {
@@ -3791,6 +3869,14 @@
         ]
       },
       {
+        "team_number": 2052,
+        "nickname": "KnightKrawler",
+        "years": [
+          2016,
+          2019
+        ]
+      },
+      {
         "team_number": 3061,
         "nickname": "Huskie Robotics",
         "years": [
@@ -3804,13 +3890,6 @@
         "years": [
           2019,
           2023
-        ]
-      },
-      {
-        "team_number": 5348,
-        "nickname": "Charger Robotics",
-        "years": [
-          2020
         ]
       },
       {
@@ -3903,9 +3982,37 @@
         "years": [
           2015
         ]
+      },
+      {
+        "team_number": 3138,
+        "nickname": "Innovators Robotics",
+        "years": [
+          2010
+        ]
+      },
+      {
+        "team_number": 3184,
+        "nickname": "Blaze Robotics",
+        "years": [
+          2023
+        ]
+      },
+      {
+        "team_number": 3276,
+        "nickname": "TOOLCATS",
+        "years": [
+          2025
+        ]
+      },
+      {
+        "team_number": 3284,
+        "nickname": "Camdenton  LASER 3284",
+        "years": [
+          2021
+        ]
       }
     ],
-    "einstein_count": 22,
+    "einstein_count": 32,
     "top_international_visitors": [
       {
         "team_number": 5996,
@@ -3986,8 +4093,8 @@
       2026
     ],
     "total_events": 101,
-    "team_count": 212,
-    "current_season_teams": 140,
+    "team_count": 211,
+    "current_season_teams": 139,
     "active_year": 2026,
     "hof_teams": [
       {
@@ -4010,19 +4117,40 @@
         "years": [
           2024
         ]
+      },
+      {
+        "team_number": 6352,
+        "nickname": "LAUNCH TEAM",
+        "years": [
+          2026
+        ]
       }
     ],
-    "hof_count": 3,
+    "hof_count": 4,
     "impact_finalists": [
+      {
+        "team_number": 359,
+        "nickname": "Hawaiian Kids",
+        "years": [
+          2026
+        ]
+      },
       {
         "team_number": 2486,
         "nickname": "CocoNuts",
         "years": [
           2024
         ]
+      },
+      {
+        "team_number": 6352,
+        "nickname": "LAUNCH TEAM",
+        "years": [
+          2026
+        ]
       }
     ],
-    "impact_count": 1,
+    "impact_count": 3,
     "einstein_winners": [
       {
         "team_number": 987,
@@ -4102,14 +4230,6 @@
         ]
       },
       {
-        "team_number": 498,
-        "nickname": "The Cobra Commanders",
-        "years": [
-          2019,
-          2025
-        ]
-      },
-      {
         "team_number": 2122,
         "nickname": "Team Tators",
         "years": [
@@ -4127,6 +4247,14 @@
         ]
       },
       {
+        "team_number": 498,
+        "nickname": "The Cobra Commanders",
+        "years": [
+          2019,
+          2025
+        ]
+      },
+      {
         "team_number": 1619,
         "nickname": "Up-A-Creek Robotics",
         "years": [
@@ -4135,10 +4263,11 @@
         ]
       },
       {
-        "team_number": 4499,
-        "nickname": "The Highlanders",
+        "team_number": 3006,
+        "nickname": "Red Rock Robotics",
         "years": [
-          2018
+          2021,
+          2026
         ]
       },
       {
@@ -4156,13 +4285,6 @@
         ]
       },
       {
-        "team_number": 3006,
-        "nickname": "Red Rock Robotics",
-        "years": [
-          2021
-        ]
-      },
-      {
         "team_number": 3374,
         "nickname": "Jackson Hole RoboBroncs",
         "years": [
@@ -4177,10 +4299,24 @@
         ]
       },
       {
+        "team_number": 4499,
+        "nickname": "The Highlanders",
+        "years": [
+          2018
+        ]
+      },
+      {
         "team_number": 6821,
         "nickname": "Rogue Techs",
         "years": [
           2020
+        ]
+      },
+      {
+        "team_number": 8229,
+        "nickname": "Balikbayan Bots",
+        "years": [
+          2026
         ]
       },
       {
@@ -4191,7 +4327,7 @@
         ]
       }
     ],
-    "einstein_count": 14,
+    "einstein_count": 15,
     "top_international_visitors": [
       {
         "team_number": 7645,
@@ -4234,12 +4370,6 @@
         "nickname": "Ghost",
         "country": "Netherlands",
         "appearances": 3
-      },
-      {
-        "team_number": 5449,
-        "nickname": "Prototype",
-        "country": "China",
-        "appearances": 2
       },
       {
         "team_number": 3158,
@@ -4342,7 +4472,7 @@
     ],
     "total_events": 365,
     "team_count": 229,
-    "current_season_teams": 203,
+    "current_season_teams": 206,
     "active_year": 2026,
     "hof_teams": [
       {
@@ -4532,6 +4662,22 @@
         ]
       },
       {
+        "team_number": 2877,
+        "nickname": "LigerBots",
+        "years": [
+          2025,
+          2026
+        ]
+      },
+      {
+        "team_number": 6329,
+        "nickname": "The Bucks' Wrath",
+        "years": [
+          2023,
+          2026
+        ]
+      },
+      {
         "team_number": 38,
         "nickname": "Nonnebots",
         "years": [
@@ -4635,23 +4781,9 @@
         "years": [
           2024
         ]
-      },
-      {
-        "team_number": 2877,
-        "nickname": "LigerBots",
-        "years": [
-          2025
-        ]
-      },
-      {
-        "team_number": 3467,
-        "nickname": "Windham Windup",
-        "years": [
-          2014
-        ]
       }
     ],
-    "einstein_count": 31,
+    "einstein_count": 34,
     "top_international_visitors": [],
     "official_team_count": 200
   },
@@ -4687,8 +4819,8 @@
       2026
     ],
     "total_events": 100,
-    "team_count": 192,
-    "current_season_teams": 155,
+    "team_count": 193,
+    "current_season_teams": 154,
     "active_year": 2026,
     "hof_teams": [
       {
@@ -4708,9 +4840,23 @@
         "years": [
           2022
         ]
+      },
+      {
+        "team_number": 1880,
+        "nickname": "Warriors of East Harlem",
+        "years": [
+          2026
+        ]
+      },
+      {
+        "team_number": 8393,
+        "nickname": "The Giant Diencephalic BrainSTEM Robotics Team",
+        "years": [
+          2026
+        ]
       }
     ],
-    "impact_count": 1,
+    "impact_count": 3,
     "einstein_winners": [],
     "einstein_winner_count": 0,
     "einstein_teams": [
@@ -4856,7 +5002,7 @@
       },
       {
         "team_number": 9030,
-        "nickname": "Garabagh MecHack",
+        "nickname": "Qarabagh MecHack",
         "country": "Azerbaijan",
         "appearances": 3
       },
@@ -4997,7 +5143,7 @@
     ],
     "total_events": 31,
     "team_count": 61,
-    "current_season_teams": 36,
+    "current_season_teams": 35,
     "active_year": 2026,
     "hof_teams": [
       {
@@ -5228,8 +5374,8 @@
       2026
     ],
     "total_events": 18,
-    "team_count": 34,
-    "current_season_teams": 20,
+    "team_count": 33,
+    "current_season_teams": 18,
     "active_year": 2026,
     "hof_teams": [],
     "hof_count": 0,
@@ -5395,7 +5541,8 @@
         "years": [
           2018,
           2022,
-          2025
+          2025,
+          2026
         ]
       },
       {
@@ -5403,7 +5550,8 @@
         "nickname": "Bear Metal",
         "years": [
           2017,
-          2019
+          2019,
+          2026
         ]
       },
       {
@@ -5513,6 +5661,13 @@
         ]
       },
       {
+        "team_number": 4915,
+        "nickname": "Spartronics",
+        "years": [
+          2026
+        ]
+      },
+      {
         "team_number": 7461,
         "nickname": "Sushi Squad",
         "years": [
@@ -5520,7 +5675,7 @@
         ]
       }
     ],
-    "einstein_count": 18,
+    "einstein_count": 19,
     "top_international_visitors": [],
     "official_team_count": 126
   },
@@ -5554,8 +5709,8 @@
       2026
     ],
     "total_events": 75,
-    "team_count": 102,
-    "current_season_teams": 77,
+    "team_count": 101,
+    "current_season_teams": 74,
     "active_year": 2026,
     "hof_teams": [
       {
@@ -5632,7 +5787,7 @@
     ],
     "einstein_count": 7,
     "top_international_visitors": [],
-    "official_team_count": 76
+    "official_team_count": 75
   },
   "Southeast": {
     "first_event_year": 1999,
@@ -5668,8 +5823,8 @@
       2026
     ],
     "total_events": 108,
-    "team_count": 295,
-    "current_season_teams": 208,
+    "team_count": 291,
+    "current_season_teams": 203,
     "active_year": 2026,
     "hof_teams": [
       {
@@ -5725,9 +5880,22 @@
             "division": "Galileo"
           }
         ]
+      },
+      {
+        "team_number": 4065,
+        "nickname": "Nerds of Prey",
+        "years": [
+          2026
+        ],
+        "wins": [
+          {
+            "year": 2026,
+            "division": "Daly"
+          }
+        ]
       }
     ],
-    "einstein_winner_count": 2,
+    "einstein_winner_count": 3,
     "einstein_teams": [
       {
         "team_number": 233,
@@ -5775,20 +5943,6 @@
         ]
       },
       {
-        "team_number": 1902,
-        "nickname": "Exploding Bacon",
-        "years": [
-          2007
-        ]
-      },
-      {
-        "team_number": 8044,
-        "nickname": "Denham Venom",
-        "years": [
-          2025
-        ]
-      },
-      {
         "team_number": 59,
         "nickname": "RamTech",
         "years": [
@@ -5831,10 +5985,24 @@
         ]
       },
       {
+        "team_number": 1902,
+        "nickname": "Exploding Bacon",
+        "years": [
+          2007
+        ]
+      },
+      {
         "team_number": 3932,
         "nickname": "The Dirty Mechanics",
         "years": [
           2021
+        ]
+      },
+      {
+        "team_number": 4065,
+        "nickname": "Nerds of Prey",
+        "years": [
+          2026
         ]
       },
       {
@@ -5857,9 +6025,16 @@
         "years": [
           2022
         ]
+      },
+      {
+        "team_number": 8044,
+        "nickname": "Denham Venom",
+        "years": [
+          2025
+        ]
       }
     ],
-    "einstein_count": 17,
+    "einstein_count": 18,
     "top_international_visitors": [
       {
         "team_number": 7403,
@@ -5997,8 +6172,8 @@
       2026
     ],
     "total_events": 29,
-    "team_count": 307,
-    "current_season_teams": 208,
+    "team_count": 305,
+    "current_season_teams": 204,
     "active_year": 2026,
     "hof_teams": [],
     "hof_count": 0,
@@ -6025,24 +6200,31 @@
           2022,
           2024
         ]
+      },
+      {
+        "team_number": 9545,
+        "nickname": "Caracal Robotics",
+        "years": [
+          2026
+        ]
       }
     ],
-    "impact_count": 3,
+    "impact_count": 4,
     "einstein_winners": [],
     "einstein_winner_count": 0,
     "einstein_teams": [
-      {
-        "team_number": 9483,
-        "nickname": "Overcharge",
-        "years": [
-          2024
-        ]
-      },
       {
         "team_number": 3646,
         "nickname": "INTEGRA BAHCESEHIR",
         "years": [
           2019
+        ]
+      },
+      {
+        "team_number": 9483,
+        "nickname": "Overcharge",
+        "years": [
+          2024
         ]
       }
     ],
@@ -6064,12 +6246,6 @@
         "team_number": 5883,
         "nickname": "Spice Gears",
         "country": "Poland",
-        "appearances": 5
-      },
-      {
-        "team_number": 8173,
-        "nickname": "Brighton College Gear Zero",
-        "country": "United Kingdom",
         "appearances": 5
       },
       {
@@ -6097,6 +6273,12 @@
         "appearances": 4
       },
       {
+        "team_number": 8173,
+        "nickname": "Brighton College Gear Zero",
+        "country": "United Kingdom",
+        "appearances": 4
+      },
+      {
         "team_number": 9089,
         "nickname": "ACS Phoenix",
         "country": "Bulgaria",
@@ -6110,7 +6292,7 @@
       },
       {
         "team_number": 9692,
-        "nickname": "Sigma Powered By Adipro",
+        "nickname": "Sigma",
         "country": "India",
         "appearances": 4
       },
@@ -6157,26 +6339,8 @@
         "appearances": 3
       },
       {
-        "team_number": 8214,
-        "nickname": "Cyber Unicorn",
-        "country": "China",
-        "appearances": 3
-      },
-      {
         "team_number": 6941,
         "nickname": "IronPulse Robotics",
-        "country": "China",
-        "appearances": 3
-      },
-      {
-        "team_number": 8570,
-        "nickname": "Binary-Bolts",
-        "country": "India",
-        "appearances": 3
-      },
-      {
-        "team_number": 10541,
-        "nickname": "CarbonPulse Robotics",
         "country": "China",
         "appearances": 3
       },
@@ -6195,6 +6359,12 @@
       {
         "team_number": 7522,
         "nickname": "ElephantRobo",
+        "country": "China",
+        "appearances": 2
+      },
+      {
+        "team_number": 8214,
+        "nickname": "Cyber Unicorn",
         "country": "China",
         "appearances": 2
       },
@@ -6259,14 +6429,14 @@
         "appearances": 2
       },
       {
-        "team_number": 8011,
-        "nickname": "Kirin",
+        "team_number": 10541,
+        "nickname": "CarbonPulse Robotics",
         "country": "China",
         "appearances": 2
       },
       {
-        "team_number": 9635,
-        "nickname": "Cyber Rabbit",
+        "team_number": 8011,
+        "nickname": "Wayi Guangzhou",
         "country": "China",
         "appearances": 2
       },
@@ -6274,6 +6444,12 @@
         "team_number": 11141,
         "nickname": "AlphaZ",
         "country": "Romania",
+        "appearances": 2
+      },
+      {
+        "team_number": 7594,
+        "nickname": "Nautilus",
+        "country": "China",
         "appearances": 2
       },
       {
