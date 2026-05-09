@@ -76,10 +76,10 @@ async def _sync_ftc_event_metadata(year: int) -> tuple[set[str], set[str]]:
         raw_events = await client.get_events(year)
     except CircuitOpenError:
         log.debug("Circuit open — skipping FTC event metadata sync")
-            return _ftc_active_events, set()
-        except Exception as e:
-            log.warning("FTC event metadata fetch failed: %s", e)
-            return _ftc_active_events, set()
+        return _ftc_active_events, set()
+    except Exception as e:
+        log.warning("FTC event metadata fetch failed: %s", e)
+        return _ftc_active_events, set()
     recently_completed: set[str] = set()
     rows: list[dict[str, Any]] = []
 
