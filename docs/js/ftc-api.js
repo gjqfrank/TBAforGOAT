@@ -67,7 +67,7 @@ const FTC_API = {
     teamAwardsSummary:  (teamNums) => FTC_API.get(`/events/teams/awards-summary?teams=${teamNums.join(',')}`),
     teamLookup:         (num, season) => FTC_API.get(`/events/team/${num}?season=${season || currentFtcSeason()}`),
     teamOprHistory:     (num, season) => FTC_API.get(`/events/team/${num}/opr-history?season=${season || currentFtcSeason()}`),
-    headToHead:         (a, b, _year, allTime) => FTC_API.get(`/events/teams/head-to-head/${a}/${b}?all_time=${allTime ? 'true' : 'false'}`),
+    headToHead:         (a, b, _year, allTime) => FTC_API.get(`/matches/head-to-head/${a}/${b}?all_time=${allTime ? 'true' : 'false'}`),
 
     // ── Matches ─────────────────────────────────────────
     allMatches:     (ek) => FTC_API.get(`/matches/${ek}/all`),
