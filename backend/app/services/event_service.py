@@ -296,7 +296,11 @@ def _apply_tims_overrides(team: dict, overrides: dict) -> None:
     if "custom_teleop_strategy" in overrides:
         team["teleop_strategy"] = overrides["custom_teleop_strategy"]
     if "custom_number_display" in overrides:
-        team["number_display"] = overrides["custom_number_display"]
+        nd = overrides["custom_number_display"]
+        # Only apply if the value contains at least one digit; ignore garbage
+        # values like "()" that could have been stored by a previous buggy save.
+        if nd and any(c.isdigit() for c in str(nd)):
+            team["number_display"] = nd
     # Audit metadata (for frontend display of "Last updated by")
     if "author_name" in overrides:
         team["tims_author"] = overrides["author_name"]

@@ -315,7 +315,8 @@ async function saveOverrideData(teamNumber, payload) {
     // Build the Supabase-compatible payload
     const body = { author_device_id: _getDeviceId() };
 
-    // Identity fields — send value or null (to clear)
+    // Identity fields — send value or null (to clear).
+    // number_display must contain at least one digit to be valid; strip garbage.
     body.custom_nickname      = payload.nickname      || null;
     body.custom_organization  = payload.organization  || null;
     body.custom_location      = payload.location      || null;
@@ -323,7 +324,8 @@ async function saveOverrideData(teamNumber, payload) {
     body.custom_pronunciation = payload.pronunciation || null;
     body.custom_robot_name    = payload.robot_name    || null;
     body.custom_motto         = payload.motto         || null;
-    body.custom_number_display = payload.number_display || null;
+    body.custom_number_display = (payload.number_display && /\d/.test(payload.number_display))
+        ? payload.number_display : null;
 
     // Hardware & Playstyle — store as JSON array strings or null
     body.custom_hardware       = payload.hardware?.length        ? JSON.stringify(payload.hardware) : null;
@@ -347,6 +349,28 @@ async function saveOverrideData(teamNumber, payload) {
         };
         await DB.putOverride(record).catch(() => {});
         if (typeof _timsCache !== 'undefined') _timsCache[teamNumber] = record;
+
+        // Also update the in-memory teamsData entry so stale server-applied
+        // values (e.g. a corrupted number_display that the backend had already
+        // baked into the response) don't linger for this session.
+        if (typeof teamsData !== 'undefined' && teamsData) {
+            const td = teamsData.find(t => t.team_number === teamNumber);
+            if (td) {
+                if (payload.nickname)      td.nickname    = payload.nickname;
+                if (payload.organization)  td.school_name = payload.organization;
+                if (payload.robot_name)    td.robot_name  = payload.robot_name;
+                if (payload.top_sponsors)  td.top_sponsors = payload.top_sponsors;
+                if (payload.motto)         td.motto       = payload.motto;
+                // Always update number_display (even to empty) so _renderTeamNum
+                // picks up the cleared value via the cache, not the stale td value.
+                td.number_display = body.custom_number_display || '';
+                if (payload.location) {
+                    const parts = payload.location.split(',').map(s => s.trim());
+                    td.city       = parts[0] || td.city;
+                    td.state_prov = parts.slice(1).join(', ') || td.state_prov;
+                }
+            }
+        }
         console.info('[Editor] Saved override for team', teamNumber, result);
         return { success: true, data: result };
     } catch (err) {

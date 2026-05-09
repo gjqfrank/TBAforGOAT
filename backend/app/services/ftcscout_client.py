@@ -15,6 +15,7 @@ FTCSCOUT_URL = "https://api.ftcscout.org/graphql"
 CACHE_TTL = 300        # 5 min for team-level stats
 EVENT_CACHE_TTL = 120  # 2 min for event queries
 WR_CACHE_TTL = 600     # 10 min for world record
+SEASON_STATS_TTL = 600 # 10 min for season-wide records (change slowly)
 _MAX_CACHE_ENTRIES = 500  # cap to prevent unbounded growth
 
 ftcscout_breaker = get_breaker("FTC Scout", failure_threshold=10, recovery_timeout=60, window=60)
@@ -423,6 +424,207 @@ class FTCScoutClient:
 
         self._set_cache(cache_key, results)
         return results
+
+    # ── Season-wide records (high scores + top OPR teams) ───
+
+    async def get_season_high_scores(self, season: int, limit: int = 10) -> dict:
+        """Fetch top match scores and top OPR teams for an FTC season.
+
+        Uses ``matchRecords`` (sorted by totalPointsNp) for high-scoring
+        matches and ``tepRecords`` (sorted by opr.totalPoints) for top teams.
+        Results are deduplicated — each team appears at most once in opr_teams.
+
+        Returns::
+
+            {
+                "matches":   [...],   # top *limit* scoring alliance performances
+                "opr_teams": [...],   # top *limit* teams by best single-event OPR
+                "team_names": {...},  # team_number (str) -> name lookup
+            }
+        """
+        import asyncio
+
+        cache_key = f"season_high:{season}:{limit}"
+        cached = self._get_cached(cache_key, SEASON_STATS_TTL)
+        if cached is not None:
+            return cached
+
+        _stat_frag = """
+            opr { totalPoints autoPoints dcPoints totalPointsNp }
+            rank wins losses
+        """
+        _score_frag = """
+            red { totalPoints autoPoints dcPoints totalPointsNp }
+            blue { totalPoints autoPoints dcPoints totalPointsNp }
+        """
+
+        match_query = """
+        query ($season: Int!, $take: Int!) {
+          matchRecords(
+            season: $season
+            sortBy: "totalPointsNp"
+            sortDir: Desc
+            skip: 0
+            take: $take
+          ) {
+            data {
+              noFilterRank
+              data {
+                alliance
+                match {
+                  season eventCode id tournamentLevel matchNum
+                  scores {
+                    ... on MatchScores2025 { """ + _score_frag + """ }
+                    ... on MatchScores2024 { """ + _score_frag + """ }
+                  }
+                  teams {
+                    station teamNumber
+                    team { name }
+                  }
+                }
+              }
+            }
+          }
+        }
+        """
+
+        tep_query = """
+        query ($season: Int!, $take: Int!) {
+          tepRecords(
+            season: $season
+            sortBy: "opr.totalPoints"
+            sortDir: Desc
+            skip: 0
+            take: $take
+          ) {
+            data {
+              noFilterRank
+              data {
+                teamNumber
+                stats {
+                  ... on TeamEventStats2025 { """ + _stat_frag + """ }
+                  ... on TeamEventStats2024 { """ + _stat_frag + """ }
+                }
+                team { name }
+                event { code name }
+              }
+            }
+          }
+        }
+        """
+
+        # Fetch both queries in parallel (single circuit-breaker unit)
+        async def _fetch_both():
+            return await asyncio.gather(
+                self._query(match_query, {"season": season, "take": limit * 2}),
+                self._query(tep_query, {"season": season, "take": limit * 3}),
+                return_exceptions=True,
+            )
+
+        try:
+            match_data, tep_data = await ftcscout_breaker.call(_fetch_both)
+        except Exception as exc:
+            log.warning("FTC Scout season high scores failed for %d: %s", season, exc)
+            return {"matches": [], "opr_teams": [], "team_names": {}}
+
+        team_names: dict[str, str] = {}
+
+        # ── Process match records ────────────────────────────
+        matches: list[dict] = []
+        if not isinstance(match_data, Exception):
+            for row in (match_data.get("matchRecords") or {}).get("data", []):
+                inner = row.get("data") or {}
+                match = inner.get("match") or {}
+                alliance = (inner.get("alliance") or "Red").lower()
+                scores = match.get("scores") or {}
+                side = scores.get(alliance) or {}
+
+                score_np = side.get("totalPointsNp", 0) or 0
+                score = side.get("totalPoints", 0) or 0
+                auto = side.get("autoPoints", 0) or 0
+                dc = side.get("dcPoints", 0) or 0
+
+                all_teams = match.get("teams") or []
+                # FTC Scout returns teams ordered Red1, Red2, [RedSurrogate], Blue1, Blue2, [BlueSurrogate].
+                # Filter to on-field stations first, then split by position.
+                on_field = [
+                    {"number": t.get("teamNumber"), "name": (t.get("team") or {}).get("name", "")}
+                    for t in all_teams
+                    if t.get("station") in ("One", "Two")
+                ]
+                for pt in on_field:
+                    if pt.get("number") and pt.get("name"):
+                        team_names[str(pt["number"])] = pt["name"]
+                # Keep only the 2 robots that belong to the scoring alliance
+                playing = on_field[:2] if alliance == "red" else on_field[2:]
+
+                event_code = match.get("eventCode", "")
+                level = match.get("tournamentLevel", "")
+                match_num = match.get("matchNum", 0)
+
+                matches.append({
+                    "rank": row.get("noFilterRank"),
+                    "event_code": event_code,
+                    "event_key": f"{season}ftc{event_code}".lower(),
+                    "event_name": event_code,  # router enriches with friendly name
+                    "match_id": match.get("id"),
+                    "level": level,
+                    "match_number": match_num,
+                    "match_label": f"{level} {match_num}" if level else f"M{match_num}",
+                    "alliance": alliance,
+                    "score": score,
+                    "score_np": score_np,
+                    "auto": auto,
+                    "dc": dc,
+                    "red_score": (scores.get("red") or {}).get("totalPoints", 0),
+                    "blue_score": (scores.get("blue") or {}).get("totalPoints", 0),
+                    "teams": [pt["name"] for pt in playing if pt.get("name")],
+                    "team_numbers": [pt["number"] for pt in playing if pt.get("number")],
+                })
+                if len(matches) >= limit:
+                    break
+
+        # ── Process TEP records — best OPR per team ──────────
+        opr_teams: list[dict] = []
+        seen_team_nums: set[int] = set()
+        if not isinstance(tep_data, Exception):
+            for row in (tep_data.get("tepRecords") or {}).get("data", []):
+                inner = row.get("data") or {}
+                team_num = inner.get("teamNumber")
+                if team_num is None or team_num in seen_team_nums:
+                    continue
+                seen_team_nums.add(team_num)
+
+                stats = inner.get("stats") or {}
+                opr = stats.get("opr") or {}
+                team_name = (inner.get("team") or {}).get("name", "")
+                event = inner.get("event") or {}
+
+                if team_name:
+                    team_names[str(team_num)] = team_name
+
+                opr_teams.append({
+                    "team": team_num,
+                    "name": team_name,
+                    "opr": round(opr.get("totalPoints") or 0, 2),
+                    "opr_auto": round(opr.get("autoPoints") or 0, 2),
+                    "opr_dc": round(opr.get("dcPoints") or 0, 2),
+                    "rank": stats.get("rank"),
+                    "wins": stats.get("wins", 0),
+                    "losses": stats.get("losses", 0),
+                    "best_event_code": event.get("code", ""),
+                    "best_event_name": event.get("name", ""),
+                })
+                if len(opr_teams) >= limit:
+                    break
+
+        result = {
+            "matches": matches,
+            "opr_teams": opr_teams,
+            "team_names": team_names,
+        }
+        self._set_cache(cache_key, result)
+        return result
 
     async def close(self) -> None:
         if self._http and not self._http.is_closed:

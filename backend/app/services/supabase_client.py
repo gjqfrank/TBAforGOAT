@@ -290,6 +290,42 @@ async def merge_event_teams(rows: list[dict[str, Any]]) -> None:
 
 # ── Supabase-first read helpers ─────────────────────────────
 
+async def get_season_record(record_key: str) -> Optional[dict[str, Any]]:
+    """Read a season_records row by its primary key.  Returns None on miss."""
+    try:
+        sb = await get_supabase()
+        result = await (
+            sb.table("season_records")
+            .select("payload, updated_at")
+            .eq("record_key", record_key)
+            .maybe_single()
+            .execute()
+        )
+        return result.data if result and result.data else None
+    except Exception as exc:
+        log.warning("Supabase season_records read failed for %s: %s", record_key, exc)
+        return None
+
+
+async def set_season_record(
+    record_key: str,
+    year: int,
+    record_type: str,
+    payload: dict[str, Any],
+) -> None:
+    """Upsert a row into season_records."""
+    try:
+        sb = await get_supabase()
+        await sb.table("season_records").upsert({
+            "record_key": record_key,
+            "year": year,
+            "record_type": record_type,
+            "payload": payload,
+        }).execute()
+    except Exception as exc:
+        log.warning("Supabase season_records write failed for %s: %s", record_key, exc)
+
+
 async def read_events_by_year(year: int) -> list[dict[str, Any]]:
     """Return all events for a given year from the events table."""
     sb = await get_supabase()

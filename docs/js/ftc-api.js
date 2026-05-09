@@ -55,6 +55,7 @@ const FTC_API = {
     refreshRankings:    (ek) => FTC_API.get(`/events/${ek}/refresh-rankings`),
     fastRankings:       (ek) => FTC_API.get(`/events/${ek}/fast-rankings`),
     worldRecord:        (season) => FTC_API.get(`/events/world-record/${season || currentFtcSeason()}`),
+    seasonHighScores:   (season) => FTC_API.get(`/events/season/high-scores?season=${season || currentFtcSeason()}&limit=10`),
     gatoolUpdates:      (ek) => FTC_API.get(`/events/${ek}/gatool-updates`),
     eventConnections:   (ek, allTime, teams) => {
         let url = `/events/${ek}/summary/connections?all_time=${allTime ? 'true' : 'false'}`;

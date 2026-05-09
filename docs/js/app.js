@@ -21,8 +21,14 @@ function showToast(message, type = 'info', duration = 3500) {
 /** Render a team number: use number_display (e.g. "11-370") when available,
  *  with dashes rendered as a styled separator. Falls back to raw number. */
 function _renderTeamNum(team) {
-    const nd = (_timsCache[team.team_number]?.number_display) || team.number_display;
-    if (!nd) return String(team.team_number);
+    const timsEntry = _timsCache[team.team_number];
+    // When a TIMS cache entry exists, use its number_display exclusively (even
+    // empty string, which means "cleared by editor" — don't fall through to a
+    // potentially stale server-applied value sitting in teamsData).
+    const nd = timsEntry !== undefined ? timsEntry.number_display : team.number_display;
+    // Validate: must contain at least one digit (guards against garbage values
+    // like "()" that can sneak in via Supabase if a previous save was buggy).
+    if (!nd || !/\d/.test(nd)) return String(team.team_number);
     // Render dashes/hyphens as styled separators
     return nd.replace(/-/g, '<span class="num-sep">-</span>');
 }

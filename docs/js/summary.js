@@ -77,8 +77,27 @@ async function loadSummary() {
                 rank: t.rank || '-',
             }));
 
-            // ── Build high scores placeholder (empty for now) ──
-            const high_scores = [];
+            // ── Fetch FTC season high scores ──
+            let high_scores = [];
+            try {
+                setLoadingStatus('summary-loading-status', 'Fetching season high scores…');
+                const ftcSeason = typeof currentFtcSeason === 'function' ? currentFtcSeason() : 2025;
+                const hsData = await FTC_API.seasonHighScores(ftcSeason);
+                if (hsData && Array.isArray(hsData.matches) && hsData.matches.length) {
+                    const tnMap = hsData.team_names || {};
+                    high_scores = hsData.matches.slice(0, 10).map(m => ({
+                        score: m.score_np != null ? m.score_np : (m.score || 0),
+                        match: `${m.event_name} · ${m.match_label}`,
+                        color: (m.alliance || 'red').toLowerCase(),
+                        teams: (m.team_numbers || []).map(num => ({
+                            team_number: num,
+                            nickname: tnMap[String(num)] || '',
+                        })),
+                    }));
+                }
+            } catch (e) {
+                console.warn('[FTC Summary] Could not fetch season high scores:', e);
+            }
 
             // ── Fetch awards for Inspire winners ──
             let inspire_finalists = [];

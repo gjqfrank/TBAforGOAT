@@ -67,6 +67,23 @@ async def ftc_season_high_scores(
         sb_row = await get_season_record(f"ftc_season_high_{season}_{limit}")
         if sb_row and sb_row.get("payload"):
             sb_payload = sb_row["payload"]
+            # Enrich event_name if still raw (Supabase row predates enrichment or
+            # CMP subdivision events were missing from the static season file).
+            if any(m.get("event_name") == m.get("event_code")
+                   for m in sb_payload.get("matches", [])):
+                try:
+                    events = await ftc_event_service.get_season_events(season)
+                    ev_names: dict[str, str] = {}
+                    for ev in events:
+                        code = (ev.get("event_code") or ev.get("code") or "").lower()
+                        if code:
+                            ev_names[code] = ev.get("name") or ev.get("event_name") or ""
+                    for m in sb_payload.get("matches", []):
+                        c = m.get("event_code", "").lower()
+                        if c and ev_names.get(c):
+                            m["event_name"] = ev_names[c]
+                except Exception:
+                    pass
             payload_cache.write_payload("ftc_season_high", cache_key, sb_payload)
             return sb_payload
 
@@ -268,24 +285,6 @@ async def ftc_season_awards(event_key: str):
         raise
     except Exception as e:
         raise_api_error(e, fallback_detail=f"Could not load FTC season awards for event '{event_key}'.")
-
-
-@router.get("/teams/head-to-head/{team_a}/{team_b}")
-async def ftc_head_to_head(
-    team_a: int,
-    team_b: int,
-    all_time: bool = Query(False),
-    seasons: int = Query(3, ge=1, le=10),
-):
-    """Playoff head-to-head history between two FTC teams."""
-    try:
-        return await ftc_event_service.get_ftc_head_to_head(
-            team_a, team_b, all_time=all_time, seasons=seasons
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise_api_error(e, fallback_detail=f"Could not load H2H for FTC teams {team_a} vs {team_b}.")
 
 
 @router.get("/team/{team_number}")

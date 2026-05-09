@@ -204,6 +204,25 @@
     box-shadow: 0 1px 6px rgba(249,115,22,.15);
 }
 
+/* ── FTC Lookup panel button — orange gradient ── */
+[data-mode="ftc"] .float-lookup-search button {
+    background: linear-gradient(135deg, #f97316 0%, #fb923c 100%);
+    color: #fff;
+    border: none;
+    box-shadow: 0 2px 10px rgba(249,115,22,.25);
+    opacity: 1;
+}
+[data-mode="ftc"] .float-lookup-search button:hover {
+    background: linear-gradient(135deg, #fb923c 0%, #fbbf24 100%);
+    box-shadow: 0 4px 18px rgba(249,115,22,.35);
+    transform: translateY(-1px);
+    opacity: 1;
+}
+[data-mode="ftc"] .float-lookup-search button:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 6px rgba(249,115,22,.15);
+}
+
 /* ── FTC button category 2: ghost / chrome — restore transparency ── */
 [data-mode="ftc"] .settings-btn {
     background: rgba(255,255,255,.06);
@@ -305,9 +324,9 @@
 }
 [data-mode="ftc"] .past-awards-filter-btn.active,
 [data-mode="ftc"] .conn-filter-btn.active {
-    background: rgba(249,115,22,.15);
-    border-color: rgba(249,115,22,.4);
-    color: #f97316;
+    background: #f97316;
+    border-color: #f97316;
+    color: #fff;
 }
 [data-mode="ftc"] .conn-sort-btn.active {
     background: #f97316;
@@ -6485,6 +6504,7 @@ tr:hover .compare-cb,
     border-radius: var(--radius-lg);
     padding: .7rem .9rem;
     margin-bottom: .7rem;
+    overflow: visible;
 }
 .summary-card h3 {
     font-size: .88rem;
@@ -6508,6 +6528,11 @@ tr:hover .compare-cb,
 }
 .summary-card-header h3 {
     margin: 0;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 .collapse-toggle {
     display: flex;
@@ -6829,6 +6854,7 @@ tr:hover .compare-cb,
     gap: .25rem;
     margin-left: auto;
     margin-right: .5rem;
+    flex-shrink: 0;
 }
 .award-season-btn {
     background: var(--surface);

@@ -700,6 +700,11 @@ async function loadEvent(eventKey) {
         code = `${year}${eventCode}`;
     }
 
+    // Snapshot of mode + generation at call time — lets us bail out if the user
+    // switches FRC⇔FTC while the fetch is still in-flight.
+    const _loadMode = competitionMode;
+    const _loadGen  = _modeSwitchGeneration;
+
     // Show inline loading indicator on the manual button (only for manual entry)
     const btn = fromSeason ? null : $('btn-load-event');
     if (btn) { btn.disabled = true; btn.dataset.origText = btn.textContent; btn.textContent = 'Loading…'; btn.classList.add('btn-loading'); }
@@ -802,6 +807,15 @@ async function loadEvent(eventKey) {
         if (btn) { btn.disabled = false; btn.textContent = btn.dataset.origText || 'Load Event'; btn.classList.remove('btn-loading'); }
         $('season-search')?.classList.remove('input-loading');
 
+        // If mode switched while Phase 1 was awaiting, discard everything:
+        // resetEventData() already cleared the badge and globals, so just exit.
+        if (competitionMode !== _loadMode || _modeSwitchGeneration !== _loadGen) {
+            if (btn) { btn.disabled = false; btn.textContent = btn.dataset.origText || 'Load Event'; btn.classList.remove('btn-loading'); }
+            badge.textContent = '';
+            badge.className = 'event-badge hidden';
+            return;
+        }
+
         currentEvent = code;
         currentEventYear = parseInt(year, 10);
         eventInfoData = info;
@@ -874,6 +888,7 @@ async function loadEvent(eventKey) {
         hide('rankings-empty');
         show('rankings-container');
         $('event-teams').innerHTML = await buildTeamTable(teams);
+        if (competitionMode !== _loadMode || _modeSwitchGeneration !== _loadGen) return;
         fadeIn('rankings-container');
         if (!isFTCMode()) _scheduleFrcAvatarPatch(currentEvent);
 
