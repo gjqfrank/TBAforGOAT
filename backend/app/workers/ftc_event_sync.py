@@ -81,6 +81,7 @@ async def _sync_ftc_event_metadata(year: int) -> tuple[set[str], set[str]]:
         log.warning("FTC event metadata fetch failed: %s", e)
         return _ftc_active_events, set()
     recently_completed: set[str] = set()
+    ongoing: set[str] = set()
     rows: list[dict[str, Any]] = []
 
     valid_events = validate_list(FTCEvent, raw_events, "ftc_events")
