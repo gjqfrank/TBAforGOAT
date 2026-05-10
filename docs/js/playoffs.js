@@ -349,7 +349,8 @@ function _renderFtcBracketTree() {
         const redWon  = seriesDone && redWins > blueWins;
         const blueWon = seriesDone && blueWins > redWins;
 
-        const shortLabel = /final/i.test(firstM.label || '') ? 'Finals' : ('Match ' + (firstM.set_number || '?'));
+        const shortLabel = /final/i.test(firstM.label || '') ? 'Finals'
+            : (firstM.label || ('Match ' + firstM.match_number));
         const seriesScore = matches.length > 1 && anyScored
             ? ` <span class="bkt-replay">${redWins}-${blueWins}</span>` : '';
 
@@ -451,10 +452,11 @@ function _renderFtcBracketSeries() {
     };
     const _teamsHtml = (nums) => nums.map(_teamSpan).join(' · ');
 
-    // Group matches by series (set_number) — each series is a best-of-N
+    // Group matches by series (set_number) — each series is a best-of-N.
+    // set_number=0 means the API had no series info; treat each match individually.
     const bySeries = {};
     playoffData.forEach(m => {
-        const series = m.set_number || 1;
+        const series = (m.set_number > 0) ? m.set_number : m.match_number;
         if (!bySeries[series]) bySeries[series] = [];
         bySeries[series].push(m);
     });

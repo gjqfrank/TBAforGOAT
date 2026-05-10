@@ -775,7 +775,11 @@ async def get_all_matches(event_key: str) -> dict:
             label = f"Qualification {match_num}"
             sort_key = (0, match_num, 0)
         else:
-            series = raw_match.get("series", 1)
+            series = raw_match.get("series") or 0
+            # Some championship events (e.g. trcmp) return series=0; fall back to
+            # match_number so each match gets a unique key and its own bracket slot.
+            if series == 0:
+                series = match_num
             desc = raw_match.get("description", "")
             # Parse bracket label from FTC API description
             # e.g. "Upper Bracket  Round 1 Match 1", "Lower Bracket  Round 2 Match 3",
