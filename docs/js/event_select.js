@@ -716,9 +716,6 @@ async function loadEvent(eventKey) {
     show('event-badge');
 
     // Reset state
-    // Refresh world-record pill so it always shows the true season high
-    fetchWorldRecord();
-
     playoffData = null;
     allianceData = null;
     summaryData = null;

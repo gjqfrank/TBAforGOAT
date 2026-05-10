@@ -5596,6 +5596,18 @@ body.show-team-attrs .pbp-hardware-tag {
   border-radius: var(--radius-lg);
 }
 
+.pbp-prediction-unavailable {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.pbp-pred-unavailable-msg {
+  font-size: .78rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
 .pbp-pred-header {
   display: flex;
   justify-content: space-between;

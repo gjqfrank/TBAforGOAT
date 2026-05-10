@@ -677,7 +677,7 @@ function toggleCompetitionMode() {
 
     // ── Nuke ALL inner rendered content so no stale data survives ──
     ['event-teams', 'playoff-bracket', 'alliance-grid',
-     'pbp-arena', 'pbp-footer', 'pbp-match-select', 'pbp-match-label',
+     'pbp-arena', 'pbp-match-select', 'pbp-match-label',
      'bd-content', 'bd-status', 'bd-match-select', 'bd-spotlight',
      'summary-title', 'summary-demographics',
      'summary-advancement-content', 'summary-past-champs-list',

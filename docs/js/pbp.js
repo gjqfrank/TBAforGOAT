@@ -515,27 +515,35 @@ function renderPbpMatch() {
 
     // Statbotics prediction bar
     let predHtml = '';
-    if (showPredictions && m.pred) {
-        const p = m.pred;
-        const redPct = p.red_win_prob != null ? Math.round(p.red_win_prob * 100) : null;
-        const bluePct = redPct != null ? 100 - redPct : null;
-        if (redPct != null) {
-            const favored = redPct >= 50 ? 'red' : 'blue';
+    if (showPredictions) {
+        if (m.pred) {
+            const p = m.pred;
+            const redPct = p.red_win_prob != null ? Math.round(p.red_win_prob * 100) : null;
+            const bluePct = redPct != null ? 100 - redPct : null;
+            if (redPct != null) {
+                const favored = redPct >= 50 ? 'red' : 'blue';
+                predHtml = `
+                <div class="pbp-prediction">
+                    <div class="pbp-pred-header">
+                        <span class="pbp-pred-label">Statbotics Win Prediction</span>
+                        <span class="pbp-pred-scores">Predicted: <span class="pred-red">${p.red_score}</span> · <span class="pred-blue">${p.blue_score}</span></span>
+                    </div>
+                    <div class="pbp-pred-bar">
+                        <div class="pbp-pred-fill pbp-pred-red ${favored === 'red' ? 'pbp-pred-favored' : ''}" style="width:${redPct}%">
+                            ${redPct >= 15 ? `<span>${redPct}%</span>` : ''}
+                        </div>
+                        <div class="pbp-pred-fill pbp-pred-blue ${favored === 'blue' ? 'pbp-pred-favored' : ''}" style="width:${bluePct}%">
+                            ${bluePct >= 15 ? `<span>${bluePct}%</span>` : ''}
+                        </div>
+                    </div>
+                </div>`;
+            }
+        } else {
             predHtml = `
-            <div class="pbp-prediction">
-                <div class="pbp-pred-header">
+                <div class="pbp-prediction pbp-prediction-unavailable">
                     <span class="pbp-pred-label">Statbotics Win Prediction</span>
-                    <span class="pbp-pred-scores">Predicted: <span class="pred-red">${p.red_score}</span> · <span class="pred-blue">${p.blue_score}</span></span>
-                </div>
-                <div class="pbp-pred-bar">
-                    <div class="pbp-pred-fill pbp-pred-red ${favored === 'red' ? 'pbp-pred-favored' : ''}" style="width:${redPct}%">
-                        ${redPct >= 15 ? `<span>${redPct}%</span>` : ''}
-                    </div>
-                    <div class="pbp-pred-fill pbp-pred-blue ${favored === 'blue' ? 'pbp-pred-favored' : ''}" style="width:${bluePct}%">
-                        ${bluePct >= 15 ? `<span>${bluePct}%</span>` : ''}
-                    </div>
-                </div>
-            </div>`;
+                    <span class="pbp-pred-unavailable-msg">Statbotics unavailable for this match</span>
+                </div>`;
         }
     }
 
