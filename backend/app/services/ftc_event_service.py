@@ -592,6 +592,9 @@ async def get_all_matches(event_key: str) -> dict:
             if not isinstance(rd, dict):
                 continue
             cl = m.get("comp_level", "qm")
+            # Skip practice/scrimmage matches stored before this filter was added
+            if cl not in ("qm", "sf", "f"):
+                continue
             if cl == "qm":
                 qual_raw.append(rd)
             else:

@@ -74,14 +74,19 @@ const FTC_API = {
     playoffMatches: (ek) => FTC_API.get(`/matches/${ek}/playoffs`),
     fastScores:     (ek) => FTC_API.get(`/matches/${ek}/scores`),
     matchBreakdown: (mk) => {
-        // Parse match key: 2025ftcTRTUQ1_qm1 → event_key, level, num
+        // Parse match key formats:
+        //   qual:    2025ftcXYZ_qm1         → level=qual,    num=1
+        //   playoff: 2025ftcXYZ_sf1m2       → level=playoff, num=2 (matchNumber)
+        //   final:   2025ftcXYZ_f1m1        → level=playoff, num=1
         const [ek, rest] = mk.split('_');
-        const levelMap = { qm: 'qual', sf: 'playoff', f: 'playoff' };
-        const match = (rest || '').match(/^(qm|sf|f)(\d+)$/);
-        if (!match) return Promise.resolve({ available: false });
-        const level = levelMap[match[1]] || 'qual';
-        const num = match[2];
-        return FTC_API.get(`/matches/match/${ek}/${level}/${num}/breakdown`);
+        if (!rest) return Promise.resolve({ available: false });
+        // Qual
+        let m = rest.match(/^qm(\d+)$/);
+        if (m) return FTC_API.get(`/matches/match/${ek}/qual/${m[1]}/breakdown`);
+        // Playoff (double-elim): sf{series}m{matchNum} or f{series}m{matchNum}
+        m = rest.match(/^(?:sf|f)(\d+)m(\d+)$/);
+        if (m) return FTC_API.get(`/matches/match/${ek}/playoff/${m[2]}/breakdown`);
+        return Promise.resolve({ available: false });
     },
 
     // ── Alliances ───────────────────────────────────────

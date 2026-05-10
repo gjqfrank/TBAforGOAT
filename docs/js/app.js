@@ -1721,7 +1721,14 @@ function renderWorldRecord(rec, isNew) {
     $('footer-wr-score').textContent = rec.score;
     const eventLabel = rec.event_name || rec.event_key || '';
     const matchLabel = rec.match || '';
-    const teamsStr = (rec.teams || []).join(', ');
+    // Show only the winning alliance's teams; fall back to all teams if unavailable
+    const winningAlliance = rec.winning_alliance;
+    const winningTeams = winningAlliance === 'red' ? rec.red_teams
+        : winningAlliance === 'blue' ? rec.blue_teams
+        : null;
+    const teamsStr = winningTeams
+        ? winningTeams.map(t => t.number || t.name || t).filter(Boolean).join(', ')
+        : (rec.teams || []).join(', ');
     let detail = '';
     if (matchLabel) detail += matchLabel;
     if (eventLabel) detail += (detail ? ' · ' : '') + eventLabel;

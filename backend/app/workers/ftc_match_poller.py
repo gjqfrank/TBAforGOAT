@@ -98,6 +98,10 @@ async def _poll_ftc_matches(event_key: str) -> None:
         series = m.get("series", 1)
         level = (m.get("tournamentLevel") or "Qualification").lower()
 
+        # Skip practice/scrimmage matches — they have no competition value
+        if "practice" in level or "scrimmage" in level:
+            continue
+
         if "qual" in level:
             comp_level = "qm"
         elif "playoff" in level or "elim" in level:
