@@ -319,13 +319,14 @@ async def get_fast_scores(event_key: str):
     """
     try:
         year = int(event_key[:4])
-        event_code = event_key[4:]
+        raw_code = event_key[4:]
+        event_code = _TBA_TO_FRC_EVENT_CODE.get(raw_code.lower(), raw_code.upper())
         frc = get_frc_client()
 
         # Fetch qual + playoff results in parallel, bypass cache
         qual_matches, playoff_matches = await asyncio.gather(
-            _safe(frc.get_matches(year, event_code.upper(), level="Qualification", bypass_cache=True)),
-            _safe(frc.get_matches(year, event_code.upper(), level="Playoff", bypass_cache=True)),
+            _safe(frc.get_matches(year, event_code, level="Qualification", bypass_cache=True)),
+            _safe(frc.get_matches(year, event_code, level="Playoff", bypass_cache=True)),
         )
 
         all_frc = (qual_matches or []) + (playoff_matches or [])
@@ -411,9 +412,24 @@ async def get_match_breakdown(match_key: str):
 
     try:
         if game_year >= 2026:
-            return await _breakdown_from_frc(match_key, game_year)
+            result = await _breakdown_from_frc(match_key, game_year)
         else:
-            return await _breakdown_from_tba(match_key, game_year)
+            result = await _breakdown_from_tba(match_key, game_year)
+
+        # If primary source returned unavailable, try the secondary (e.g. TBA
+        # has data for completed events that FRC API may not surface).
+        if not result.get("available"):
+            try:
+                if game_year >= 2026:
+                    secondary = await _breakdown_from_tba(match_key, game_year)
+                else:
+                    secondary = await _breakdown_from_frc(match_key, game_year)
+                if secondary.get("available"):
+                    return secondary
+            except Exception:
+                pass
+
+        return result
     except HTTPException:
         raise
     except Exception as e:
@@ -430,6 +446,24 @@ async def get_match_breakdown(match_key: str):
 # ── Comp level mapping ──────────────────────────────────────
 _COMP_LEVEL_TO_FRC = {"qm": "Qualification", "qf": "Playoff", "sf": "Playoff", "ef": "Playoff", "f": "Playoff"}
 
+# TBA short code → FRC Events API event code for championship divisions.
+# Without this mapping "2026arc" would send "ARC" to FIRST which returns 404.
+_TBA_TO_FRC_EVENT_CODE: dict[str, str] = {
+    "arc": "ARCHIMEDES",
+    "car": "CARSON",
+    "cur": "CURIE",
+    "dal": "DALY",
+    "dar": "DARWIN",
+    "ein": "EINSTEIN",
+    "gal": "GALILEO",
+    "haw": "HAWKING",
+    "hop": "HOPPER",
+    "joh": "JOHNSON",
+    "mil": "MILSTEIN",
+    "new": "NEWTON",
+    "tur": "TURING",
+}
+
 
 async def _breakdown_from_frc(match_key: str, game_year: int) -> dict:
     """Fetch breakdown from FRC Events API (instant data from FIRST)."""
@@ -444,7 +478,8 @@ async def _breakdown_from_frc(match_key: str, game_year: int) -> dict:
         return {"match_key": match_key, "available": False}
 
     season = int(m.group(1))
-    event_code = m.group(2).upper()
+    raw_code = m.group(2).lower()
+    event_code = _TBA_TO_FRC_EVENT_CODE.get(raw_code, raw_code.upper())
     comp_level = m.group(3)            # "qm", "sf", "f", "qf", "ef"
     first_num = int(m.group(4))        # match_number for qm; set_number for sf/f
     second_num = int(m.group(5)) if m.group(5) else None  # match_number within the set
