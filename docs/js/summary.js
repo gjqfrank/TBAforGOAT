@@ -108,7 +108,7 @@ async function loadSummary() {
                     }
                 }
                 allScores.sort((a, b) => b.score - a.score);
-                high_scores = allScores.slice(0, 10);
+                high_scores = allScores.slice(0, 3);
             } catch (e) {
                 console.warn('[FTC Summary] Could not build event high scores:', e);
             }
