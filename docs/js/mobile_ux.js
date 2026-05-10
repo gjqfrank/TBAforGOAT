@@ -411,7 +411,7 @@ function _buildMobSettings(container) {
         ]},
         { title: 'Play-by-Play', toggles: [
             { id: 'toggle-pbp-awards', label: 'Show Awards', fn: 'togglePbpAwards' },
-            { id: 'toggle-predictions', label: 'Show Win Predictions (Statbotics)', fn: 'toggleShowPredictions' },
+            { id: 'toggle-predictions', label: 'Show Win Predictions (Statbotics)', fn: 'toggleShowPredictions', ftcHide: true },
             { id: 'toggle-gatool-sponsors', label: 'Sponsors', fn: 'toggleGatoolSponsors' },
             { id: 'toggle-sponsor-first-only', label: 'Hide Sponsors After First Appearance', fn: 'toggleSponsorFirstOnly' },
             { id: 'toggle-team-attrs', label: 'Show Team Attributes', fn: 'toggleTeamAttrs' },
@@ -424,6 +424,7 @@ function _buildMobSettings(container) {
         hdr.textContent = g.title;
         container.appendChild(hdr);
         g.toggles.forEach(t => {
+            if (t.ftcHide && typeof isFTCMode === 'function' && isFTCMode()) return;
             const orig = document.getElementById(t.id);
             const checked = orig ? orig.checked : false;
             const lbl = document.createElement('label');

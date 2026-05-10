@@ -2265,6 +2265,8 @@ async def _build_ftc_connections(
             # Check opponents: different alliances in same playoff match
             highest_label = None
             highest_order = -1
+            h2h_a_wins = 0
+            h2h_b_wins = 0
             for m in match_cache.get((s, code), []):
                 red_teams = [
                     t.get("teamNumber") for t in m.get("teams", [])
@@ -2287,6 +2289,20 @@ async def _build_ftc_connections(
                     if order > highest_order:
                         highest_order = order
                         highest_label = label
+                    # Track H2H wins
+                    red_score = m.get("scoreRedFinal")
+                    blue_score = m.get("scoreBlueFinal")
+                    if red_score is not None and blue_score is not None:
+                        if ta in red_teams and tb in blue_teams:
+                            if red_score > blue_score:
+                                h2h_a_wins += 1
+                            elif blue_score > red_score:
+                                h2h_b_wins += 1
+                        elif ta in blue_teams and tb in red_teams:
+                            if blue_score > red_score:
+                                h2h_a_wins += 1
+                            elif red_score > blue_score:
+                                h2h_b_wins += 1
 
             if highest_label:
                 opponent_events.append({
@@ -2294,6 +2310,8 @@ async def _build_ftc_connections(
                     "event_name": display_name,
                     "year": s,
                     "stage": highest_label,
+                    "team_a_wins": h2h_a_wins,
+                    "team_b_wins": h2h_b_wins,
                 })
 
         if partner_events or opponent_events:
@@ -2315,16 +2333,25 @@ async def _build_ftc_connections(
                 for e in events:
                     ek = e["event_key"]
                     if ek not in best or _stage_rank(e["stage"]) > _stage_rank(best[ek]["stage"]):
+                        if ek in best and "team_a_wins" in e:
+                            e = dict(e)
+                            e["team_a_wins"] += best[ek].get("team_a_wins", 0)
+                            e["team_b_wins"] += best[ek].get("team_b_wins", 0)
                         best[ek] = e
                 return sorted(best.values(), key=lambda x: x["year"], reverse=True)
 
+            deduped_opponents = _dedup(opponent_events)
+            h2h_wins_a = sum(e.get("team_a_wins", 0) for e in deduped_opponents)
+            h2h_wins_b = sum(e.get("team_b_wins", 0) for e in deduped_opponents)
             connections.append({
                 "team_a": ta,
                 "team_a_name": name_map.get(ta, ""),
                 "team_b": tb,
                 "team_b_name": name_map.get(tb, ""),
                 "partnered_at": _dedup(partner_events),
-                "opponents_at": _dedup(opponent_events),
+                "opponents_at": deduped_opponents,
+                "h2h_wins_a": h2h_wins_a,
+                "h2h_wins_b": h2h_wins_b,
             })
 
     connections.sort(

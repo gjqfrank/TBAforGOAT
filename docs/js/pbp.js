@@ -515,7 +515,7 @@ function renderPbpMatch() {
 
     // Statbotics prediction bar
     let predHtml = '';
-    if (showPredictions) {
+    if (showPredictions && !(typeof isFTCMode === 'function' && isFTCMode())) {
         if (m.pred) {
             const p = m.pred;
             const redPct = p.red_win_prob != null ? Math.round(p.red_win_prob * 100) : null;
