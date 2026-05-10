@@ -5934,6 +5934,19 @@ body.show-team-attrs .pbp-hardware-tag {
   color: var(--accent-hover, #60b0ff);
 }
 
+[data-mode="ftc"] .pbp-conn-more {
+  background: none;
+  border: none;
+  padding: 0;
+  box-shadow: none;
+}
+[data-mode="ftc"] .pbp-conn-more:hover {
+  background: none;
+  border: none;
+  box-shadow: none;
+  transform: none;
+}
+
 .pbp-conn-extra.hidden {
   display: none;
 }

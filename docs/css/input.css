@@ -286,6 +286,20 @@
         box-shadow: 0 1px 6px rgba(249,115,22,.15);
     }
     
+    /* ── FTC .pbp-conn-more — plain text link, no pill ── */
+    [data-mode="ftc"] .pbp-conn-more {
+        background: none;
+        border: none;
+        padding: 0;
+        box-shadow: none;
+    }
+    [data-mode="ftc"] .pbp-conn-more:hover {
+        background: none;
+        border: none;
+        box-shadow: none;
+        transform: none;
+    }
+    
     /* ── FTC button category 2: ghost / chrome — restore transparency ── */
     [data-mode="ftc"] .settings-btn {
         background: rgba(255,255,255,.06);

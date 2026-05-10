@@ -77,26 +77,40 @@ async function loadSummary() {
                 rank: t.rank || '-',
             }));
 
-            // ── Fetch FTC season high scores ──
+            // ── Build event high scores from match data ──
             let high_scores = [];
             try {
-                setLoadingStatus('summary-loading-status', 'Fetching season high scores…');
-                const ftcSeason = typeof currentFtcSeason === 'function' ? currentFtcSeason() : 2025;
-                const hsData = await FTC_API.seasonHighScores(ftcSeason);
-                if (hsData && Array.isArray(hsData.matches) && hsData.matches.length) {
-                    const tnMap = hsData.team_names || {};
-                    high_scores = hsData.matches.slice(0, 10).map(m => ({
-                        score: m.score_np != null ? m.score_np : (m.score || 0),
-                        match: `${m.event_name} · ${m.match_label}`,
-                        color: (m.alliance || 'red').toLowerCase(),
-                        teams: (m.team_numbers || []).map(num => ({
-                            team_number: num,
-                            nickname: tnMap[String(num)] || '',
-                        })),
-                    }));
+                setLoadingStatus('summary-loading-status', 'Fetching event high scores…');
+                // Use already-loaded PbP matches if available, otherwise fetch fresh
+                let eventMatches = (typeof pbpData !== 'undefined' && pbpData && pbpData.matches && pbpData.matches.length)
+                    ? pbpData.matches
+                    : null;
+                if (!eventMatches) {
+                    const allData = await FTC_API.allMatches(currentEvent);
+                    eventMatches = (allData && Array.isArray(allData.matches)) ? allData.matches : [];
                 }
+                // Collect all alliance scores, sort descending, take top 10
+                const allScores = [];
+                for (const m of eventMatches) {
+                    const label = m.label || m.match_label || '';
+                    for (const side of ['red', 'blue']) {
+                        const score = m[side]?.score ?? -1;
+                        if (score < 0) continue;
+                        allScores.push({
+                            score,
+                            match: label,
+                            color: side,
+                            teams: (m[side]?.teams || []).map(t => ({
+                                team_number: t.team_number,
+                                nickname: t.nickname || '',
+                            })),
+                        });
+                    }
+                }
+                allScores.sort((a, b) => b.score - a.score);
+                high_scores = allScores.slice(0, 10);
             } catch (e) {
-                console.warn('[FTC Summary] Could not fetch season high scores:', e);
+                console.warn('[FTC Summary] Could not build event high scores:', e);
             }
 
             // ── Fetch awards for Inspire winners ──
