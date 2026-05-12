@@ -514,9 +514,11 @@ class FTCScoutClient:
         """
 
         # Fetch both queries in parallel (single circuit-breaker unit)
+        # Fetch limit*4 match records — scrimmages are filtered by the router
+        # after cross-referencing with get_season_events, so we need extra headroom.
         async def _fetch_both():
             return await asyncio.gather(
-                self._query(match_query, {"season": season, "take": limit * 2}),
+                self._query(match_query, {"season": season, "take": limit * 4}),
                 self._query(tep_query, {"season": season, "take": limit * 3}),
                 return_exceptions=True,
             )
@@ -581,8 +583,7 @@ class FTCScoutClient:
                     "teams": [pt["name"] for pt in playing if pt.get("name")],
                     "team_numbers": [pt["number"] for pt in playing if pt.get("number")],
                 })
-                if len(matches) >= limit:
-                    break
+                # No early break — router filters scrimmages and applies final limit
 
         # ── Process TEP records — best OPR per team ──────────
         opr_teams: list[dict] = []

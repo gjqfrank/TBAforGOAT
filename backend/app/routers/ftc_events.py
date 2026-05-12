@@ -51,39 +51,61 @@ async def ftc_season_high_scores(
     1. Disk cache (``payload_cache``) — 10-min TTL, survives restarts.
     2. Supabase ``season_records`` — persistent, served if FTC Scout is down.
     3. Live FTC Scout GraphQL fetch — updates both caches on success.
+
+    Scrimmage events (type 0) are always excluded from the matches list.
     """
     season = season or current_ftc_season()
     cache_key = f"{season}_{limit}"
+
+    # ── Build valid competition event-code set (excludes scrimmages/kickoffs) ──
+    # get_season_events already filters NON_COMPETITION_TYPES; the resulting
+    # dict is used both for event-name enrichment AND as a scrimmage allowlist.
+    event_names: dict[str, str] = {}
+    valid_event_codes: set[str] = set()
+    try:
+        events = await ftc_event_service.get_season_events(season)
+        for ev in events:
+            code = (ev.get("event_code") or ev.get("code") or "").lower()
+            if code:
+                valid_event_codes.add(code)
+                event_names[code] = ev.get("name") or ev.get("event_name") or code
+    except Exception:
+        pass  # degrade gracefully — filtering is skipped if events unavailable
+
+    def _filter_scrimmages(data: dict) -> dict:
+        """Remove scrimmage matches and re-apply the requested limit."""
+        if not valid_event_codes:
+            return data
+        data["matches"] = [
+            m for m in data.get("matches", [])
+            if m.get("event_code", "").lower() in valid_event_codes
+        ][:limit]
+        return data
 
     try:
         # ── 1. Disk cache ───────────────────────────────────
         cached = payload_cache.read_payload("ftc_season_high", cache_key, 600)
         if cached:
-            return cached
+            return _filter_scrimmages(dict(cached))
 
         stale = payload_cache.read_stale("ftc_season_high", cache_key)
 
         # ── 2. Supabase ─────────────────────────────────────
         sb_row = await get_season_record(f"ftc_season_high_{season}_{limit}")
         if sb_row and sb_row.get("payload"):
-            sb_payload = sb_row["payload"]
+            sb_payload = dict(sb_row["payload"])
+            sb_payload["matches"] = list(sb_payload.get("matches", []))
             # Enrich event_name if still raw (Supabase row predates enrichment or
             # CMP subdivision events were missing from the static season file).
-            if any(m.get("event_name") == m.get("event_code")
-                   for m in sb_payload.get("matches", [])):
-                try:
-                    events = await ftc_event_service.get_season_events(season)
-                    ev_names: dict[str, str] = {}
-                    for ev in events:
-                        code = (ev.get("event_code") or ev.get("code") or "").lower()
-                        if code:
-                            ev_names[code] = ev.get("name") or ev.get("event_name") or ""
-                    for m in sb_payload.get("matches", []):
-                        c = m.get("event_code", "").lower()
-                        if c and ev_names.get(c):
-                            m["event_name"] = ev_names[c]
-                except Exception:
-                    pass
+            if event_names and any(
+                m.get("event_name") == m.get("event_code")
+                for m in sb_payload.get("matches", [])
+            ):
+                for m in sb_payload["matches"]:
+                    c = m.get("event_code", "").lower()
+                    if c and event_names.get(c):
+                        m["event_name"] = event_names[c]
+            _filter_scrimmages(sb_payload)
             payload_cache.write_payload("ftc_season_high", cache_key, sb_payload)
             return sb_payload
 
@@ -92,21 +114,14 @@ async def ftc_season_high_scores(
             scout = get_ftcscout_client()
             data = await scout.get_season_high_scores(season, limit=limit)
 
-            # Enrich match event_name with friendly event names from FTC API
-            event_names: dict[str, str] = {}
-            try:
-                events = await ftc_event_service.get_season_events(season)
-                for ev in events:
-                    code = (ev.get("event_code") or ev.get("code") or "").lower()
-                    if code:
-                        event_names[code] = ev.get("name") or ev.get("event_name") or code
-            except Exception:
-                pass
-
+            # Enrich event_name with friendly names
             for m in data.get("matches", []):
                 code = m.get("event_code", "").lower()
                 if code and code in event_names:
                     m["event_name"] = event_names[code]
+
+            # Filter scrimmages before persisting so caches stay clean
+            _filter_scrimmages(data)
 
             # Persist to disk and Supabase
             payload_cache.write_payload("ftc_season_high", cache_key, data)
@@ -122,7 +137,7 @@ async def ftc_season_high_scores(
 
         except Exception:
             if stale:
-                return stale
+                return _filter_scrimmages(dict(stale))
             raise
 
     except HTTPException:
