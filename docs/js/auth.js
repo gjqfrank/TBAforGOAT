@@ -482,6 +482,8 @@ function hideLoginModal() {
     _hideEl('passkey-signin-error');
     _hideEl('passkey-offer-error');
     _passkeyEmailCache = {};
+}
+
 function showRequestState() {
     _showState('request-state');
     document.getElementById('request-name')?.focus();
