@@ -17,7 +17,7 @@ from .config import TRUSTED_API_KEYS
 from .routers import events, matches, alliances, teams, storylines
 from .routers import ftc_events, ftc_matches, ftc_alliances
 from .routers import sync, snapshot
-from .routers import auth
+from .routers import auth, passkey
 
 log = logging.getLogger(__name__)
 
@@ -235,9 +235,10 @@ async def live_event_status(event_key: str):
         raise HTTPException(status_code=404, detail=f"No live status for event: {event_key}")
     return resp.data
 
-# ── Auth router ────────────────────────────────────────────
-# prefix is defined inside the router itself (/auth/...)
+# ── Auth routers ────────────────────────────────────────────
+# Prefixes are defined inside each router (/auth/...)
 app.include_router(auth.router)
+app.include_router(passkey.router)
 
 # ── API routers ─────────────────────────────────────────────
 app.include_router(events.router, prefix="/api/events", tags=["Events"])

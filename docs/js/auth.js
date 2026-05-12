@@ -341,6 +341,12 @@ const Auth = (() => {
         logout,
         onAuthChange,
         requestAccount,
+        /** Called by the passkey flow after backend validates the assertion. */
+        _saveSessionFromPasskey(sessionData) {
+            const session = _sessionFromResponse(sessionData);
+            _saveSession(session);
+            _backfillName(session).catch(() => {});
+        },
         SUPABASE_URL,
         SUPABASE_ANON,
     };
@@ -468,12 +474,14 @@ function hideLoginModal() {
         submitBtn.dataset.step = 'email';
         submitBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg> Send Code';
     }
-}
-
-function showLoginState() {
-    _showState('login-state');
-}
-
+    // Reset passkey UI
+    const passkeyBtn = document.getElementById('passkey-signin-btn');
+    const passkeyDivider = document.getElementById('passkey-divider');
+    if (passkeyBtn) passkeyBtn.classList.add('hidden');
+    if (passkeyDivider) passkeyDivider.classList.add('hidden');
+    _hideEl('passkey-signin-error');
+    _hideEl('passkey-offer-error');
+    _passkeyEmailCache = {};
 function showRequestState() {
     _showState('request-state');
     document.getElementById('request-name')?.focus();
@@ -484,7 +492,7 @@ function showRequestSuccess() {
 }
 
 function _showState(activeId) {
-    ['login-state', 'request-state', 'request-success-state'].forEach(id => {
+    ['login-state', 'request-state', 'request-success-state', 'passkey-offer-state'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.classList.toggle('hidden', id !== activeId);
     });
@@ -552,8 +560,9 @@ async function handleLogin(e) {
             return false;
         }
 
-        hideLoginModal();
         updateAuthUI();
+        // Offer passkey registration if WebAuthn is supported and no passkey yet
+        await _maybeOfferPasskey();
     }
     return false;
 }
@@ -626,3 +635,284 @@ Auth.handleMagicLinkRedirect().then(handled => {
 });
 
 Auth.onAuthChange(() => updateAuthUI());
+
+// ═══════════════════════════════════════════════════════════
+// Passkey (WebAuthn) — registration + authentication
+// ═══════════════════════════════════════════════════════════
+
+const PASSKEY_API = '/auth/passkey';
+
+// Simple per-session cache: email → {has_passkey, fetched_at}
+let _passkeyEmailCache = {};
+let _emailCheckTimer = null;
+
+/** Check (with debounce) whether a passkey exists for the typed email. */
+function onLoginEmailInput() {
+    clearTimeout(_emailCheckTimer);
+    const email = document.getElementById('login-email')?.value.trim() || '';
+
+    // Hide immediately when field is cleared
+    if (!email || !email.includes('@')) {
+        _setPasskeyButtonVisible(false);
+        return;
+    }
+
+    _emailCheckTimer = setTimeout(() => _checkPasskeyForEmail(email), 600);
+}
+
+async function _checkPasskeyForEmail(email) {
+    if (!_isWebAuthnAvailable()) return;
+
+    // Use cache to avoid hammering the backend
+    const cached = _passkeyEmailCache[email];
+    if (cached && Date.now() - cached.fetched_at < 60_000) {
+        _setPasskeyButtonVisible(cached.has_passkey);
+        return;
+    }
+
+    try {
+        const resp = await fetch(
+            `${PASSKEY_API}/has-credential?email=${encodeURIComponent(email)}`
+        );
+        if (!resp.ok) return;
+        const { has_passkey } = await resp.json();
+        _passkeyEmailCache[email] = { has_passkey, fetched_at: Date.now() };
+        _setPasskeyButtonVisible(has_passkey);
+    } catch { /* non-fatal — passkey button stays hidden */ }
+}
+
+function _setPasskeyButtonVisible(show) {
+    const btn = document.getElementById('passkey-signin-btn');
+    const div = document.getElementById('passkey-divider');
+    if (btn) btn.classList.toggle('hidden', !show);
+    if (div) div.classList.toggle('hidden', !show);
+}
+
+/** Called by the "Sign in with Passkey" button in the login form. */
+async function handlePasskeySignIn(e) {
+    e.preventDefault();
+    const email = document.getElementById('login-email')?.value.trim();
+    if (!email) return;
+
+    const btn = document.getElementById('passkey-signin-btn');
+    _hideEl('passkey-signin-error');
+    if (btn) { btn.disabled = true; btn.textContent = 'Waiting for device…'; }
+
+    try {
+        // 1. Get authentication options from backend
+        const optResp = await fetch(`${PASSKEY_API}/authenticate-options`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email }),
+        });
+        const opts = await optResp.json();
+
+        if (!optResp.ok || !opts.has_passkey) {
+            _showError('passkey-signin-error', 'No passkey found for this email. Use the code method below.');
+            return;
+        }
+
+        // 2. Prompt the platform authenticator
+        const credential = await navigator.credentials.get({
+            publicKey: _parseAuthOptions(opts),
+        });
+
+        // 3. Send assertion to backend → receive Supabase session
+        const authResp = await fetch(`${PASSKEY_API}/authenticate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, credential: _credentialToJSON(credential) }),
+        });
+        const sessionData = await authResp.json();
+
+        if (!authResp.ok) {
+            _showError('passkey-signin-error', sessionData.detail || 'Passkey verification failed.');
+            return;
+        }
+
+        // 4. Store the session just like OTP auth does
+        Auth._saveSessionFromPasskey(sessionData);
+        hideLoginModal();
+        updateAuthUI();
+
+    } catch (err) {
+        if (err?.name === 'NotAllowedError') {
+            // User cancelled — don't show error
+        } else {
+            _showError('passkey-signin-error', err.message || 'Passkey sign-in failed.');
+        }
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 1 0-16 0"/><circle cx="19" cy="19" r="3"/><line x1="19" y1="16" x1="19" y1="13"/><line x1="22" y1="19" x1="19" y1="19"/></svg> Sign in with Passkey`;
+        }
+    }
+}
+
+/** Offer passkey registration after a successful OTP sign-in. */
+async function _maybeOfferPasskey() {
+    // Require WebAuthn support
+    if (!_isWebAuthnAvailable()) {
+        hideLoginModal();
+        return;
+    }
+    // Require an authenticated session
+    const token = Auth.getAccessToken();
+    const user  = Auth.getUser();
+    if (!token || !user?.email) {
+        hideLoginModal();
+        return;
+    }
+    // Check if they already have a passkey (skip offer if so)
+    try {
+        const resp = await fetch(
+            `${PASSKEY_API}/has-credential?email=${encodeURIComponent(user.email)}`
+        );
+        const { has_passkey } = await resp.json();
+        if (has_passkey) { hideLoginModal(); return; }
+    } catch { hideLoginModal(); return; }
+
+    // Show the offer
+    _showState('passkey-offer-state');
+}
+
+/** Called by "Set Up Passkey" button. */
+async function handlePasskeyRegister() {
+    const token = Auth.getAccessToken();
+    const user  = Auth.getUser();
+    if (!token || !user?.email) return;
+
+    const btn = document.getElementById('passkey-register-btn');
+    _hideEl('passkey-offer-error');
+    if (btn) { btn.disabled = true; btn.textContent = 'Setting up…'; }
+
+    try {
+        // 1. Fetch registration options
+        const optResp = await fetch(`${PASSKEY_API}/register-options`, {
+            method: 'POST',
+            headers: {
+                'Content-Type':  'application/json',
+                'Authorization': `Bearer ${token}`,
+            },
+            body: JSON.stringify({ email: user.email }),
+        });
+        if (!optResp.ok) {
+            const d = await optResp.json().catch(() => ({}));
+            _showError('passkey-offer-error', d.detail || 'Failed to start registration.');
+            return;
+        }
+        const opts = await optResp.json();
+
+        // 2. Prompt the authenticator
+        const credential = await navigator.credentials.create({
+            publicKey: _parseCreationOptions(opts),
+        });
+
+        // 3. Verify and store on backend
+        const regResp = await fetch(`${PASSKEY_API}/register`, {
+            method: 'POST',
+            headers: {
+                'Content-Type':  'application/json',
+                'Authorization': `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+                email:      user.email,
+                credential: _credentialToJSON(credential),
+            }),
+        });
+        const result = await regResp.json();
+        if (!regResp.ok) {
+            _showError('passkey-offer-error', result.detail || 'Registration failed.');
+            return;
+        }
+
+        // Success — dismiss the offer
+        hideLoginModal();
+
+    } catch (err) {
+        if (err?.name === 'NotAllowedError') {
+            // User cancelled — treat as "not now"
+            hideLoginModal();
+        } else {
+            _showError('passkey-offer-error', err.message || 'Passkey setup failed.');
+        }
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Set Up Passkey`;
+        }
+    }
+}
+
+function dismissPasskeyOffer() {
+    hideLoginModal();
+}
+
+// ── WebAuthn helpers ─────────────────────────────────────────────────────
+
+function _isWebAuthnAvailable() {
+    return !!(window.PublicKeyCredential && navigator.credentials?.get);
+}
+
+/** Convert base64url strings in server options to ArrayBuffers for the browser API. */
+function _parseCreationOptions(opts) {
+    return {
+        ...opts,
+        challenge: _b64ToBuffer(opts.challenge),
+        user: {
+            ...opts.user,
+            id: _b64ToBuffer(opts.user.id),
+        },
+        excludeCredentials: (opts.excludeCredentials || []).map(c => ({
+            ...c,
+            id: _b64ToBuffer(c.id),
+        })),
+    };
+}
+
+function _parseAuthOptions(opts) {
+    return {
+        ...opts,
+        challenge: _b64ToBuffer(opts.challenge),
+        allowCredentials: (opts.allowCredentials || []).map(c => ({
+            ...c,
+            id: _b64ToBuffer(c.id),
+        })),
+    };
+}
+
+function _b64ToBuffer(b64url) {
+    const b64 = b64url.replace(/-/g, '+').replace(/_/g, '/');
+    const bin = atob(b64);
+    const buf = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+    return buf.buffer;
+}
+
+function _bufferToB64Url(buffer) {
+    const bytes = new Uint8Array(buffer);
+    let bin = '';
+    for (const b of bytes) bin += String.fromCharCode(b);
+    return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+}
+
+/** Serialize a PublicKeyCredential to a plain JSON-safe object. */
+function _credentialToJSON(cred) {
+    const json = { id: cred.id, rawId: _bufferToB64Url(cred.rawId), type: cred.type };
+    const resp = cred.response;
+    if (resp instanceof AuthenticatorAttestationResponse) {
+        json.response = {
+            clientDataJSON:    _bufferToB64Url(resp.clientDataJSON),
+            attestationObject: _bufferToB64Url(resp.attestationObject),
+        };
+    } else {
+        json.response = {
+            clientDataJSON:    _bufferToB64Url(resp.clientDataJSON),
+            authenticatorData: _bufferToB64Url(resp.authenticatorData),
+            signature:         _bufferToB64Url(resp.signature),
+            userHandle:        resp.userHandle ? _bufferToB64Url(resp.userHandle) : null,
+        };
+    }
+    return json;
+}
+

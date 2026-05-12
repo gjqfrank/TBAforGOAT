@@ -1169,9 +1169,16 @@
                     <h2 class="login-title">Caster's Login</h2>
                     <p class="login-subtitle">Enter your email to receive a sign-in code</p>
                 </div>
+                <!-- Passkey sign-in button — shown only when a passkey exists for the typed email -->
+                <button class="login-btn login-btn-passkey hidden" id="passkey-signin-btn" onclick="handlePasskeySignIn(event)" type="button">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 1 0-16 0"/><circle cx="19" cy="19" r="3"/><line x1="19" y1="16" x2="19" y2="13"/><line x1="22" y1="19" x2="19" y2="19"/></svg>
+                    Sign in with Passkey
+                </button>
+                <div id="passkey-signin-error" class="login-error hidden"></div>
+                <div id="passkey-divider" class="login-divider hidden"><span>or use a code</span></div>
                 <form id="login-form" onsubmit="return handleLogin(event)" autocomplete="off">
                     <label class="login-label" for="login-email">Email</label>
-                    <input class="login-input" id="login-email" type="email" placeholder="you@example.com" required autocomplete="email">
+                    <input class="login-input" id="login-email" type="email" placeholder="you@example.com" required autocomplete="email" oninput="onLoginEmailInput()">
                     <div id="otp-group" class="hidden">
                         <p id="otp-help" class="login-help">Enter the 6-digit code from your email. You can also click the link in the email on another device.</p>
                         <label class="login-label" for="login-otp">Verification Code</label>
@@ -1189,6 +1196,21 @@
                     Request Account
                 </button>
                 <button class="login-btn login-btn-subtle" onclick="hideLoginModal()">Continue as Guest</button>
+            </div>
+
+            <!-- ── State 4: Passkey offer (after first OTP sign-in) ── -->
+            <div id="passkey-offer-state" class="login-state hidden">
+                <div class="login-header">
+                    <svg class="login-passkey-icon" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 1 0-16 0"/><circle cx="19" cy="19" r="3"/><line x1="19" y1="16" x2="19" y2="13"/><line x1="22" y1="19" x2="19" y2="19"/></svg>
+                    <h2 class="login-title">Save this device?</h2>
+                    <p class="login-subtitle">Register a passkey so you can sign in with Face ID, fingerprint, or your device PIN next time — no code required.</p>
+                </div>
+                <div id="passkey-offer-error" class="login-error hidden"></div>
+                <button class="login-btn login-btn-primary" id="passkey-register-btn" onclick="handlePasskeyRegister()" type="button">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    Set Up Passkey
+                </button>
+                <button class="login-btn login-btn-subtle" onclick="dismissPasskeyOffer()" type="button">Not Now</button>
             </div>
 
             <!-- ── State 2: Request Account ───────────── -->
