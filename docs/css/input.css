@@ -264,7 +264,8 @@
     /* ── FTC load-event buttons — gradient accent ── */
     [data-mode="ftc"] #btn-load-event,
     [data-mode="ftc"] #ssb-load-btn,
-    [data-mode="ftc"] .ssb-load-btn {
+    [data-mode="ftc"] .ssb-load-btn,
+    [data-mode="ftc"] #tab-team .input-row button {
         background: linear-gradient(135deg, #f97316 0%, #fb923c 100%);
         color: #fff;
         border: none;
@@ -272,7 +273,8 @@
     }
     [data-mode="ftc"] #btn-load-event:hover,
     [data-mode="ftc"] #ssb-load-btn:hover,
-    [data-mode="ftc"] .ssb-load-btn:hover {
+    [data-mode="ftc"] .ssb-load-btn:hover,
+    [data-mode="ftc"] #tab-team .input-row button:hover {
         background: linear-gradient(135deg, #fb923c 0%, #fbbf24 100%);
         border: none;
         color: #fff;
@@ -281,7 +283,8 @@
     }
     [data-mode="ftc"] #btn-load-event:active,
     [data-mode="ftc"] #ssb-load-btn:active,
-    [data-mode="ftc"] .ssb-load-btn:active {
+    [data-mode="ftc"] .ssb-load-btn:active,
+    [data-mode="ftc"] #tab-team .input-row button:active {
         transform: translateY(0);
         box-shadow: 0 1px 6px rgba(249,115,22,.15);
     }
@@ -401,9 +404,9 @@
     }
     [data-mode="ftc"] .past-awards-filter-btn.active,
     [data-mode="ftc"] .conn-filter-btn.active {
-        background: rgba(249,115,22,.15);
-        border-color: rgba(249,115,22,.4);
-        color: #f97316;
+        background: #f97316;
+        border-color: #f97316;
+        color: #fff;
     }
     [data-mode="ftc"] .conn-sort-btn.active {
         background: #f97316;
@@ -608,14 +611,16 @@
         box-shadow: none;
     }
     [data-mode="ftc"][data-theme="light"] #btn-load-event,
-    [data-mode="ftc"][data-theme="light"] .ssb-load-btn {
+    [data-mode="ftc"][data-theme="light"] .ssb-load-btn,
+    [data-mode="ftc"][data-theme="light"] #tab-team .input-row button {
         background: linear-gradient(135deg, #ea580c 0%, #f97316 100%);
         border: none;
         color: #fff;
         box-shadow: 0 2px 10px rgba(234,88,12,.2);
     }
     [data-mode="ftc"][data-theme="light"] #btn-load-event:hover,
-    [data-mode="ftc"][data-theme="light"] .ssb-load-btn:hover {
+    [data-mode="ftc"][data-theme="light"] .ssb-load-btn:hover,
+    [data-mode="ftc"][data-theme="light"] #tab-team .input-row button:hover {
         background: linear-gradient(135deg, #f97316 0%, #fb923c 100%);
         box-shadow: 0 4px 14px rgba(234,88,12,.25);
     }
@@ -6137,6 +6142,7 @@
         gap: .35rem;
         flex-wrap: wrap;
         margin-bottom: .65rem;
+        min-width: 0;
     }
     .award-season-toggle {
         display: flex;
@@ -6499,6 +6505,8 @@
         gap: .35rem;
         flex-wrap: wrap;
         align-items: center;
+        min-width: 0;
+        flex-shrink: 1;
     }
     .conn-filter-btn {
         background: var(--surface);
@@ -6529,6 +6537,7 @@
         gap: .4rem;
         flex-wrap: wrap;
         margin-bottom: .5rem;
+        min-width: 0;
     }
     .conn-search-input {
         flex: 0 0 auto;

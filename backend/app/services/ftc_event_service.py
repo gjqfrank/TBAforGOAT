@@ -12,7 +12,7 @@ import json
 from .ftc_client import get_ftc_client
 from .ftcscout_client import get_ftcscout_client
 from .gatool_client import get_gatool_client
-from .payload_cache import read_payload, write_payload
+from .payload_cache import read_payload, write_payload, invalidate
 from .supabase_client import (
     get_cached_summary,
     set_cached_summary,
@@ -2020,22 +2020,36 @@ async def get_ftc_event_connections(
     """Public entry point — 3-tier cache-aside: disk → Supabase → build."""
     cache_key = f"{event_key}_all" if all_time else event_key
 
+    def _has_h2h(conns: list[dict]) -> bool:
+        """Return True if the connections list already contains H2H win data."""
+        for c in conns:
+            if c.get("opponents_at"):
+                return "h2h_wins_a" in c
+        return True  # no opponent pairs → nothing to check
+
     # 1) Disk cache
     cached = read_payload("connections", cache_key, _CONNECTIONS_TTL)
     if cached:
-        cached.pop("_ts", None)
-        if not all_time:
-            _maybe_warm_ftc_alltime(event_key)
-        return cached.get("connections", [])
+        conns = cached.get("connections", [])
+        if _has_h2h(conns):
+            cached.pop("_ts", None)
+            if not all_time:
+                _maybe_warm_ftc_alltime(event_key)
+            return conns
+        # Stale cache (pre-H2H) — invalidate so we rebuild with H2H data
+        invalidate("connections", cache_key)
 
     # 2) Supabase cache
     sb_key = f"conn_{cache_key}"
     sb_row = await get_cached_summary(sb_key)
     if sb_row and sb_row.get("summary"):
-        write_payload("connections", cache_key, sb_row["summary"])
-        if not all_time:
-            _maybe_warm_ftc_alltime(event_key)
-        return sb_row["summary"].get("connections", [])
+        conns = sb_row["summary"].get("connections", [])
+        if _has_h2h(conns):
+            write_payload("connections", cache_key, sb_row["summary"])
+            if not all_time:
+                _maybe_warm_ftc_alltime(event_key)
+            return conns
+        # Stale Supabase entry — fall through to rebuild
 
     # 3) Build from scratch
     result = await _build_ftc_connections(event_key, all_time=all_time, lookback=lookback)
