@@ -484,6 +484,10 @@ function hideLoginModal() {
     _passkeyEmailCache = {};
 }
 
+function showLoginState() {
+    _showState('login-state');
+}
+
 function showRequestState() {
     _showState('request-state');
     document.getElementById('request-name')?.focus();
