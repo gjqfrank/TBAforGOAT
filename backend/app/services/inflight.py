@@ -58,6 +58,7 @@ async def coalesce(
         return result
     except BaseException as exc:
         future.set_exception(exc)
+        future.exception()  # Mark as retrieved; suppresses "Future exception was never retrieved" warning
         raise
     finally:
         _inflight.pop(key, None)

@@ -9,6 +9,18 @@ import httpx
 from ..config import BLUE_ALLIANCE_API_KEY
 from .circuit_breaker import tba_breaker
 
+
+def _is_tba_failure(exc: Exception) -> bool:
+    """Only count network/server errors toward the circuit breaker threshold.
+
+    HTTP 4xx responses (e.g. 404 Not Found for a team without media) are
+    valid TBA responses and should NOT trip the breaker.
+    """
+    if isinstance(exc, httpx.HTTPStatusError):
+        return exc.response.status_code >= 500
+    # Timeouts, connection errors, etc. are genuine failures.
+    return True
+
 TBA_BASE = "https://www.thebluealliance.com/api/v3"
 CACHE_TTL = 120  # seconds – reduced for faster updates during live events
 _MAX_CACHE_ENTRIES = 500  # cap to prevent unbounded growth over 72h
@@ -56,7 +68,7 @@ class TBAClient:
             resp.raise_for_status()
             return resp.json()
 
-        data = await tba_breaker.call(_do_request)
+        data = await tba_breaker.call(_do_request, is_failure=_is_tba_failure)
         self._cache[endpoint] = (now, data)
         return data
 

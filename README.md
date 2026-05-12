@@ -1,4 +1,4 @@
-# Caster's Tool v2.0
+# Caster's Tool v3.0
 
 A real-time companion app for **FIRST Robotics Competition (FRC)** and **FIRST Tech Challenge (FTC)** broadcasters, commentators, and the FIRST community. Surfaces team stats, alliance breakdowns, playoff brackets, play-by-play data, AI-generated broadcast storylines, live caster notes, and historical context — all at a glance.
 
@@ -6,61 +6,56 @@ Built by **Gürsel & [Team 9020](https://www.thebluealliance.com/team/9020)** fo
 
 ---
 
-## What's New in v2.0
+## What's New in v3.0
 
-v2.0 is a ground-up architectural rebuild. The app moves from a polling-only REST cache to an **offline-first Supabase backbone** with background workers, Realtime WebSocket push, and persistent caster collaboration tools.
+v3.0 is a structural overhaul focused on **modular frontend architecture** and **championship-scale backend hardening**. No user-facing behaviour changes by default — but everything underneath got faster, more maintainable, and more resilient.
 
-### Architecture
+### Frontend — Modular Tab Architecture
 
-| Component | v1.x | v2.0 |
+`app.js` was a 11 573-line monolith. It is now a 1 912-line shell that wires 12 independent per-view modules:
+
+| Module | Lines | Responsibility |
+|---|---:|---|
+| `event_select.js` | 1 451 | Events tab, season picker, regional pool |
+| `summary.js`      | 1 585 | Summary tab, demographics, awards, brackets |
+| `pbp.js`          | 1 321 | Play-by-Play (23.6× faster cold render, 13× faster incremental) |
+| `breakdown.js`    | 1 379 | Breakdown tab |
+| `mobile_ux.js`    | 1 121 | Pull-to-refresh + mobile gestures |
+| `playoffs.js`     |   718 | Bracket render |
+| `team_lookup.js`  |   665 | Team lookup / head-to-head |
+| `floating_lookup.js` | 548 | Floating lookup panel |
+| `alliances.js`    |   249 | Alliance grid |
+| `comparison.js`   |   286 | Team comparison |
+| `match_history.js`|   257 | Match history |
+| `region_history.js`|  227 | Regional history |
+
+### Backend — Championship-Scale Hardening
+
+- **Snapshot coalescing** — N concurrent cold tab-loads for the same event now trigger exactly 1 upstream TBA fan-out (via `inflight.coalesce()`)
+- **Per-event merge lock** — replaced the single global `asyncio.Lock` with a per-event lock map; championship divisions now merge in parallel
+- **Orphan sweep throttled** — `delete_orphaned_matches` capped at once per 300 s (was every 5 s)
+- **Snapshot TTL raised** — 5 min → 30 min; Realtime push handles UI freshness, snapshots are for cold loaders only
+- **Inflight deduplication** (`inflight.py`) — `Future exception was never retrieved` warning fixed; futures are now marked retrieved on exception
+- **Circuit breaker tuned** — TBA `failure_threshold` raised 5 → 10 to handle `asyncio.gather` burst scenarios; 4xx responses (e.g. 404 Not Found) no longer count as failures
+- **Season High Scores Supabase cache** — FRC season high scores now persisted to `season_records`; cold starts serve from Supabase instead of fetching Statbotics live
+
+### Realtime Fixes
+
+- **State-reconciliation bug** — `_scheduleResubscribe()` was clearing `_wasConnected` mid-cycle, preventing `_fireReconnect()` from running. Fixed.
+- **Listener leaks** — `onTeamChange` / `onMatchChange` / `onNoteInsert` / `onReconnect` all return unsubscribe functions; re-mounting views no longer accumulate duplicate handlers
+
+### Architecture Comparison
+
+| Component | v2.0 | v3.0 |
 |-----------|------|------|
-| **Data layer** | In-memory TTL caches _(lost on restart)_ | Supabase Postgres _(persistent, 14 tables)_ |
-| **Data freshness** | Client polls backend on tab switch | Background workers sync every 5s/120s + Realtime WebSocket push |
-| **Concurrency** | Single-threaded request handlers | Serialized merge lock + deadlock retry (3× exponential backoff) |
-| **Fault tolerance** | None — 5xx = blank data | Circuit breaker (3-strike, 30s cooldown) on every external call |
-| **Auth** | None | Email OTP via Supabase GoTrue, account request flow |
-| **Caster notes** | None | Persistent notes per event, synced via Realtime |
-| **TIMS overrides** | None | Context-menu editor for team metadata (tags, robot names, playstyle) |
-| **Battle Station** | None | Live broadcast note timeline with macro deck |
-| **AI Storylines** | In-memory only | Cached in Supabase `storyline_cache`, deduped inflight |
-| **FTC support** | Basic | Full workers, season awards, team avatars |
-| **Frontend cache** | IndexedDB only | IndexedDB + delta-sync from Supabase (`POST /api/sync`) |
-| **Security** | Open | Row-Level Security (RLS), trusted API keys, input validation |
-
-### New Features
-
-- **Supabase-backed persistence** — 14-table schema with delta-sync triggers, JSONB merge functions, and partial indexes
-- **Background workers** — `event_sync` (120s) and `match_poller` (5s) for FRC; mirrored `ftc_event_sync` and `ftc_match_poller` for FTC
-- **Realtime WebSocket** — `event_teams` and `matches` push updates to the frontend via `postgres_changes` (no polling)
-- **Circuit breaker** — 3-strike threshold with 30s cooldown on TBA, FRC Events, Statbotics, and Supabase clients
-- **Deadlock prevention** — `asyncio.Lock` serializes `merge_event_teams_batch`; `_retry_on_deadlock` handles Postgres 40P01 with exponential backoff
-- **Email OTP login** — Magic-link + OTP-first auth via Supabase GoTrue, glassmorphic account popover
-- **Account requests** — Self-service request form with auto-populated display names
-- **TIMS Override Editor** — Context menu + tabbed modal for robot names, tags, playstyle, hardware notes (with history tracking)
-- **Caster Notes** — Persistent per-event notes with CRUD, Supabase Realtime sync
-- **Battle Station** — Top-level tab with spine timeline, pill navigation, macro deck, alliance-colored bubbles, and mobile responsive layout
-- **Global Notes Panel** — Floating glassmorphic panel with search, team auto-complete, and categorized tabs
-- **AI Storyline caching** — Supabase `storyline_cache` table with event-aware invalidation and inflight deduplication
-- **Row-Level Security** — Migration 13 locks down all tables with RLS policies
-- **FTC improvements** — Full worker sync, season awards, team avatars (parsed from FIRST CSS), proper FTC mode styling
-- **Score Breakdown 2026** — Full REBUILT game support with per-robot spotlight and match history
-- **Regional Advancement Pool** — v3.2 FIRST FRC Events API integration for official Championship qualification data
-- **Pre-computed region stats** — `region_stats.json` covering 1992–2026 (HoF, Einstein, Impact, international visitors)
-- **World record footer** — Season high score display
-- **Team comparison** — Up to 6-team EPA breakdown comparison
-- **Collapsible sections** — Show/Hide toggle pills on all Summary and Events panels
-- **Dark/light theme** — Full theme support across all components including FTC mode
-- **Mobile responsive** — All tabs, panels, and Battle Station adapt to small screens
-
-### Bug Fixes (v2.0)
-
-- Fixed 8 FTC/production bugs (avatar routes, alliance upsert null, stale summary)
-- Fixed FTC mode CSS leaking into tabs, context menus, compare buttons, and notes panel
-- Fixed regional pool showing stale 2025 year when switching FTC → FRC
-- Fixed mobile pill overflow for long event names
-- Fixed spotlight match history clipping at 14+ matches
-- Added null-state guards across 6 crash-prone code paths (prevents white-screen on missing data)
-- Deadlock-free concurrent worker syncs (validated with 4-event stress test)
+| **Frontend** | 11 573-line monolith (`app.js`) | 1 912-line shell + 12 tab modules |
+| **PBP render** | Baseline | 23.6× faster cold, 13× faster incremental |
+| **Snapshot coalescing** | None (N tabs → N builds) | `inflight.coalesce()` (N tabs → 1 build) |
+| **Merge lock** | Single global lock | Per-event lock map (parallel divisions) |
+| **Orphan sweep** | Every 5 s | Every 300 s |
+| **Circuit breaker** | 5-strike threshold; 4xx = failure | 10-strike; 4xx ignored |
+| **Season high scores cache** | Disk only | Disk → Supabase → live |
+| **Realtime reconnect** | State-reconciliation bug | Fixed; no listener leaks |
 
 ---
 
@@ -311,7 +306,7 @@ casters-tool/
 │   │   ├── tailwind.css                # Compiled Tailwind output (minified)
 │   │   └── input.css                   # Tailwind source
 │   ├── js/
-│   │   ├── app.js                      # Main UI controller (~11k lines)
+│   │   ├── app.js                      # Main UI shell (~1.9k lines)
 │   │   ├── api.js                      # FRC API wrapper
 │   │   ├── ftc-api.js                  # FTC API wrapper
 │   │   ├── db.js                       # IndexedDB client
@@ -321,7 +316,19 @@ casters-tool/
 │   │   ├── editor.js                   # TIMS Override Editor
 │   │   ├── global_notes.js             # Global Notes Panel
 │   │   ├── notes_service.js            # Caster Notes CRUD
-│   │   └── battle_station.js           # Battle Station timeline
+│   │   ├── battle_station.js           # Battle Station timeline
+│   │   ├── event_select.js             # Events tab module
+│   │   ├── summary.js                  # Summary tab module
+│   │   ├── pbp.js                      # Play-by-Play module
+│   │   ├── breakdown.js                # Breakdown tab module
+│   │   ├── mobile_ux.js                # Mobile UX / gestures
+│   │   ├── playoffs.js                 # Bracket render module
+│   │   ├── team_lookup.js              # Team lookup module
+│   │   ├── floating_lookup.js          # Floating lookup panel
+│   │   ├── alliances.js                # Alliance grid module
+│   │   ├── comparison.js               # Team comparison module
+│   │   ├── match_history.js            # Match history module
+│   │   └── region_history.js           # Regional history module
 │   └── data/
 │       ├── region_stats.json           # Pre-computed region stats (1992–2026)
 │       └── season_2026.json            # Cached season event list

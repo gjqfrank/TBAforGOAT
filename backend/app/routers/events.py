@@ -12,6 +12,8 @@ from ..services.statbotics_client import get_statbotics_client
 from ..services.alliance_service import get_alliances_with_stats
 from ..services.gatool_client import get_gatool_client
 from ..services.error_utils import raise_api_error
+from ..services.supabase_client import get_season_record, set_season_record
+import asyncio
 
 router = APIRouter()
 
@@ -35,13 +37,20 @@ async def world_record():
 async def season_high_scores(year: int = Query(2026)):
     """Top match scores and top EPA teams for a season (from Statbotics)."""
     try:
-        # Disk cache — Statbotics data changes infrequently
+        # 1. Disk cache — Statbotics data changes infrequently
         cached = payload_cache.read_payload("season_high", str(year), 600)
         if cached:
             return cached
 
         # Keep stale data on hand so we can fall back if Statbotics is down
         stale = payload_cache.read_stale("season_high", str(year))
+
+        # 2. Supabase cache — survives process restarts / cold starts
+        sb_row = await get_season_record(f"frc_season_high_{year}")
+        if sb_row and sb_row.get("payload"):
+            payload = sb_row["payload"]
+            payload_cache.write_payload("season_high", str(year), payload)
+            return payload
 
         try:
             sb = get_statbotics_client()
@@ -64,6 +73,9 @@ async def season_high_scores(year: int = Query(2026)):
                 m["match_label"] = _parse_match_label(raw)
 
             payload_cache.write_payload("season_high", str(year), data)
+            asyncio.create_task(
+                set_season_record(f"frc_season_high_{year}", year, "frc_season_high_scores", data)
+            )
             return data
         except Exception:
             if stale:
