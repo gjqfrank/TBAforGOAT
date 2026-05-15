@@ -127,6 +127,8 @@ async def get_alliances_with_stats(event_key: str) -> dict:
         # Build lookups from Supabase data (TBA + FRC + Statbotics merged)
         name_map: dict[str, str] = {}
         country_map: dict[str, str] = {}
+        city_map: dict[str, str] = {}
+        state_prov_map: dict[str, str] = {}
         school_map: dict[str, str] = {}
         rookie_year_map: dict[str, int | None] = {}
         rank_map: dict[str, dict] = {}
@@ -153,6 +155,8 @@ async def get_alliances_with_stats(event_key: str) -> dict:
 
             name_map[tk] = r.get("nickname", "")
             country_map[tk] = tims.get("country", "")
+            city_map[tk] = frc_d.get("city") or tims.get("city", "")
+            state_prov_map[tk] = frc_d.get("stateProv") or tims.get("state_prov", "")
             # Prefer FRC API schoolName over TBA school_name
             school_map[tk] = frc_d.get("schoolName") or tims.get("school_name", "")
             rookie_year_map[tk] = tims.get("rookie_year") or frc_d.get("rookieYear")
@@ -202,6 +206,8 @@ async def get_alliances_with_stats(event_key: str) -> dict:
                 if team and isinstance(team, dict):
                     name_map[tk] = team.get("nickname", "") or ""
                     country_map.setdefault(tk, team.get("country", "") or "")
+                    city_map.setdefault(tk, team.get("city", "") or "")
+                    state_prov_map.setdefault(tk, team.get("state_prov", "") or "")
                     school_map.setdefault(tk, team.get("school_name", "") or "")
                     rookie_year_map.setdefault(tk, team.get("rookie_year"))
                 else:
@@ -224,7 +230,7 @@ async def get_alliances_with_stats(event_key: str) -> dict:
                 frc_playoff_matches = None
 
         return await _build_alliances_response(
-            sb_alliances_raw, name_map, country_map, school_map,
+            sb_alliances_raw, name_map, country_map, city_map, state_prov_map, school_map,
             rookie_year_map, frc_org_map, rank_map, opr_map, avatar_map,
             frc_playoff_matches, year, event_key,
             event_type=sb_event_type,
@@ -259,12 +265,16 @@ async def get_alliances_with_stats(event_key: str) -> dict:
     # ── Lookups ─────────────────────────────────────────────
     name_map: dict[str, str] = {}
     country_map: dict[str, str] = {}
+    city_map: dict[str, str] = {}
+    state_prov_map: dict[str, str] = {}
     school_map: dict[str, str] = {}
     rookie_year_map: dict[str, int | None] = {}
     if teams_list:
         for t in teams_list:
             name_map[t["key"]] = t.get("nickname", "")
             country_map[t["key"]] = t.get("country", "")
+            city_map[t["key"]] = t.get("city", "")
+            state_prov_map[t["key"]] = t.get("state_prov", "")
             school_map[t["key"]] = t.get("school_name", "")
             rookie_year_map[t["key"]] = t.get("rookie_year")
 
@@ -304,7 +314,7 @@ async def get_alliances_with_stats(event_key: str) -> dict:
     avatar_map = await get_avatars(all_alliance_keys, year)
 
     return await _build_alliances_response(
-        alliances_raw, name_map, country_map, school_map,
+        alliances_raw, name_map, country_map, city_map, state_prov_map, school_map,
         rookie_year_map, frc_org_map, rank_map, opr_map, avatar_map,
         frc_playoff_matches, year, event_key, event_type=tba_event_type,
     )
@@ -316,7 +326,7 @@ _EINSTEIN_TYPE = 4         # Championship Finals (Einstein)
 
 
 async def _build_alliances_response(
-    alliances_raw, name_map, country_map, school_map,
+    alliances_raw, name_map, country_map, city_map, state_prov_map, school_map,
     rookie_year_map, frc_org_map, rank_map, opr_map, avatar_map,
     frc_playoff_matches, year, event_key, event_type: int = -1,
 ) -> dict:
@@ -345,6 +355,8 @@ async def _build_alliances_response(
                     "team_number": tnum,
                     "nickname": name_map.get(tk, ""),
                     "country": country_map.get(tk, ""),
+                    "city": city_map.get(tk, ""),
+                    "state_prov": state_prov_map.get(tk, ""),
                     "school_name": frc_org_map.get(tnum, "") or school_map.get(tk, ""),
                     "rookie_year": rookie_year_map.get(tk),
                     "avatar": avatar_map.get(tk),
