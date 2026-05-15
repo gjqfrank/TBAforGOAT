@@ -235,6 +235,20 @@ async def live_event_status(event_key: str):
         raise HTTPException(status_code=404, detail=f"No live status for event: {event_key}")
     return resp.data
 
+# ── Apple App Site Association (required for native passkeys) ──
+# Must be served from the RP domain (casterstool.com) at this exact path.
+# Apple fetches it during app install to verify the webcredentials entitlement.
+@app.get("/.well-known/apple-app-site-association", include_in_schema=False)
+async def apple_app_site_association() -> JSONResponse:
+    return JSONResponse(
+        content={
+            "webcredentials": {
+                "apps": ["458G3B5NLP.com.kleium.CastersTool"]
+            }
+        },
+        media_type="application/json",
+    )
+
 # ── Auth routers ────────────────────────────────────────────
 # Prefixes are defined inside each router (/auth/...)
 app.include_router(auth.router)
