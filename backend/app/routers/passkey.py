@@ -35,9 +35,10 @@ import os
 import secrets
 import time
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
-from fastapi import APIRouter, Header, HTTPException, Query, status
+from fastapi import APIRouter, Header, HTTPException, Query, Request, status
 from pydantic import BaseModel, EmailStr
 from webauthn import (
     generate_registration_options,
@@ -70,8 +71,30 @@ router = APIRouter(prefix="/auth/passkey", tags=["passkey"])
 
 # ── Config ───────────────────────────────────────────────────────────────
 RP_NAME   = os.environ.get("PASSKEY_RP_NAME",   "Caster's Tool")
-RP_ID     = os.environ.get("PASSKEY_RP_ID",     "localhost")
-ORIGIN    = os.environ.get("PASSKEY_ORIGIN",    "http://localhost:3000")
+RP_ID     = os.environ.get("PASSKEY_RP_ID",     "")
+ORIGIN    = os.environ.get("PASSKEY_ORIGIN",    "")
+
+
+def _rp_config(request: Request) -> tuple[str, str]:
+    """Return (rp_id, expected_origin) for WebAuthn.
+
+    If both PASSKEY_RP_ID and PASSKEY_ORIGIN env vars are set, they win.
+    Otherwise the values are derived from the request's Origin header so
+    the app works on any domain without extra configuration.
+    """
+    if RP_ID and ORIGIN:
+        return RP_ID, ORIGIN
+
+    origin_header = request.headers.get("origin", "")
+    if origin_header:
+        parsed = urlparse(origin_header)
+        rp_id  = parsed.hostname or "localhost"
+        scheme = parsed.scheme   or "https"
+        netloc = parsed.netloc   or "localhost"
+        return rp_id, f"{scheme}://{netloc}"
+
+    # Last resort — only reached when there is no Origin header (e.g. curl)
+    return RP_ID or "localhost", ORIGIN or "http://localhost:3000"
 
 # ── In-memory challenge store (TTL = 90 s) ───────────────────────────────
 # {challenge_b64url: {"email": str, "user_id": str|None, "expires": float}}
@@ -317,6 +340,7 @@ async def has_credential(email: str = Query(..., min_length=3)) -> dict:
 
 @router.post("/register-options")
 async def register_options(
+    request: Request,
     body: RegisterOptionsRequest,
     authorization: str = Header(...),
 ) -> dict:
@@ -325,6 +349,7 @@ async def register_options(
     Requires a valid Bearer token (the user must already be authenticated via OTP).
     """
     user_id = _extract_user_id_from_token(authorization)
+    rp_id, _origin = _rp_config(request)
 
     # Retrieve existing credentials so they can be excluded (prevent re-registration
     # of the same authenticator).
@@ -335,7 +360,7 @@ async def register_options(
     ]
 
     opts = generate_registration_options(
-        rp_id=RP_ID,
+        rp_id=rp_id,
         rp_name=RP_NAME,
         user_id=user_id.encode(),
         user_name=body.email,
@@ -354,6 +379,7 @@ async def register_options(
 
 @router.post("/register")
 async def register(
+    request: Request,
     body: RegisterVerifyRequest,
     authorization: str = Header(...),
 ) -> dict:
@@ -384,12 +410,13 @@ async def register(
             detail="Challenge was issued for a different user.",
         )
 
+    rp_id, expected_origin = _rp_config(request)
     try:
         verification = verify_registration_response(
             credential=body.credential,
             expected_challenge=base64url_to_bytes(challenge_b64),
-            expected_rp_id=RP_ID,
-            expected_origin=ORIGIN,
+            expected_rp_id=rp_id,
+            expected_origin=expected_origin,
             require_user_verification=False,
         )
     except (InvalidCBORData, InvalidAuthenticationResponse) as exc:
@@ -421,7 +448,7 @@ async def register(
 
 
 @router.post("/authenticate-options")
-async def authenticate_options(body: AuthOptionsRequest) -> dict:
+async def authenticate_options(request: Request, body: AuthOptionsRequest) -> dict:
     """
     Generate WebAuthn assertion options for a sign-in attempt.
     Returns allowCredentials populated with the user's known passkeys.
@@ -440,8 +467,9 @@ async def authenticate_options(body: AuthOptionsRequest) -> dict:
         for c in existing
     ]
 
+    rp_id, _origin = _rp_config(request)
     opts = generate_authentication_options(
-        rp_id=RP_ID,
+        rp_id=rp_id,
         allow_credentials=allow_creds,
         user_verification=UserVerificationRequirement.PREFERRED,
     )
@@ -451,7 +479,7 @@ async def authenticate_options(body: AuthOptionsRequest) -> dict:
 
 
 @router.post("/authenticate")
-async def authenticate(body: AuthVerifyRequest) -> dict:
+async def authenticate(request: Request, body: AuthVerifyRequest) -> dict:
     """
     Verify a WebAuthn assertion and, on success, return a Supabase session.
     The session JSON is compatible with Auth._sessionFromResponse in auth.js.
@@ -489,12 +517,13 @@ async def authenticate(body: AuthVerifyRequest) -> dict:
             detail="Passkey not recognized.",
         )
 
+    rp_id, expected_origin = _rp_config(request)
     try:
         verification = verify_authentication_response(
             credential=body.credential,
             expected_challenge=base64url_to_bytes(challenge_b64),
-            expected_rp_id=RP_ID,
-            expected_origin=ORIGIN,
+            expected_rp_id=rp_id,
+            expected_origin=expected_origin,
             credential_public_key=base64url_to_bytes(matched["public_key"]),
             credential_current_sign_count=matched["sign_count"],
             require_user_verification=False,
