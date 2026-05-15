@@ -1,1 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5 12 2"/><line x1="12" y1="22" x2="12" y2="15.5"/><polyline points="22 8.5 12 15.5 2 8.5"/><polyline points="2 15.5 12 8.5 22 15.5"/><line x1="12" y1="2" x2="12" y2="8.5"/></svg>
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" version="2.0" baseProfile="tiny-ps"
+     width="32" height="32" viewBox="0 0 32 32"
+     fill="none" stroke="#6366f1" stroke-width="2.67"
+     stroke-linecap="round" stroke-linejoin="round">
+  <title>Caster's Tool</title>
+  <polygon points="16 2.67 29.33 11.33 29.33 20.67 16 29.33 2.67 20.67 2.67 11.33 16 2.67"/>
+  <line x1="16" y1="29.33" x2="16" y2="20.67"/>
+  <polyline points="29.33 11.33 16 20.67 2.67 11.33"/>
+  <polyline points="2.67 20.67 16 11.33 29.33 20.67"/>
+  <line x1="16" y1="2.67" x2="16" y2="11.33"/>
+</svg>

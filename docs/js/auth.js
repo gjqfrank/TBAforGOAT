@@ -146,7 +146,14 @@ const Auth = (() => {
 
             if (!resp.ok) {
                 const body = await resp.json().catch(() => ({}));
-                return { error: body.msg || body.error_description || `HTTP ${resp.status}` };
+                const raw = body.msg || body.error_description || body.message || `HTTP ${resp.status}`;
+                const isRateLimit = resp.status === 429
+                    || /rate.limit|too.many/i.test(raw)
+                    || body.error_code === 'over_email_send_rate_limit';
+                const msg = isRateLimit
+                    ? 'Too many sign-in emails sent recently. Please wait a few minutes and try again.'
+                    : raw;
+                return { error: msg };
             }
             return { error: null };
         } catch (e) {
