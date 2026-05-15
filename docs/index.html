@@ -1169,6 +1169,13 @@
                     <h2 class="login-title">Caster's Login</h2>
                     <p class="login-subtitle">Enter your email to receive a sign-in code</p>
                 </div>
+                <!-- Direct passkey sign-in (discoverable credentials — no email needed) -->
+                <button class="login-btn login-btn-passkey hidden" id="passkey-discover-btn" onclick="handlePasskeyDiscover(event)" type="button">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 1 0-16 0"/><circle cx="19" cy="19" r="3"/><line x1="19" y1="16" x2="19" y2="13"/><line x1="22" y1="19" x2="19" y2="19"/></svg>
+                    Sign in with Passkey
+                </button>
+                <div id="passkey-discover-error" class="login-error hidden"></div>
+                <div id="passkey-discover-divider" class="login-divider hidden"><span>or sign in with email</span></div>
                 <!-- Passkey sign-in button — shown only when a passkey exists for the typed email -->
                 <button class="login-btn login-btn-passkey hidden" id="passkey-signin-btn" onclick="handlePasskeySignIn(event)" type="button">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 1 0-16 0"/><circle cx="19" cy="19" r="3"/><line x1="19" y1="16" x2="19" y2="13"/><line x1="22" y1="19" x2="19" y2="19"/></svg>

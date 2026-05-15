@@ -109,7 +109,7 @@ def _prune_challenges() -> None:
         del _challenges[k]
 
 
-def _store_challenge(challenge_bytes: bytes, *, email: str, user_id: str | None = None) -> None:
+def _store_challenge(challenge_bytes: bytes, *, email: str = "", user_id: str | None = None) -> None:
     _prune_challenges()
     key = bytes_to_base64url(challenge_bytes)
     _challenges[key] = {
@@ -159,6 +159,36 @@ async def _get_user_by_email(email: str) -> dict | None:
     data = resp.json()
     users = data.get("users") or []
     return users[0] if users else None
+
+
+async def _get_user_by_id(user_id: str) -> dict | None:
+    """Fetch a GoTrue user record by user_id using the admin API."""
+    if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
+        return None
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(
+            f"{SUPABASE_URL}/auth/v1/admin/users/{user_id}",
+            headers=_svc_headers(),
+        )
+    if not resp.is_success:
+        return None
+    return resp.json()
+
+
+async def _get_credential_by_id(credential_id: str) -> dict | None:
+    """Fetch a single passkey credential row by its credential_id."""
+    if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
+        return None
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(
+            f"{SUPABASE_URL}/rest/v1/passkey_credentials",
+            headers={**_svc_headers(), "Prefer": "return=representation"},
+            params={"credential_id": f"eq.{credential_id}", "select": "*", "limit": 1},
+        )
+    if not resp.is_success:
+        return None
+    rows = resp.json()
+    return rows[0] if rows else None
 
 
 async def _get_passkey_credentials(user_id: str) -> list[dict]:
@@ -326,6 +356,10 @@ class AuthVerifyRequest(BaseModel):
     credential: dict          # raw PublicKeyCredential JSON from browser
 
 
+class DiscoverAuthVerifyRequest(BaseModel):
+    credential: dict          # raw PublicKeyCredential JSON from browser
+
+
 # ── Endpoints ─────────────────────────────────────────────────────────────
 
 @router.get("/has-credential")
@@ -445,6 +479,88 @@ async def register(
         )
 
     return {"ok": True, "credential_id": cred_id}
+
+
+@router.post("/discover-options")
+async def discover_options(request: Request) -> dict:
+    """
+    Generate WebAuthn assertion options for a discoverable-credential (usernameless) sign-in.
+    No email required — the platform authenticator presents the user's available passkeys.
+    Uses empty allowCredentials so the browser shows the passkey picker.
+    """
+    rp_id, _origin = _rp_config(request)
+    opts = generate_authentication_options(
+        rp_id=rp_id,
+        allow_credentials=[],
+        user_verification=UserVerificationRequirement.PREFERRED,
+    )
+    _store_challenge(opts.challenge)  # no email/user_id — resolved from credential_id at verify time
+    return json.loads(options_to_json(opts))
+
+
+@router.post("/discover-authenticate")
+async def discover_authenticate(request: Request, body: DiscoverAuthVerifyRequest) -> dict:
+    """
+    Verify a discoverable-credential WebAuthn assertion (no email required upfront).
+    Looks up the user by credential_id extracted from the assertion response.
+    """
+    try:
+        client_data = json.loads(
+            base64.b64decode(body.credential["response"]["clientDataJSON"] + "==")
+        )
+        challenge_b64 = client_data.get("challenge", "")
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Malformed credential response.",
+        )
+
+    entry = _pop_challenge(challenge_b64)
+    if entry is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Challenge expired or not found. Please start the sign-in again.",
+        )
+
+    # Look up the credential by ID to find the owning user
+    cred_id = body.credential.get("id") or body.credential.get("rawId", "")
+    cred_row = await _get_credential_by_id(cred_id)
+    if cred_row is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Passkey not recognized.",
+        )
+
+    user_id = cred_row["user_id"]
+    user = await _get_user_by_id(user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User account not found.",
+        )
+    email = user.get("email", "")
+
+    rp_id, expected_origin = _rp_config(request)
+    try:
+        verification = verify_authentication_response(
+            credential=body.credential,
+            expected_challenge=base64url_to_bytes(challenge_b64),
+            expected_rp_id=rp_id,
+            expected_origin=expected_origin,
+            credential_public_key=base64url_to_bytes(cred_row["public_key"]),
+            credential_current_sign_count=cred_row["sign_count"],
+            require_user_verification=False,
+        )
+    except (InvalidCBORData, InvalidAuthenticationResponse) as exc:
+        log.warning("Discoverable passkey authentication failed: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Passkey verification failed.",
+        ) from exc
+
+    await _update_sign_count(cred_row["credential_id"], verification.new_sign_count)
+    session_data = await _generate_supabase_session(email, user_id)
+    return session_data
 
 
 @router.post("/authenticate-options")

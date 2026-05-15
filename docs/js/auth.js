@@ -448,6 +448,12 @@ function updateAuthUI() {
 function showLoginModal() {
     if (Auth.isAuthenticated()) return;
     showLoginState();
+    // Show the discover-passkey button only when the platform supports WebAuthn
+    const discoverBtn = document.getElementById('passkey-discover-btn');
+    const discoverDivider = document.getElementById('passkey-discover-divider');
+    const available = _isWebAuthnAvailable();
+    if (discoverBtn) discoverBtn.classList.toggle('hidden', !available);
+    if (discoverDivider) discoverDivider.classList.toggle('hidden', !available);
     document.getElementById('login-overlay').classList.remove('hidden');
     document.getElementById('login-email')?.focus();
 }
@@ -692,6 +698,58 @@ function _setPasskeyButtonVisible(show) {
     const div = document.getElementById('passkey-divider');
     if (btn) btn.classList.toggle('hidden', !show);
     if (div) div.classList.toggle('hidden', !show);
+}
+
+/** Called by the top-level "Sign in with Passkey" button — no email required (discoverable credentials). */
+async function handlePasskeyDiscover(e) {
+    e.preventDefault();
+    const btn = document.getElementById('passkey-discover-btn');
+    _hideEl('passkey-discover-error');
+    if (btn) { btn.disabled = true; btn.textContent = 'Waiting for device…'; }
+
+    try {
+        // 1. Get discoverable-credential options (no email needed)
+        const optResp = await fetch(`${PASSKEY_API}/discover-options`, { method: 'POST' });
+        if (!optResp.ok) {
+            _showError('passkey-discover-error', 'Could not start passkey sign-in. Please try again.');
+            return;
+        }
+        const opts = await optResp.json();
+
+        // 2. Prompt the platform authenticator — browser shows the passkey picker
+        const credential = await navigator.credentials.get({
+            publicKey: _parseAuthOptions(opts),
+        });
+
+        // 3. Send assertion to backend → receive Supabase session
+        const authResp = await fetch(`${PASSKEY_API}/discover-authenticate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ credential: _credentialToJSON(credential) }),
+        });
+        const sessionData = await authResp.json();
+
+        if (!authResp.ok) {
+            _showError('passkey-discover-error', sessionData.detail || 'Passkey verification failed.');
+            return;
+        }
+
+        Auth._saveSessionFromPasskey(sessionData);
+        hideLoginModal();
+        updateAuthUI();
+
+    } catch (err) {
+        if (err?.name === 'NotAllowedError') {
+            // User cancelled — silent
+        } else {
+            _showError('passkey-discover-error', err.message || 'Passkey sign-in failed.');
+        }
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 1 0-16 0"/><circle cx="19" cy="19" r="3"/><line x1="19" y1="16" x2="19" y2="13"/><line x1="22" y1="19" x2="19" y2="19"/></svg> Sign in with Passkey`;
+        }
+    }
 }
 
 /** Called by the "Sign in with Passkey" button in the login form. */
