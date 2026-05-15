@@ -401,6 +401,37 @@ function closeMobUtilPanel() {
 
 /* Settings panel content */
 function _buildMobSettings(container) {
+    // ── Auth section ───────────────────────────────────────
+    const authed = typeof Auth !== 'undefined' && Auth.isAuthenticated();
+    const user = authed && typeof Auth !== 'undefined' ? Auth.getUser() : null;
+    const displayName = user ? (user.user_metadata?.name || user.email?.split('@')[0] || 'Caster') : null;
+
+    const authSection = document.createElement('div');
+    authSection.className = 'settings-auth-section';
+    authSection.id = 'settings-auth-section';
+
+    const signInBtn = document.createElement('button');
+    signInBtn.className = 'settings-auth-btn';
+    signInBtn.id = 'settings-auth-btn';
+    signInBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><span class="settings-auth-label"><span id="settings-auth-label">${authed ? 'Hey, ' + displayName + '!' : 'Sign In'}</span><span class="settings-auth-sub" id="settings-auth-sub">${authed && user ? (user.email || '') : ''}</span></span>`;
+    if (authed) {
+        signInBtn.style.cursor = 'default';
+    } else {
+        signInBtn.style.cursor = 'pointer';
+        signInBtn.onclick = function() { showLoginModal(); closeMobUtilPanel(); };
+    }
+    authSection.appendChild(signInBtn);
+
+    const logoutBtn = document.createElement('button');
+    logoutBtn.id = 'settings-logout-btn';
+    logoutBtn.className = 'settings-auth-btn' + (authed ? '' : ' hidden');
+    logoutBtn.style.cssText = 'color:var(--danger,#ef4444); justify-content:center; margin-bottom:0;';
+    logoutBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> Sign Out`;
+    logoutBtn.onclick = function() { handleLogout(); closeMobUtilPanel(); };
+    authSection.appendChild(logoutBtn);
+
+    container.appendChild(authSection);
+
     const groups = [
         { title: 'General', toggles: [
             { id: 'toggle-theme', label: 'Light mode', fn: 'toggleTheme' },
