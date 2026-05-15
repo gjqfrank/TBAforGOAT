@@ -145,20 +145,35 @@ def _anon_headers() -> dict[str, str]:
 
 
 async def _get_user_by_email(email: str) -> dict | None:
-    """Fetch a GoTrue user record by email using the admin API."""
+    """Fetch a GoTrue user record by email using the admin API.
+
+    GoTrue's ``filter`` query param performs a case-insensitive ILIKE
+    substring match against the email/phone columns — there is no
+    PostgREST-style ``email.eq.<value>`` syntax. Passing the literal
+    ``email.eq.<value>`` string therefore never matches any user and
+    silently returns an empty list. We pass the bare email as the filter
+    (which the server treats as ILIKE '%email%') and then verify an exact
+    case-insensitive match client-side so partial collisions can't return
+    the wrong account.
+    """
     if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
         return None
     async with httpx.AsyncClient() as client:
         resp = await client.get(
             f"{SUPABASE_URL}/auth/v1/admin/users",
             headers=_svc_headers(),
-            params={"filter": f"email.eq.{email}", "page": 1, "per_page": 1},
+            params={"filter": email, "page": 1, "per_page": 50},
         )
     if not resp.is_success:
+        log.warning("admin/users lookup failed for %s: %s %s", email, resp.status_code, resp.text)
         return None
     data = resp.json()
     users = data.get("users") or []
-    return users[0] if users else None
+    needle = email.strip().lower()
+    for u in users:
+        if (u.get("email") or "").lower() == needle:
+            return u
+    return None
 
 
 async def _get_user_by_id(user_id: str) -> dict | None:
@@ -268,7 +283,15 @@ async def _generate_supabase_session(email: str, user_id: str) -> dict:
       3. Return the session fields that the browser's Auth._sessionFromResponse
          knows how to handle.
     """
-    if not SUPABASE_URL or not SUPABASE_SERVICE_KEY or not SUPABASE_ANON_KEY:
+    missing = [
+        name for name, val in (
+            ("SUPABASE_URL",        SUPABASE_URL),
+            ("SUPABASE_SERVICE_KEY", SUPABASE_SERVICE_KEY),
+            ("SUPABASE_ANON_KEY",   SUPABASE_ANON_KEY),
+        ) if not val
+    ]
+    if missing:
+        log.error("Cannot issue passkey session — missing env vars: %s", ", ".join(missing))
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Auth service is not configured.",

@@ -815,7 +815,7 @@ async function handlePasskeySignIn(e) {
     } finally {
         if (btn) {
             btn.disabled = false;
-            btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 1 0-16 0"/><circle cx="19" cy="19" r="3"/><line x1="19" y1="16" x1="19" y1="13"/><line x1="22" y1="19" x1="19" y1="19"/></svg> Sign in with Passkey`;
+            btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 1 0-16 0"/><circle cx="19" cy="19" r="3"/><line x1="19" y1="16" x2="19" y2="13"/><line x1="22" y1="19" x2="19" y2="19"/></svg> Sign in with Passkey`;
         }
     }
 }
