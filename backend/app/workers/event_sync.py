@@ -480,7 +480,35 @@ async def run_event_sync(year: int | None = None) -> None:
             # 3) Regional pool (v3.2) — once per sweep, not per event
             await _sync_regional_pool(year, ongoing)
 
+            # 4) Warm connections cache for ongoing events (non-blocking background tasks).
+            #    This ensures Supabase has both past-3yr and all-time connections data
+            #    before any user requests it via the Play by Play "All Time" toggle.
+            for ek in ongoing:
+                asyncio.ensure_future(_warm_event_connections(ek))
+
         except Exception as e:
             log.error("Event sync sweep error: %s", e)
 
         await asyncio.sleep(SYNC_INTERVAL)
+
+
+async def _warm_event_connections(event_key: str) -> None:
+    """Ensure past-3yr and all-time connections are cached in Supabase.
+
+    Returns immediately if the disk cache is already warm.  The
+    get_event_connections call handles Supabase → build-from-scratch
+    fallback and automatically kicks off the all-time background warm.
+    """
+    from ..services.summary_service import get_event_connections
+    from ..services import payload_cache
+
+    _CONN_TTL = 3600
+    # Fast-path: skip if disk cache is already populated
+    if payload_cache.read_payload("connections", event_key, _CONN_TTL):
+        return
+    try:
+        # Building past-3yr also triggers _maybe_warm_alltime_connections
+        await get_event_connections(event_key, all_time=False)
+        log.debug("Connections cache warmed for %s", event_key)
+    except Exception as e:
+        log.debug("Connections warm failed for %s: %s", event_key, e)

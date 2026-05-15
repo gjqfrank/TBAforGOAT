@@ -436,7 +436,33 @@ async def run_ftc_event_sync(year: int | None = None) -> None:
                 except Exception as e:
                     log.warning("FTC rankings sync failed for %s: %s", ek, e)
 
+            # Warm connections cache for ongoing events (non-blocking background tasks).
+            # Ensures Supabase has both past-3yr and all-time connections before any
+            # user triggers the Play by Play "All Time" toggle.
+            for ek in ongoing:
+                asyncio.ensure_future(_warm_ftc_event_connections(ek))
+
         except Exception as e:
             log.error("FTC event sync sweep error: %s", e)
 
         await asyncio.sleep(SYNC_INTERVAL)
+
+
+async def _warm_ftc_event_connections(event_key: str) -> None:
+    """Ensure past-3yr and all-time FTC connections are cached in Supabase.
+
+    Fast-paths through the disk cache so it only rebuilds when stale.
+    Building past-3yr automatically triggers all-time warming via
+    _maybe_warm_ftc_alltime.
+    """
+    from ..services.ftc_event_service import get_ftc_event_connections
+    from ..services import payload_cache
+
+    _CONN_TTL = 3600
+    if payload_cache.read_payload("connections", event_key, _CONN_TTL):
+        return
+    try:
+        await get_ftc_event_connections(event_key, all_time=False)
+        log.debug("FTC connections cache warmed for %s", event_key)
+    except Exception as e:
+        log.debug("FTC connections warm failed for %s: %s", event_key, e)

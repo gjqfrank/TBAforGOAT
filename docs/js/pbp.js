@@ -766,7 +766,7 @@ async function fetchMatchConnections(teamNums, forceAllTime) {
         _pbpConnCache[key] = result;
         return result;
     } catch {
-        _pbpConnCache[key] = [];
+        // Do NOT cache errors — allow the user to retry by re-toggling
         return [];
     }
 }
