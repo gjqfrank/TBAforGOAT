@@ -186,6 +186,7 @@ async def _get_credential_by_id(credential_id: str) -> dict | None:
             params={"credential_id": f"eq.{credential_id}", "select": "*", "limit": 1},
         )
     if not resp.is_success:
+        log.warning("Failed to fetch passkey credential %s: %s %s", credential_id, resp.status_code, resp.text)
         return None
     rows = resp.json()
     return rows[0] if rows else None
@@ -323,7 +324,7 @@ def _extract_user_id_from_token(authorization: str) -> str:
     """Decode (without verifying signature) the sub claim from a JWT."""
     try:
         parts = authorization.removeprefix("Bearer ").split(".")
-        payload = json.loads(base64.b64decode(parts[1] + "=="))
+        payload = json.loads(base64.urlsafe_b64decode(parts[1] + "=="))
         uid = payload.get("sub")
         if not uid:
             raise ValueError("no sub claim")
@@ -423,7 +424,7 @@ async def register(
     # Reconstruct the challenge bytes from the credential's clientDataJSON
     try:
         client_data = json.loads(
-            base64.b64decode(body.credential["response"]["clientDataJSON"] + "==")
+            base64.urlsafe_b64decode(body.credential["response"]["clientDataJSON"] + "==")
         )
         challenge_b64 = client_data.get("challenge", "")
     except Exception:
@@ -506,7 +507,7 @@ async def discover_authenticate(request: Request, body: DiscoverAuthVerifyReques
     """
     try:
         client_data = json.loads(
-            base64.b64decode(body.credential["response"]["clientDataJSON"] + "==")
+            base64.urlsafe_b64decode(body.credential["response"]["clientDataJSON"] + "==")
         )
         challenge_b64 = client_data.get("challenge", "")
     except Exception:
@@ -526,6 +527,7 @@ async def discover_authenticate(request: Request, body: DiscoverAuthVerifyReques
     cred_id = body.credential.get("id") or body.credential.get("rawId", "")
     cred_row = await _get_credential_by_id(cred_id)
     if cred_row is None:
+        log.warning("Discoverable passkey not found in DB for credential_id=%s", cred_id)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Passkey not recognized.",
@@ -603,7 +605,7 @@ async def authenticate(request: Request, body: AuthVerifyRequest) -> dict:
     # Reconstruct challenge from the credential's clientDataJSON
     try:
         client_data = json.loads(
-            base64.b64decode(body.credential["response"]["clientDataJSON"] + "==")
+            base64.urlsafe_b64decode(body.credential["response"]["clientDataJSON"] + "==")
         )
         challenge_b64 = client_data.get("challenge", "")
     except Exception:
@@ -628,6 +630,8 @@ async def authenticate(request: Request, body: AuthVerifyRequest) -> dict:
     all_creds = await _get_passkey_credentials(user_id)
     matched = next((c for c in all_creds if c["credential_id"] == cred_id_from_response), None)
     if matched is None:
+        log.warning("Passkey not found in DB for user %s, credential_id=%s, stored_ids=%s",
+                    user_id, cred_id_from_response, [c["credential_id"] for c in all_creds])
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Passkey not recognized.",
