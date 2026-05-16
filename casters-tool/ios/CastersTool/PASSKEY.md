@@ -44,7 +44,7 @@ async def apple_app_site_association():
     return JSONResponse(
         content={
             "webcredentials": {
-                "apps": ["458G3B5NLP.com.kleium.CastersTool"]
+                "apps": ["458G3B5NLP.gurselgenc.CastersTool"]
             }
         },
         media_type="application/json",
@@ -233,7 +233,7 @@ func signOut() {
 
 ```swift
 enum KeychainHelper {
-    private static let service = "com.kleium.CastersTool"
+    private static let service = "gurselgenc.CastersTool"
     private static let sessionKey = "authSession"
 
     static func saveSession(_ session: AuthSession) {

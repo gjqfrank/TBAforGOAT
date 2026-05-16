@@ -243,7 +243,7 @@ async def apple_app_site_association() -> JSONResponse:
     return JSONResponse(
         content={
             "webcredentials": {
-                "apps": ["458G3B5NLP.com.kleium.CastersTool"]
+                "apps": ["458G3B5NLP.gurselgenc.CastersTool"]
             }
         },
         media_type="application/json",
