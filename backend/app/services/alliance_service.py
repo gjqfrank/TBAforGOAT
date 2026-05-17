@@ -331,7 +331,14 @@ async def _build_alliances_response(
     frc_playoff_matches, year, event_key, event_type: int = -1,
 ) -> dict:
     """Build the final alliances response dict from lookup maps."""
-    _pick_labels = ['Captain', '1st Pick', '2nd Pick', '3rd Pick', 'Backup']
+    _is_champ = event_type in (_CHAMP_DIVISION_TYPE, _EINSTEIN_TYPE)
+    # Championship (division / Einstein): 4 real picks, no backup slot.
+    # All other events: 3 real picks; a 4th entry is always a backup.
+    _pick_labels = (
+        ['Captain', '1st Pick', '2nd Pick', '3rd Pick']
+        if _is_champ else
+        ['Captain', '1st Pick', '2nd Pick', 'Backup']
+    )
 
     alliances = []
     for idx, alliance in enumerate(alliances_raw):

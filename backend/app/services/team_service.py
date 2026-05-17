@@ -235,7 +235,13 @@ async def _get_team_stats_impl(team_number: int, year: Optional[int] = None) -> 
         qual_record = qual_ranking.get("record", {})
 
         # Alliance pick info (already in status, no extra API call)
-        _PICK_LABELS = ['Captain', '1st Pick', '2nd Pick', '3rd Pick', 'Backup']
+        # Championship events (type 3/4) have a real 3rd pick; all others use Backup.
+        _is_champ_et = et in (3, 4)
+        _PICK_LABELS = (
+            ['Captain', '1st Pick', '2nd Pick', '3rd Pick']
+            if _is_champ_et else
+            ['Captain', '1st Pick', '2nd Pick', 'Backup']
+        )
         alliance_info = status.get("alliance") if status else None
         alliance_pick = ""
         alliance_number = None

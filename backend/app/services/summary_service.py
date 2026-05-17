@@ -820,7 +820,8 @@ def _extract_past_event_champions(
     if not event_history or not event_history.get("timeline"):
         return []
 
-    _PICK_LABELS = ['Captain', '1st Pick', '2nd Pick', '3rd Pick', 'Backup']
+    # Non-championship events only — 3 real picks, index 3 is always a backup.
+    _PICK_LABELS = ['Captain', '1st Pick', '2nd Pick', 'Backup']
     if alliance_cache is None:
         alliance_cache = {}
 
@@ -895,7 +896,6 @@ async def _build_champs_awards(
     * **season_impact** — teams that won the Impact Award this season
     * **einstein_contenders** — teams that competed on Einstein in a prior year
     """
-    _PICK_LABELS = ['Captain', '1st Pick', '2nd Pick', '3rd Pick', 'Backup']
     name_map = {t["team_number"]: t.get("nickname", "") for t in teams}
     team_nums = {t["team_number"] for t in teams}
 
@@ -949,13 +949,19 @@ async def _build_champs_awards(
         if not alliances:
             continue
         pm: dict[str, dict] = {}
+        _ek_is_champ = event_types.get(ek, -1) in _CHAMPIONSHIP_EVENT_TYPES
+        _ek_labels = (
+            ['Captain', '1st Pick', '2nd Pick', '3rd Pick']
+            if _ek_is_champ else
+            ['Captain', '1st Pick', '2nd Pick', 'Backup']
+        )
         for al in alliances:
             name_parts = (al.get("name") or "").split()
             al_num = al.get("number") or (name_parts[-1] if name_parts else "")
             backup_in = (al.get("backup") or {}).get("in")
             for idx, tk in enumerate(al.get("picks", [])):
-                if idx < len(_PICK_LABELS):
-                    label = "Backup" if tk == backup_in else _PICK_LABELS[idx]
+                if idx < len(_ek_labels):
+                    label = "Backup" if tk == backup_in else _ek_labels[idx]
                     pm[tk] = {"pick": label, "alliance": al_num}
         pick_maps[ek] = pm
 
@@ -1046,7 +1052,6 @@ async def _build_past_season_awards(
     of teams that earned Impact / Winner / Finalist.  Championship-level
     awards are included when *include_champs* is True (i.e. the current
     event is itself a championship division or finals)."""
-    _PICK_LABELS = ['Captain', '1st Pick', '2nd Pick', '3rd Pick', 'Backup']
     name_map = {t["team_number"]: t.get("nickname", "") for t in teams}
     team_award_map: dict[int, list[dict]] = {}
     award_event_keys: set[str] = set()
@@ -1095,13 +1100,19 @@ async def _build_past_season_awards(
         if not alliances:
             continue
         pm: dict[str, dict] = {}
+        _ek_is_champ = event_types.get(ek, -1) in _CHAMPIONSHIP_EVENT_TYPES
+        _ek_labels = (
+            ['Captain', '1st Pick', '2nd Pick', '3rd Pick']
+            if _ek_is_champ else
+            ['Captain', '1st Pick', '2nd Pick', 'Backup']
+        )
         for al in alliances:
             name_parts = (al.get("name") or "").split()
             al_num = al.get("number") or (name_parts[-1] if name_parts else "")
             backup_in = (al.get("backup") or {}).get("in")
             for idx, tk in enumerate(al.get("picks", [])):
-                if idx < len(_PICK_LABELS):
-                    label = "Backup" if tk == backup_in else _PICK_LABELS[idx]
+                if idx < len(_ek_labels):
+                    label = "Backup" if tk == backup_in else _ek_labels[idx]
                     pm[tk] = {"pick": label, "alliance": al_num}
         pick_maps[ek] = pm
 
@@ -1202,7 +1213,6 @@ async def _build_current_season_awards(event_key: str) -> dict:
         return {"season_awards": []}
 
     # Batch-fetch event names + alliances for pick labels
-    _PICK_LABELS = ['Captain', '1st Pick', '2nd Pick', '3rd Pick', 'Backup']
     ek_list = list(award_event_keys)
     alliance_ek_list = list(alliance_event_keys)
     infos, *alliance_results = await asyncio.gather(
@@ -1211,11 +1221,14 @@ async def _build_current_season_awards(event_key: str) -> dict:
     )
 
     event_names: dict[str, str] = {}
+    event_types_cs: dict[str, int] = {}
     for ek, info in zip(ek_list, infos):
         if info:
             event_names[ek] = info.get("short_name") or info.get("name", ek)
+            event_types_cs[ek] = info.get("event_type", -1)
         else:
             event_names[ek] = ek
+            event_types_cs[ek] = -1
 
     # Build pick maps
     pick_maps: dict[str, dict[str, dict]] = {}
@@ -1223,13 +1236,19 @@ async def _build_current_season_awards(event_key: str) -> dict:
         if not alliances:
             continue
         pm: dict[str, dict] = {}
+        _ek_is_champ = event_types_cs.get(ek, -1) in _CHAMPIONSHIP_EVENT_TYPES
+        _ek_labels = (
+            ['Captain', '1st Pick', '2nd Pick', '3rd Pick']
+            if _ek_is_champ else
+            ['Captain', '1st Pick', '2nd Pick', 'Backup']
+        )
         for al in alliances:
             name_parts = (al.get("name") or "").split()
             al_num = al.get("number") or (name_parts[-1] if name_parts else "")
             backup_in = (al.get("backup") or {}).get("in")
             for idx, tk in enumerate(al.get("picks", [])):
-                if idx < len(_PICK_LABELS):
-                    label = "Backup" if tk == backup_in else _PICK_LABELS[idx]
+                if idx < len(_ek_labels):
+                    label = "Backup" if tk == backup_in else _ek_labels[idx]
                     pm[tk] = {"pick": label, "alliance": al_num}
         pick_maps[ek] = pm
 

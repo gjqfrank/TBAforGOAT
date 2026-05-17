@@ -327,7 +327,12 @@ async def _build_team_dossier_uncached(team_key: str, event_key: str, year: int)
     alliance_info = this_status.get("alliance") if this_status else None
     alliance_str = ""
     if alliance_info:
-        pick_labels = ['Captain', '1st Pick', '2nd Pick', '3rd Pick', 'Backup']
+        _this_event_type = (event_info or {}).get("event_type", -1)
+        pick_labels = (
+            ['Captain', '1st Pick', '2nd Pick', '3rd Pick']
+            if _this_event_type in (3, 4) else
+            ['Captain', '1st Pick', '2nd Pick', 'Backup']
+        )
         pick_idx = alliance_info.get("pick", 0)
         a_num = alliance_info.get("number")
         role = pick_labels[pick_idx] if pick_idx < len(pick_labels) else "Member"
