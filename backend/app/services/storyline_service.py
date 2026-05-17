@@ -51,6 +51,8 @@ _MATCH_SYSTEM_PROMPT = (
     "Weave them into a story, don't just list stats. "
     "Also consider: rivalry between specific teams on the field, redemption arcs, "
     "rookie underdogs vs veterans, blue-banner pedigree clashes, or upset potential. "
+    "If a PRIOR HEAD-TO-HEAD HISTORY section is present, use it — an all-time record "
+    "between specific teams (e.g. '254 leads 4-1 over 1678') is a strong narrative hook. "
     "FIRST award hierarchy context: "
     "Blue Banners (event wins + Impact Award) are the pinnacle. "
     "Engineering Inspiration is one step below Impact — a team that has won EI "
@@ -656,6 +658,58 @@ def _format_team_dossier(d: dict) -> str:
     return "\n".join(lines)
 
 
+def _format_h2h_connections(connections: list[dict]) -> str:
+    """Format all-time H2H connection data into a compact text section for the LLM."""
+    if not connections:
+        return ""
+
+    lines = ["PRIOR HEAD-TO-HEAD HISTORY (all-time playoff record):"]
+    for c in connections:
+        ta = c["team_a"]
+        tb = c["team_b"]
+        ta_label = f"{ta} {c.get('team_a_name', '')}".strip()
+        tb_label = f"{tb} {c.get('team_b_name', '')}".strip()
+
+        opp = c.get("opponents_at", [])   # sorted year desc
+        ally = c.get("partnered_at", [])
+        h2h_a = c.get("h2h_wins_a", 0)
+        h2h_b = c.get("h2h_wins_b", 0)
+        total = h2h_a + h2h_b
+
+        row_parts = []
+        if opp:
+            if h2h_a > h2h_b:
+                lead = f"{ta_label} leads {h2h_a}-{h2h_b}"
+            elif h2h_b > h2h_a:
+                lead = f"{tb_label} leads {h2h_b}-{h2h_a}"
+            else:
+                lead = f"tied {h2h_a}-{h2h_b}"
+            recent = opp[0]
+            row_parts.append(
+                f"As opponents: {total} playoff match(es), {lead}"
+                f" — last met {recent['year']} {recent.get('event_name', '')} ({recent.get('stage', '')})"
+            )
+        if ally:
+            recent_ally = ally[0]
+            result_note = ""
+            if recent_ally.get("result") == "winner":
+                result_note = ", won event"
+            elif recent_ally.get("result") == "finalist":
+                result_note = ", finalist"
+            row_parts.append(
+                f"As allies: {len(ally)} event(s)"
+                f" — last {recent_ally['year']} {recent_ally.get('event_name', '')}"
+                f" ({recent_ally.get('stage', '')}{result_note})"
+            )
+
+        if row_parts:
+            lines.append(f"  {ta_label} vs {tb_label}:")
+            for rp in row_parts:
+                lines.append(f"    {rp}")
+
+    return "\n".join(lines)
+
+
 async def _assemble_match_dossier(event_key: str, match_key: str) -> str:
     """Build a complete text dossier for a match."""
     from .tba_client import get_tba_client
@@ -670,10 +724,23 @@ async def _assemble_match_dossier(event_key: str, match_key: str) -> str:
     blue_keys = match_data.get("alliances", {}).get("blue", {}).get("team_keys", [])
     all_keys = red_keys + blue_keys
 
-    # Build all dossiers in parallel
-    dossiers = await asyncio.gather(
-        *[_build_team_dossier(tk, event_key, year) for tk in all_keys]
+    # Build all dossiers + fetch H2H connections in parallel
+    # (connections reuse the event-level cache built by the Connections tab — no extra TBA calls)
+    team_numbers = [int(tk.replace("frc", "")) for tk in all_keys]
+
+    async def _fetch_connections():
+        try:
+            from .summary_service import get_match_connections
+            return await get_match_connections(event_key, team_numbers, all_time=True)
+        except Exception as e:
+            log.debug("H2H connections unavailable for storyline %s: %s", match_key, e)
+            return []
+
+    dossiers_list, connections = await asyncio.gather(
+        asyncio.gather(*[_build_team_dossier(tk, event_key, year) for tk in all_keys]),
+        _fetch_connections(),
     )
+    dossiers = list(dossiers_list)
 
     # Match context
     comp_level = match_data.get("comp_level", "qm")
@@ -701,6 +768,11 @@ async def _assemble_match_dossier(event_key: str, match_key: str) -> str:
         if idx < len(dossiers):
             parts.append(_format_team_dossier(dossiers[idx]))
             parts.append("")
+
+    h2h_section = _format_h2h_connections(connections)
+    if h2h_section:
+        parts.append(h2h_section)
+        parts.append("")
 
     return "\n".join(parts)
 
