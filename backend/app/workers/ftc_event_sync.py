@@ -231,12 +231,21 @@ async def _sync_ftc_stats(event_key: str) -> None:
         return
 
     rows: list[dict[str, Any]] = []
+    stub_team_rows: list[dict[str, Any]] = []
     for s in stats:
         # ftcscout_client.get_event_team_stats() returns snake_case keys
         num = s.get("team_number")
         if not num:
             continue
         team_key = f"ftc{num}"
+        # Guard: FTC Scout may return teams not in the FTC Events API roster.
+        # Upsert a minimal stub so the FK constraint on event_teams is satisfied.
+        stub_team_rows.append({
+            "team_key": team_key,
+            "team_number": num,
+            "nickname": "",
+            "competition_type": "ftc",
+        })
         rows.append({
             "event_key": event_key,
             "team_key": team_key,
@@ -268,6 +277,12 @@ async def _sync_ftc_stats(event_key: str) -> None:
                 "qual_matches_played": s.get("qual_matches_played"),
             }),
         })
+
+    if stub_team_rows:
+        try:
+            await upsert_rows("teams", stub_team_rows)
+        except Exception as e:
+            log.warning("FTC Scout stub teams upsert failed for %s: %s", event_key, e)
 
     if rows:
         try:
