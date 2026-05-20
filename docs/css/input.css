@@ -303,7 +303,8 @@
     [data-mode="ftc"] #btn-load-event,
     [data-mode="ftc"] #ssb-load-btn,
     [data-mode="ftc"] .ssb-load-btn,
-    [data-mode="ftc"] #tab-team .input-row button {
+    [data-mode="ftc"] #tab-team .input-row button,
+    [data-mode="ftc"] .float-lookup-search button {
         background: linear-gradient(135deg, #f97316 0%, #fb923c 100%);
         color: #fff;
         border: none;
@@ -312,7 +313,8 @@
     [data-mode="ftc"] #btn-load-event:hover,
     [data-mode="ftc"] #ssb-load-btn:hover,
     [data-mode="ftc"] .ssb-load-btn:hover,
-    [data-mode="ftc"] #tab-team .input-row button:hover {
+    [data-mode="ftc"] #tab-team .input-row button:hover,
+    [data-mode="ftc"] .float-lookup-search button:hover {
         background: linear-gradient(135deg, #fb923c 0%, #fbbf24 100%);
         border: none;
         color: #fff;
@@ -322,7 +324,8 @@
     [data-mode="ftc"] #btn-load-event:active,
     [data-mode="ftc"] #ssb-load-btn:active,
     [data-mode="ftc"] .ssb-load-btn:active,
-    [data-mode="ftc"] #tab-team .input-row button:active {
+    [data-mode="ftc"] #tab-team .input-row button:active,
+    [data-mode="ftc"] .float-lookup-search button:active {
         transform: translateY(0);
         box-shadow: 0 1px 6px rgba(249,115,22,.15);
     }
@@ -339,6 +342,14 @@
         border: none;
         box-shadow: none;
         transform: none;
+    }
+
+    /* ── FTC .banner-more-btn — remove outer dashed frame ── */
+    [data-mode="ftc"] .banner-more-btn {
+        border: none;
+    }
+    [data-mode="ftc"] .banner-more-btn:hover {
+        border: none;
     }
     
     /* ── FTC button category 2: ghost / chrome — restore transparency ── */
@@ -731,7 +742,8 @@
     }
     [data-mode="ftc"][data-theme="light"] #btn-load-event,
     [data-mode="ftc"][data-theme="light"] .ssb-load-btn,
-    [data-mode="ftc"][data-theme="light"] #tab-team .input-row button {
+    [data-mode="ftc"][data-theme="light"] #tab-team .input-row button,
+    [data-mode="ftc"][data-theme="light"] .float-lookup-search button {
         background: linear-gradient(135deg, #ea580c 0%, #f97316 100%);
         border: none;
         color: #fff;
@@ -739,7 +751,8 @@
     }
     [data-mode="ftc"][data-theme="light"] #btn-load-event:hover,
     [data-mode="ftc"][data-theme="light"] .ssb-load-btn:hover,
-    [data-mode="ftc"][data-theme="light"] #tab-team .input-row button:hover {
+    [data-mode="ftc"][data-theme="light"] #tab-team .input-row button:hover,
+    [data-mode="ftc"][data-theme="light"] .float-lookup-search button:hover {
         background: linear-gradient(135deg, #f97316 0%, #fb923c 100%);
         box-shadow: 0 4px 14px rgba(234,88,12,.25);
     }
