@@ -243,7 +243,8 @@ async def _sync_ftc_stats(event_key: str) -> None:
         stub_team_rows.append({
             "team_key": team_key,
             "team_number": num,
-            "nickname": "",
+            # Omit nickname — _sync_ftc_teams sets the real nickname and an
+            # empty string here would overwrite it on conflict upsert.
             "competition_type": "ftc",
         })
         rows.append({

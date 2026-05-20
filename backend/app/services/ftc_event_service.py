@@ -73,7 +73,10 @@ def _sb_ftc_teams_valid(sb_rows: list[dict]) -> bool:
             rd = json.loads(rd)
         if not isinstance(rd, dict):
             continue
-        if rd.get("rank") is not None or rd.get("opr_total") is not None:
+        # Require rank to be present — OPR alone can be a false positive.
+        # Rank confirms _sync_ftc_rankings has run; OPR from Scout may exist
+        # even when rankings failed, leading to null rank served from cache.
+        if rd.get("rank") is not None:
             return True
     return False
 
@@ -326,7 +329,9 @@ async def get_event_teams_with_stats(event_key: str) -> list[dict]:
 
             opr_val = raw.get("opr_total")
             sort_orders = raw.get("sort_orders") or []
-            rp_val = sort_orders[0] if sort_orders else None
+            # Fall back to FTC Scout's rp when the FTC Events API returns no
+            # sortOrders (e.g. Turkish/regional events where sortOrders is []).
+            rp_val = sort_orders[0] if sort_orders else raw.get("rp")
             wins = raw.get("wins", 0) or 0
             losses = raw.get("losses", 0) or 0
             ties = raw.get("ties", 0) or 0

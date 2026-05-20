@@ -331,10 +331,14 @@ async def is_ftc_ingested(event_key: str) -> bool:
         return True
     try:
         sb = await get_supabase()
+        # Require at least one row with actual data (non-null raw_data).
+        # Pure FK-stub rows created by _sync_ftc_teams before stats/rankings
+        # arrive have raw_data=NULL and must not block a full ingest.
         teams_resp = (
             await sb.table("event_teams")
             .select("event_key")
             .eq("event_key", event_key)
+            .filter("raw_data", "not.is", "null")
             .limit(1)
             .execute()
         )
