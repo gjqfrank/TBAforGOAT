@@ -25,7 +25,7 @@ The `region_name` path segment is **URL-encoded** (e.g. `FIRST%20in%20Michigan`)
 The `event_key` is a standard TBA key like `2026tuak`.
 
 The `/history` endpoint is listed in `_HEAVY_PATTERNS` in `main.py`, so it is subject
-to the heavy rate limit (40 req/min unauthenticated, 300 req/min with `X-API-Key`).
+to the heavy rate limit (60 req/min unauthenticated, 300 req/min with `X-API-Key`).
 Call it once per event selection and cache the result locally — do **not** poll it.
 
 ---

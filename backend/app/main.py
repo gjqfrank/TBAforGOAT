@@ -105,11 +105,14 @@ _RATE_LIMIT_TRUSTED_HEAVY = 300     # raised from 60
 # Endpoints that fan out to many upstream calls.
 # NOTE: /summary/connections removed — play-by-play fires one request per match
 # with unique team combos; 3-tier cache + inflight.py keeps them cheap after warm-up.
-# NOTE: Use /api/alliances/ (not /alliances/) so FTC alliances (/api/ftc/alliances/)
-# are not incorrectly classified as heavy.
+# NOTE: Patterns are kept specific to FRC paths so FTC routes are never
+# incorrectly bucketed as heavy:
+#   /api/alliances/          → FRC only (avoids /api/ftc/alliances/)
+#   /api/events/world-record → FRC only (avoids /api/ftc/events/world-record/)
+#   /tims-overrides/history  → FRC only (avoids /api/ftc/events/.../opr-history)
 _HEAVY_PATTERNS = {
-    "/summary/awards", "/history",
-    "/world-record", "/api/alliances/", "/storylines/",
+    "/summary/awards", "/tims-overrides/history",
+    "/api/events/world-record", "/api/alliances/", "/storylines/",
 }
 # Paths that are exempt from rate limiting
 _RATE_EXEMPT_PATHS = {"/api/health", "/api/status"}
