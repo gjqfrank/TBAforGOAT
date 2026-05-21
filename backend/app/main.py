@@ -95,8 +95,8 @@ app.add_middleware(
 
 # ── Rate-limiter middleware (in-memory, per-IP) ─────────────
 _RATE_WINDOW = 60          # seconds
-_RATE_LIMIT_GENERAL = 200  # requests per window for normal endpoints (raised: BFF cache hits are cheap)
-_RATE_LIMIT_HEAVY = 40     # requests per window for heavy endpoints (raised: most are cached)
+_RATE_LIMIT_GENERAL = 300  # requests per window for normal endpoints
+_RATE_LIMIT_HEAVY = 60     # requests per window for heavy endpoints (raised: most are cached)
 
 # Trusted consumers get higher ceilings but aren't unlimited
 _RATE_LIMIT_TRUSTED_GENERAL = 600   # raised from 300
@@ -105,9 +105,11 @@ _RATE_LIMIT_TRUSTED_HEAVY = 300     # raised from 60
 # Endpoints that fan out to many upstream calls.
 # NOTE: /summary/connections removed — play-by-play fires one request per match
 # with unique team combos; 3-tier cache + inflight.py keeps them cheap after warm-up.
+# NOTE: Use /api/alliances/ (not /alliances/) so FTC alliances (/api/ftc/alliances/)
+# are not incorrectly classified as heavy.
 _HEAVY_PATTERNS = {
     "/summary/awards", "/history",
-    "/world-record", "/alliances/", "/storylines/",
+    "/world-record", "/api/alliances/", "/storylines/",
 }
 # Paths that are exempt from rate limiting
 _RATE_EXEMPT_PATHS = {"/api/health", "/api/status"}
