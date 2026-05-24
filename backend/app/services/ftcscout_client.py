@@ -76,7 +76,7 @@ class FTCScoutClient:
             return {}
         if "errors" in body and body["errors"]:
             log.warning("FTC Scout GraphQL errors: %s", body["errors"])
-        return body.get("data", {})
+        return body.get("data") or {}
 
     # ── Event team stats (OPR, averages) ────────────────────
 
@@ -202,6 +202,10 @@ class FTCScoutClient:
             season eventCode id hasBeenPlayed
             tournamentLevel series matchNum
             scores {
+              ... on MatchScores2026 {
+                red { autoPoints dcPoints totalPoints minorsCommitted majorsCommitted }
+                blue { autoPoints dcPoints totalPoints minorsCommitted majorsCommitted }
+              }
               ... on MatchScores2025 {
                 red { autoPoints dcPoints totalPoints minorsCommitted majorsCommitted }
                 blue { autoPoints dcPoints totalPoints minorsCommitted majorsCommitted }
@@ -474,6 +478,7 @@ class FTCScoutClient:
                 match {
                   season eventCode id tournamentLevel matchNum
                   scores {
+                    ... on MatchScores2026 { """ + _score_frag + """ }
                     ... on MatchScores2025 { """ + _score_frag + """ }
                     ... on MatchScores2024 { """ + _score_frag + """ }
                   }
@@ -502,6 +507,7 @@ class FTCScoutClient:
               data {
                 teamNumber
                 stats {
+                  ... on TeamEventStats2026 { """ + _stat_frag + """ }
                   ... on TeamEventStats2025 { """ + _stat_frag + """ }
                   ... on TeamEventStats2024 { """ + _stat_frag + """ }
                 }
