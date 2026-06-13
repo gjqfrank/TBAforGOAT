@@ -178,6 +178,7 @@ async def _build_event_history(event_key: str) -> dict:
     event_name = event.get("name", event_key)
     event_short = _normalize_name(event.get("short_name") or "")
     current_year = int(event_key[:4])
+    current_district_abbr = (event.get("district") or {}).get("abbreviation", "")
 
     # Determine the full set of codes that belong to this event's lineage
     key_code = event_key[4:]
@@ -220,7 +221,11 @@ async def _build_event_history(event_key: str) -> dict:
         filtered = []
         for ev in all_instances:
             ev_short = _normalize_name(ev.get("short_name") or "")
-            if ev_short == event_short:
+            ev_district_abbr = (ev.get("district") or {}).get("abbreviation", "")
+            # Include if: name matches, OR both events belong to the same district
+            # (district championships keep editions that had a different title sponsor
+            # without incorrectly merging unrelated events that share a key code).
+            if ev_short == event_short or (current_district_abbr and ev_district_abbr == current_district_abbr):
                 filtered.append(ev)
         # Only use the filtered list if it kept at least the current event
         if filtered:
