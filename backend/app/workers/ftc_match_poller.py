@@ -71,18 +71,40 @@ def get_ftc_poll_events() -> set[str]:
 # ── Match polling ───────────────────────────────────────────
 
 async def _poll_ftc_matches(event_key: str) -> None:
-    """Fetch latest FTC match data and upsert into Supabase."""
+    """Fetch latest FTC match data and upsert into Supabase.
+
+    Uses the hybrid schedule endpoint (qual + playoff in parallel) so that
+    upcoming matches appear in Supabase as soon as the schedule is published,
+    not only after scores are posted.  Mirrors FRC behaviour where the /matches
+    endpoint returns the full schedule including unplayed matches.
+    """
     client = get_ftc_client()
     year, event_code = _parse_ftc_key(event_key)
 
     try:
-        raw_matches = await client.get_matches(year, event_code, bypass_cache=True)
+        qual_matches, playoff_matches = await asyncio.gather(
+            client.get_schedule_hybrid(year, event_code, "qual", bypass_cache=True),
+            client.get_schedule_hybrid(year, event_code, "playoff", bypass_cache=True),
+            return_exceptions=True,
+        )
     except CircuitOpenError:
         log.debug("Circuit open — skipping FTC match poll for %s", event_key)
         return
     except Exception as e:
         log.warning("FTC match poll failed for %s: %s", event_key, e)
         return
+
+    if isinstance(qual_matches, CircuitOpenError) or isinstance(playoff_matches, CircuitOpenError):
+        log.debug("Circuit open — skipping FTC match poll for %s", event_key)
+        return
+    if isinstance(qual_matches, Exception):
+        log.warning("FTC qual schedule fetch failed for %s: %s", event_key, qual_matches)
+        qual_matches = []
+    if isinstance(playoff_matches, Exception):
+        log.warning("FTC playoff schedule fetch failed for %s: %s", event_key, playoff_matches)
+        playoff_matches = []
+
+    raw_matches = (qual_matches or []) + (playoff_matches or [])
 
     if not raw_matches:
         return

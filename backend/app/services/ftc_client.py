@@ -149,10 +149,13 @@ class FTCClient:
         season: int,
         event_code: str,
         level: str = "qual",
+        *,
+        bypass_cache: bool = False,
     ) -> list[dict]:
         """Hybrid schedule (results for played, schedule for upcoming)."""
         data = await self.get(
-            f"/{season}/schedule/{event_code}/{level}/hybrid"
+            f"/{season}/schedule/{event_code}/{level}/hybrid",
+            bypass_cache=bypass_cache,
         )
         return data.get("schedule", [])
 
