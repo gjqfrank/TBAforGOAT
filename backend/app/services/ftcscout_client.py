@@ -18,7 +18,7 @@ WR_CACHE_TTL = 600     # 10 min for world record
 SEASON_STATS_TTL = 600 # 10 min for season-wide records (change slowly)
 _MAX_CACHE_ENTRIES = 500  # cap to prevent unbounded growth
 
-ftcscout_breaker = get_breaker("FTC Scout", failure_threshold=10, recovery_timeout=60, window=60)
+ftcscout_breaker = get_breaker("FTC Scout", failure_threshold=20, recovery_timeout=30, window=30)
 
 
 class FTCScoutClient:
