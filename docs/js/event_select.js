@@ -680,7 +680,7 @@ async function loadEvent(eventKey) {
         try {
             const _ac = new AbortController();
             const _tm = setTimeout(() => _ac.abort(), 5000);
-            const _r = await fetch(`/api/events/${code}/snapshot`, { signal: _ac.signal });
+            const _r = await fetch(`${API_BASE}/api/events/${code}/snapshot`, { signal: _ac.signal });
             clearTimeout(_tm);
             if (_r.ok) _snap = await _r.json();
         } catch (_) { /* snapshot unavailable — fall back */ }

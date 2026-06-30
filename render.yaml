@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: casters-tool-backend
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: TBA_API_KEY
+        sync: false
+      - key: FRC_EVENTS_API_TOKEN
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+        required: false
+      - key: TRUSTED_API_KEYS
+        sync: false
+        required: false

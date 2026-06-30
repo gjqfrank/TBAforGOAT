@@ -2,6 +2,10 @@
    api.js — thin fetch wrapper for the backend
    ═══════════════════════════════════════════════════════════ */
 
+// Backend API base URL — empty for same-origin (local dev),
+// set via window.API_BASE in config.js for cross-origin deployment.
+const API_BASE = window.API_BASE || '';
+
 // ── In-flight request deduplication (client-side single-flight) ──
 const _inflight = new Map();
 
@@ -18,7 +22,7 @@ const API = {
 
     /** Raw fetch — callers should go through get() for dedup */
     async _fetch(path) {
-        const resp = await fetch(`/api${path}`);
+        const resp = await fetch(`${API_BASE}/api${path}`);
         if (!resp.ok) {
             const body = await resp.json().catch(() => ({}));
             const detail = body.detail || '';
@@ -51,7 +55,7 @@ const API = {
     },
 
     async put(path, body) {
-        const resp = await fetch(`/api${path}`, {
+        const resp = await fetch(`${API_BASE}/api${path}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body),
@@ -104,7 +108,7 @@ const API = {
     timsGet:     (teamKey) => API.get(`/teams/${teamKey}/tims-overrides`),
     timsPut:     (teamKey, body) => API.put(`/teams/${teamKey}/tims-overrides`, body),
     timsHistory: (teamKey) => API.get(`/teams/${teamKey}/tims-overrides/history`),
-    timsDelete:  (teamKey) => fetch(`/api/teams/${teamKey}/tims-overrides`, { method: 'DELETE' })
+    timsDelete:  (teamKey) => fetch(`${API_BASE}/api/teams/${teamKey}/tims-overrides`, { method: 'DELETE' })
                      .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))),
 
     // ── Compare ─────────────────────────────────────────
@@ -127,7 +131,7 @@ const API = {
 
     // ── AI Storylines ───────────────────────────────────
     storylineStatus: () => API.get('/storylines/status'),
-    generateStoryline: (payload) => fetch('/api/storylines/generate', {
+    generateStoryline: (payload) => fetch(`${API_BASE}/api/storylines/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
