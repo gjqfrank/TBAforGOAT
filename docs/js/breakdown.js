@@ -17,9 +17,7 @@ function updateBreakdownTabState() {
     if (!bdBtn) return;
     if (currentEventYear && currentEventYear < 2025) {
         bdBtn.classList.add('disabled');
-        bdBtn.title = isFTCMode()
-            ? 'Score breakdown is only available for the 2025-2026 DECODE season and later'
-            : 'Score breakdown is only available for 2025 events onwards';
+        bdBtn.title = 'Score breakdown is only available for 2025 events onwards';
     } else {
         bdBtn.classList.remove('disabled');
         bdBtn.title = '';
@@ -233,9 +231,7 @@ function renderBreakdown(data) {
     const isPlayoff = m && m.comp_level && m.comp_level !== 'qm';
 
     let renderFn;
-    if (data.program === 'FTC') {
-        renderFn = renderBdAllianceFTC;
-    } else if (data.game_year >= 2026) {
+    if (data.game_year >= 2026) {
         renderFn = renderBdAlliance2026;
     } else {
         renderFn = renderBdAlliance;
@@ -482,205 +478,6 @@ function renderReefGrid(reef, otherPhaseReef, isAuto) {
 
     html += '</div>';
     return html;
-}
-
-
-// ═══════════════════════════════════════════════════════════
-//  FTC DECODE — BREAKDOWN RENDERER
-// ═══════════════════════════════════════════════════════════
-
-function renderBdAllianceFTC(alliance, color, won, nickMap, statsMap, allianceNum, isPlayoff) {
-    const bd = alliance.breakdown;
-    if (!bd) return '<div class="bd-alliance">No breakdown data</div>';
-
-    const sideCls = color === 'red' ? 'red-side' : 'blue-side';
-    const title = allianceNum ? `Alliance #${allianceNum}` : (color === 'red' ? 'Red Alliance' : 'Blue Alliance');
-    const displayScore = alliance.score != null && alliance.score >= 0 ? alliance.score : '–';
-
-    const headerContent = color === 'blue'
-        ? `<div class="bd-alliance-score-group">
-                <span class="bd-alliance-score">${displayScore}</span>
-                ${won ? '<span class="bd-winner-label">WINNER</span>' : ''}
-            </div>
-            <span>${title}</span>`
-        : `<span>${title}</span>
-            <div class="bd-alliance-score-group">
-                ${won ? '<span class="bd-winner-label">WINNER</span>' : ''}
-                <span class="bd-alliance-score">${displayScore}</span>
-            </div>`;
-
-    // Get match teams from bdData for robot → team mapping
-    const m = (bdData && bdData.matches) ? bdData.matches[bdIndex] : null;
-    const sideTeams = m && m[color] && m[color].teams ? m[color].teams : [];
-
-    return `
-    <div class="bd-alliance ${sideCls}">
-        <div class="bd-alliance-header">
-            ${headerContent}
-        </div>
-
-        <!-- Per-robot: Auto Leave + Endgame -->
-        <div class="bd-section">
-            <div class="bd-section-title">Per-Robot Performance</div>
-            <div class="bd-robots">
-                ${(bd.robots || []).map((r, i) => renderBdRobotFTC(r, sideTeams[i], nickMap, statsMap, color)).join('')}
-            </div>
-        </div>
-
-        <!-- Autonomous -->
-        <div class="bd-section">
-            <div class="bd-section-title">Autonomous (${bd.autoPoints} pts)</div>
-            <div class="bd-stats">
-                <div class="bd-stat-row">
-                    <span class="bd-stat-label">Leave Points</span>
-                    <span class="bd-stat-value">${bd.autoLeavePoints}</span>
-                </div>
-                <div class="bd-stat-row">
-                    <span class="bd-stat-label">Artifacts Classified</span>
-                    <span class="bd-stat-value">${bd.autoClassifiedArtifacts}</span>
-                </div>
-                <div class="bd-stat-row">
-                    <span class="bd-stat-label">Overflow Artifacts</span>
-                    <span class="bd-stat-value">${bd.autoOverflowArtifacts}</span>
-                </div>
-                <div class="bd-stat-row">
-                    <span class="bd-stat-label">Artifact Points</span>
-                    <span class="bd-stat-value">${bd.autoArtifactPoints}</span>
-                </div>
-                <div class="bd-stat-row">
-                    <span class="bd-stat-label">Pattern Points</span>
-                    <span class="bd-stat-value">${bd.autoPatternPoints}</span>
-                </div>
-            </div>
-            ${renderClassifierGrid(bd.autoClassifierState, 'Auto Classifier')}
-        </div>
-
-        <!-- Driver-Controlled (Teleop) -->
-        <div class="bd-section">
-            <div class="bd-section-title">Driver-Controlled (${bd.teleopPoints} pts)</div>
-            <div class="bd-stats">
-                <div class="bd-stat-row">
-                    <span class="bd-stat-label">Artifacts Classified</span>
-                    <span class="bd-stat-value">${bd.teleopClassifiedArtifacts}</span>
-                </div>
-                <div class="bd-stat-row">
-                    <span class="bd-stat-label">Overflow Artifacts</span>
-                    <span class="bd-stat-value">${bd.teleopOverflowArtifacts}</span>
-                </div>
-                <div class="bd-stat-row">
-                    <span class="bd-stat-label">Depot Artifacts</span>
-                    <span class="bd-stat-value">${bd.teleopDepotArtifacts}</span>
-                </div>
-                <div class="bd-stat-row">
-                    <span class="bd-stat-label">Artifact Points</span>
-                    <span class="bd-stat-value">${bd.teleopArtifactPoints}</span>
-                </div>
-                <div class="bd-stat-row">
-                    <span class="bd-stat-label">Depot Points</span>
-                    <span class="bd-stat-value">${bd.teleopDepotPoints}</span>
-                </div>
-                <div class="bd-stat-row">
-                    <span class="bd-stat-label">Base Points</span>
-                    <span class="bd-stat-value">${bd.teleopBasePoints}</span>
-                </div>
-                <div class="bd-stat-row">
-                    <span class="bd-stat-label">Pattern Points</span>
-                    <span class="bd-stat-value">${bd.teleopPatternPoints}</span>
-                </div>
-            </div>
-            ${renderClassifierGrid(bd.teleopClassifierState, 'Teleop Classifier')}
-        </div>
-
-        <!-- Fouls -->
-        <div class="bd-section">
-            <div class="bd-section-title">Fouls & Penalties</div>
-            <div class="bd-fouls">
-                <div class="bd-foul-item">
-                    <span class="bd-foul-label">Minor:</span>
-                    <span class="bd-foul-value">${bd.minorFouls}</span>
-                </div>
-                <div class="bd-foul-item">
-                    <span class="bd-foul-label">Major:</span>
-                    <span class="bd-foul-value">${bd.majorFouls}</span>
-                </div>
-                <div class="bd-foul-item">
-                    <span class="bd-foul-label">Foul Pts Committed:</span>
-                    <span class="bd-foul-value">${bd.foulPointsCommitted}</span>
-                </div>
-            </div>
-        </div>
-
-        <!-- Ranking Points -->
-        <div class="bd-section">
-            <div class="bd-section-title">${isPlayoff ? 'Bonuses' : 'Ranking Points'}</div>
-            <div class="bd-bonuses">
-                <span class="bd-bonus-badge ${bd.movementRP ? 'achieved' : ''}">🏃 Movement</span>
-                <span class="bd-bonus-badge ${bd.goalRP ? 'achieved' : ''}">🎯 Goal</span>
-                <span class="bd-bonus-badge ${bd.patternRP ? 'achieved' : ''}">🧩 Pattern</span>
-            </div>
-        </div>
-
-        <!-- Total -->
-        <div class="bd-total-bar">
-            <span class="bd-total-label">Total</span>
-            <span class="bd-total-score">${bd.totalPoints}</span>
-        </div>
-    </div>`;
-}
-
-function renderBdRobotFTC(robot, teamObj, nickMap, statsMap, color) {
-    const leaveCls = robot.auto_leave ? 'yes' : 'no';
-    const leaveVal = robot.auto_leave ? 'Yes' : 'No';
-
-    const endMap = {
-        'None': { label: '–', cls: 'no' },
-        'Partial Ascent': { label: 'Partial', cls: 'parked' },
-        'Full Ascent': { label: 'Full', cls: 'deep' },
-    };
-    const eg = endMap[robot.endgame] || { label: robot.endgame || '–', cls: '' };
-
-    // Try to get team number from the match data
-    const num = teamObj ? teamObj.team_number : `R${robot.robot_number}`;
-    const nick = teamObj ? teamObj.nickname : (nickMap && nickMap[num]) || '';
-    const tooltipHtml = nick ? `<span class="custom-tooltip">${nick}</span>` : '';
-    const st = teamObj || (statsMap && statsMap[num]) || {};
-    const oprStr = st.opr != null ? st.opr : '–';
-
-    return `
-    <div class="bd-robot-card" data-team="${num}" data-color="${color}">
-        <div class="bd-robot-num has-tooltip">${num}${tooltipHtml}</div>
-        <div class="bd-micro-tags-slot">${_renderBdTags(num)}</div>
-        <div class="bd-robot-fields">
-            <div class="bd-robot-field">
-                <span class="bd-robot-label">Auto Leave</span>
-                <span class="bd-robot-value ${leaveCls}">${leaveVal}</span>
-            </div>
-            <div class="bd-robot-field">
-                <span class="bd-robot-label">Endgame</span>
-                <span class="bd-robot-value ${eg.cls}">${eg.label}</span>
-            </div>
-        </div>
-    </div>`;
-}
-
-function renderClassifierGrid(state, title) {
-    if (!state || !state.length) return '';
-    const colorMap = {
-        'NONE':   { cls: '',           label: '–' },
-        'GREEN':  { cls: 'cls-green',  label: '●' },
-        'PURPLE': { cls: 'cls-purple', label: '●' },
-        'YELLOW': { cls: 'cls-yellow', label: '●' },
-    };
-    return `
-    <div class="bd-classifier">
-        <div class="bd-classifier-title">${title}</div>
-        <div class="bd-classifier-grid">
-            ${state.map((s, i) => {
-                const c = colorMap[s] || colorMap['NONE'];
-                return `<div class="bd-classifier-cell ${c.cls}" title="Slot ${i + 1}: ${s}">${c.label}</div>`;
-            }).join('')}
-        </div>
-    </div>`;
 }
 
 
@@ -1008,13 +805,7 @@ function toggleSpotlight(teamNum, color) {
     const eventKey = currentEvent;
     if (!eventKey) return;
 
-    const _perfApi = isFTCMode() ? null : API;
-    if (!_perfApi) {
-        // FTC: show fallback with just the current-match robot data
-        _renderSpotlightFallback(panel, robot, bd.game_year, color, nick, teamNum, colorLabel);
-        return;
-    }
-    _perfApi.teamPerf(eventKey, teamNum).then(perf => {
+    API.teamPerf(eventKey, teamNum).then(perf => {
         if (_spotlightTeam !== teamNum) return;  // user closed or switched
 
         _renderSpotlightContent(panel, perf, robot, bd.game_year, color, nick, teamNum, colorLabel, frcLevel, currentMatchNum, oprStr, epaStr);
@@ -1350,13 +1141,7 @@ function _openMobSpotlight(teamNum, color) {
 
     const frcLevel = (m?.comp_level || 'qm') === 'qm' ? 'Qualification' : 'Playoff';
     const currentMatchNum = m?.match_number || 0;
-    const _perfApi = isFTCMode() ? null : API;
-
-    if (!_perfApi) {
-        _renderSpotlightFallback(body.querySelector('.spotlight-card'), robot, bd.game_year, color, nick, teamNum, colorLabel);
-        return;
-    }
-    _perfApi.teamPerf(currentEvent, teamNum).then(perf => {
+    API.teamPerf(currentEvent, teamNum).then(perf => {
         if (_spotlightTeam !== teamNum) return;
         _renderSpotlightContent(body.querySelector('.spotlight-card'), perf, robot, bd.game_year, color, nick, teamNum, colorLabel, frcLevel, currentMatchNum, oprStr, epaStr);
     }).catch(() => {

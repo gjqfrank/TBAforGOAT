@@ -14,17 +14,11 @@
 // ── Season events loader ──────────────────────────────────
 async function loadSeasonEvents() {
     const status = $('season-status');
-    const ftc = isFTCMode();
-    const seasonYear = ftc ? currentFtcSeason() : 2026;
-    const label = ftc ? 'FTC' : '';
-    // Try the year-specific static file first, then the previous-year file as a
-    // grace period during the September rollover, then fall back to the live API.
-    const staticCandidates = ftc
-        ? [`data/season_${seasonYear}_ftc.json`, `data/season_${seasonYear - 1}_ftc.json`]
-        : [`data/season_${seasonYear}.json`];
-    status.textContent = `Loading ${seasonYear} ${label} events…`;
+    const seasonYear = 2026;
+    status.textContent = `Loading ${seasonYear} events…`;
     try {
         let loaded = false;
+        const staticCandidates = [`data/season_${seasonYear}.json`];
         for (const file of staticCandidates) {
             try {
                 const resp = await fetch(file);
@@ -41,10 +35,8 @@ async function loadSeasonEvents() {
         const badge = $('season-count-badge');
         if (badge) badge.textContent = `${seasonEventsRaw.length} events`;
     } catch (err) {
-        // Fallback: fetch live from API
         try {
-            const api = getActiveAPI();
-            seasonEventsRaw = await api.seasonEvents(seasonYear);
+            seasonEventsRaw = await API.seasonEvents(seasonYear);
             populateSeasonFilters();
             filterSeasonEvents();
             status.textContent = '';
@@ -60,12 +52,11 @@ async function refreshSeasonEventsFromAPI() {
     const status = $('season-status');
     const btn = $('season-refresh-btn');
     btn.classList.add('spinning');
-    const label = isFTCMode() ? 'FTC Events API' : 'TBA';
-    const seasonYear = isFTCMode() ? currentFtcSeason() : 2026;
+    const label = 'TBA';
+    const seasonYear = 2026;
     status.textContent = `Refreshing from ${label}…`;
     try {
-        const api = getActiveAPI();
-        seasonEventsRaw = await api.seasonEvents(seasonYear, true);
+        seasonEventsRaw = await API.seasonEvents(seasonYear, true);
         populateSeasonFilters();
         filterSeasonEvents();
         status.textContent = `Updated from ${label} ✓`;
@@ -82,88 +73,20 @@ async function refreshSeasonEventsFromAPI() {
 const MONTH_NAMES = ['', 'January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December'];
 
-const _FTC_REGION_SPECIAL = {
-    CMPZ2: 'FIRST Championship', CMP: 'Championship', CMPHOU: 'Champs Houston',
-    FPE: 'FPE', ONADOD: 'Ontario ADOD',
-};
-const _FTC_REGION_NAMES = {
-    // US States
-    USAL:'Alabama', USAK:'Alaska', USAR:'Arkansas', USAZ:'Arizona',
-    USCALA:'California – LA', USCALS:'California – LA South', USCANO:'California – NorCal', USCASD:'California – San Diego',
-    USCO:'Colorado', USCHS:'Chesapeake', USCT:'Connecticut', USFCT:'Connecticut',
-    USDE:'Delaware', USFL:'Florida', USGA:'Georgia', USHI:'Hawaii',
-    USIA:'Iowa', USID:'Idaho', USIL:'Illinois', USIN:'Indiana',
-    USKS:'Kansas', USKY:'Kentucky', USLA:'Louisiana',
-    USMA:'Massachusetts', USMD:'Maryland', USME:'Maine', USMI:'Michigan',
-    USMN:'Minnesota', USMO:'Missouri', USMOKS:'Missouri–Kansas', USMS:'Mississippi', USMT:'Montana',
-    USNC:'North Carolina', USND:'North Dakota', USNE:'Nebraska', USNH:'New Hampshire',
-    USNJ:'New Jersey', USNM:'New Mexico', USNV:'Nevada',
-    USNY:'New York', USNYEX:'New York – Excelsior', USNYLI:'New York – Long Island', USNYNY:'New York – NYC',
-    USOH:'Ohio', USOK:'Oklahoma', USOR:'Oregon',
-    USPA:'Pennsylvania', USPR:'Puerto Rico', USRI:'Rhode Island',
-    USSC:'South Carolina', USSD:'South Dakota', USTN:'Tennessee',
-    USTX:'Texas', USTXCE:'Texas – Central', USTXHO:'Texas – Houston', USTXNO:'Texas – North', USTXSO:'Texas – South',
-    USUT:'Utah', USVA:'Virginia', USVT:'Vermont', USWA:'Washington', USWI:'Wisconsin', USWV:'West Virginia', USWY:'Wyoming',
-    // Canada
-    CAAB:'Alberta', CABC:'British Columbia', CAMB:'Manitoba', CANB:'New Brunswick',
-    CANL:'Newfoundland & Labrador', CANS:'Nova Scotia', CAON:'Ontario', CAQC:'Quebec', CASK:'Saskatchewan',
-    // International (ISO 3166-1 alpha-2)
-    AE:'UAE', AR:'Argentina', AU:'Australia', BR:'Brazil', CN:'China', CY:'Cyprus',
-    DE:'Germany', EG:'Egypt', FR:'France', GB:'United Kingdom', GR:'Greece', HKG:'Hong Kong',
-    HU:'Hungary', ID:'Indonesia', IL:'Israel', IN:'India', IT:'Italy', JM:'Jamaica',
-    JP:'Japan', KR:'South Korea', KZ:'Kazakhstan', LT:'Lithuania', LY:'Libya',
-    MA:'Morocco', MD:'Moldova', MX:'Mexico', MY:'Malaysia', NG:'Nigeria', NL:'Netherlands',
-    NZ:'New Zealand', PL:'Poland', PY:'Paraguay', QA:'Qatar', RO:'Romania',
-    TH:'Thailand', TR:'Turkey', TW:'Taiwan', UA:'Ukraine', VN:'Vietnam', ZA:'South Africa',
-};
-function _ftcRegionLabel(code) {
-    if (!code) return code;
-    if (_FTC_REGION_NAMES[code]) return _FTC_REGION_NAMES[code];
-    if (_FTC_REGION_SPECIAL[code]) return _FTC_REGION_SPECIAL[code];
-    // Fallback: strip US/CA prefix as abbreviation
-    if (code.startsWith('US') && code.length > 2) return code.slice(2);
-    if (code.startsWith('CA') && code.length > 2) return code.slice(2);
-    return code;
-}
-
 function populateSeasonFilters() {
-    // Region filter — exclude championship pseudo-regions in FTC mode
-    const _CHAMP_REGION_CODES = new Set(['CMPZ2', 'CMP', 'CMPHOU']);
-    const regions = [...new Set(seasonEventsRaw.map(e => e.region))].filter(r => {
-        if (isFTCMode() && _CHAMP_REGION_CODES.has(r)) return false;
-        return true;
-    }).sort((a, b) => {
-        if (isFTCMode()) return (_ftcRegionLabel(a) || a).localeCompare(_ftcRegionLabel(b) || b);
-        return a.localeCompare(b);
-    });
+    const regions = [...new Set(seasonEventsRaw.map(e => e.region))].sort((a, b) => a.localeCompare(b));
     const regionSel = $('season-filter-region');
     regionSel.innerHTML = '<option value="">All Regions</option>'
-        + regions.map(r => `<option value="${r}">${isFTCMode() ? _ftcRegionLabel(r) : r}</option>`).join('');
+        + regions.map(r => `<option value="${r}">${r}</option>`).join('');
 
-    // Week / Month filter
     const weekSel = $('season-filter-week');
-    if (isFTCMode()) {
-        // FTC: use month-based filtering
-        const months = [...new Set(seasonEventsRaw.map(e => e.month).filter(m => m != null))].sort((a, b) => a - b);
-        weekSel.innerHTML = '<option value="">All Months</option>'
-            + months.map(m => `<option value="month_${m}">${MONTH_NAMES[m] || 'Month ' + m}</option>`).join('');
-    } else {
-        const weeks = [...new Set(seasonEventsRaw.map(e => e.week).filter(w => w !== null && w !== undefined))].sort((a, b) => a - b);
-        weekSel.innerHTML = '<option value="">All Weeks</option>'
-            + weeks.map(w => `<option value="${w}">Week ${w + 1}</option>`).join('');
-    }
+    const weeks = [...new Set(seasonEventsRaw.map(e => e.week).filter(w => w !== null && w !== undefined))].sort((a, b) => a - b);
+    weekSel.innerHTML = '<option value="">All Weeks</option>'
+        + weeks.map(w => `<option value="${w}">Week ${w + 1}</option>`).join('');
 
-    // Event type filter (FTC only)
     const typeSel = $('season-filter-type');
     if (typeSel) {
-        if (isFTCMode()) {
-            const types = [...new Set(seasonEventsRaw.map(e => e.event_type_string).filter(Boolean))].sort();
-            typeSel.innerHTML = '<option value="">All Types</option>'
-                + types.map(t => `<option value="${t}">${t}</option>`).join('');
-            typeSel.classList.remove('hidden');
-        } else {
-            typeSel.classList.add('hidden');
-        }
+        typeSel.classList.add('hidden');
     }
 }
 
@@ -181,7 +104,7 @@ function filterSeasonEvents() {
         if (eventType && e.event_type_string !== eventType) return false;
         if (week !== '') {
             if (week.startsWith('month_')) {
-                // FTC month filter
+                // Month-based filter
                 if (String(e.month) !== week.replace('month_', '')) return false;
             } else {
                 if (String(e.week) !== week) return false;
@@ -212,17 +135,10 @@ function renderSeasonDropdown() {
     }
 
     list.innerHTML = seasonEventsFiltered.map((e, i) => {
-        let weekLabel;
-        if (isFTCMode()) {
-            weekLabel = e.month ? (MONTH_NAMES[e.month] || '').substring(0, 3) : (e.event_type_string || '');
-        } else {
-            weekLabel = e.week !== null && e.week !== undefined ? `Wk ${e.week + 1}` : 'CMP';
-        }
-        const typeLabel = isFTCMode() && e.event_type_string ? `<span class="sdi-type">${e.event_type_string}</span>` : '';
+        const weekLabel = e.week !== null && e.week !== undefined ? `Wk ${e.week + 1}` : 'CMP';
         const loc = [e.city, e.country].filter(Boolean).join(', ');
         return `<div class="season-dropdown-item" data-idx="${i}" onclick="selectSeasonEvent(${i})">
             <span class="sdi-name">${e.name}</span>
-            ${typeLabel}
             <span class="sdi-week">${weekLabel}</span>
             <span class="sdi-loc">${loc}</span>
         </div>`;
@@ -245,12 +161,7 @@ function selectSeasonEvent(idx) {
     const bar = $('season-selected-bar');
     if (bar) {
         $('ssb-name').textContent = ev.name;
-        let weekLabel;
-        if (isFTCMode()) {
-            weekLabel = ev.month ? MONTH_NAMES[ev.month] : (ev.event_type_string || 'Event');
-        } else {
-            weekLabel = ev.week !== null && ev.week !== undefined ? `Week ${ev.week + 1}` : 'Championship';
-        }
+        const weekLabel = ev.week !== null && ev.week !== undefined ? `Week ${ev.week + 1}` : 'Championship';
         const loc = [ev.city, ev.country].filter(Boolean).join(', ');
         $('ssb-meta').textContent = `${weekLabel} · ${loc}`;
         bar.classList.remove('hidden');
@@ -344,7 +255,7 @@ function highlightDropdownItem(items) {
 
 // loadSeasonEvents() and loadRegionalPool() are kicked off from app.js's
 // init block (search 'typeof loadSeasonEvents'); top-level invocations
-// here would crash because they call isFTCMode() which is defined in
+// here would crash because they call getActiveAPI() which is defined in
 // app.js (loaded LAST).
 
 /** Unified collapse toggle helper. Updates body, header class, and pill label/arrow. */
@@ -380,11 +291,11 @@ let _regionalPoolFiltered = null;  // filtered view
 let _loadingRegionalPool = false;
 
 // loadRegionalPool() is invoked from app.js init (typeof check);
-// calling it here at top-level crashes because it calls isFTCMode()
+// calling it here at top-level crashes because it calls getActiveAPI()
 // which is defined in app.js (loaded LAST).
 
 async function loadRegionalPool() {
-    if (isFTCMode() || _loadingRegionalPool) return;  // FRC-only feature, deduplicate
+    if (_loadingRegionalPool) return;
     _loadingRegionalPool = true;
     try {
         const year = currentEventYear || 2026;
@@ -701,7 +612,7 @@ async function loadEvent(eventKey) {
     }
 
     // Snapshot of mode + generation at call time — lets us bail out if the user
-    // switches FRC⇔FTC while the fetch is still in-flight.
+    // switches competition mode while the fetch is still in-flight.
     const _loadMode = competitionMode;
     const _loadGen  = _modeSwitchGeneration;
 
@@ -766,23 +677,13 @@ async function loadEvent(eventKey) {
 
         // Try server snapshot first (single cached request)
         let _snap = null;
-        if (!isFTCMode()) {
-            try {
-                const _ac = new AbortController();
-                const _tm = setTimeout(() => _ac.abort(), 5000);
-                const _r = await fetch(`/api/events/${code}/snapshot`, { signal: _ac.signal });
-                clearTimeout(_tm);
-                if (_r.ok) _snap = await _r.json();
-            } catch (_) { /* snapshot unavailable — fall back */ }
-        } else {
-            try {
-                const _ac = new AbortController();
-                const _tm = setTimeout(() => _ac.abort(), 15000);
-                const _r = await fetch(`/api/ftc/events/${code}/snapshot`, { signal: _ac.signal });
-                clearTimeout(_tm);
-                if (_r.ok) _snap = await _r.json();
-            } catch (_) { /* FTC snapshot unavailable — fall back to individual calls */ }
-        }
+        try {
+            const _ac = new AbortController();
+            const _tm = setTimeout(() => _ac.abort(), 5000);
+            const _r = await fetch(`/api/events/${code}/snapshot`, { signal: _ac.signal });
+            clearTimeout(_tm);
+            if (_r.ok) _snap = await _r.json();
+        } catch (_) { /* snapshot unavailable — fall back */ }
 
         const [info, teams] = _snap
             ? [_snap.info, _snap.teams]
@@ -887,7 +788,7 @@ async function loadEvent(eventKey) {
         $('event-teams').innerHTML = await buildTeamTable(teams);
         if (competitionMode !== _loadMode || _modeSwitchGeneration !== _loadGen) return;
         fadeIn('rankings-container');
-        if (!isFTCMode()) _scheduleFrcAvatarPatch(currentEvent);
+        _scheduleFrcAvatarPatch(currentEvent);
 
         // Reset dependent tabs — clear both visibility and inner content
         $('summary-empty')?.classList.remove('hidden');
@@ -957,6 +858,10 @@ async function loadEvent(eventKey) {
             if (_snap.matches) { pbpData = _snap.matches; bdData = _snap.matches; }
             if (_snap.playoffs && _snap.playoffs.matches) playoffData = _snap.playoffs.matches;
             if (_snap.alliances) allianceData = _snap.alliances;
+            if (_snap.summary) {
+                summaryData = _snap.summary;
+                updateTabDots();
+            }
             loading(false);
             updateTabDots();
         } else {
@@ -999,15 +904,8 @@ async function loadEvent(eventKey) {
         p2api.alliances(code).then(allianceResult => {
             if (currentEvent !== code) return;
             if (allianceResult) {
-                // FTC returns a flat array; wrap it to match FRC format
-                if (isFTCMode() && Array.isArray(allianceResult)) {
-                    const wrapped = _wrapFtcAlliances(allianceResult);
-                    allianceData = wrapped;
-                    autoCacheTab('alliances', wrapped);
-                } else {
-                    allianceData = allianceResult;
-                    autoCacheTab('alliances', allianceResult);
-                }
+                allianceData = allianceResult;
+                autoCacheTab('alliances', allianceResult);
                 // If the user is already viewing a playoff match, re-render so that
                 // the bench team card (which requires allianceData) is shown.
                 if (allianceData?.is_championship && pbpData?.matches) {
@@ -1030,15 +928,15 @@ async function loadEvent(eventKey) {
                 setTimeout(() => {
                     p2api.alliances(code).then(ar => {
                         if (currentEvent !== code || !ar) return;
-                        if (isFTCMode() && Array.isArray(ar)) { allianceData = _wrapFtcAlliances(ar); } else { allianceData = ar; }
+                        allianceData = ar;
                         autoCacheTab('alliances', allianceData);
                     }).catch(() => {});
                 }, 5000);
             }
         }).finally(phase2Check);
 
-        // Summary — pre-fetch so tab switch is instant (FRC only; FTC builds client-side)
-        if (!isFTCMode()) {
+        // Summary — pre-fetch so tab switch is instant
+        {
             API.eventSummary(code).then(data => {
                 if (currentEvent !== code) return;
                 if (data && data.demographics) {
@@ -1076,17 +974,11 @@ async function loadEvent(eventKey) {
                         const sc = $('summary-container');
                         if (sc) sc.classList.remove('hidden');
                     }
-                    // Same proactive awards load for offline/cached path
                     if (cached.is_championship && !cached.einstein_contenders) {
                         loadSummaryAwards();
                     }
                 }
             });
-        } else {
-            // FTC: pre-fetch the slow API calls in background so summary tab is faster
-            _ftcPrefetchSummary(code);
-        }
-
         } // end !_snap fallback
 
     } catch (err) {
@@ -1386,8 +1278,6 @@ function renderTeamTable(teams, sortCol, asc) {
     const compact = rankingsCompact;
 
     const school = rankingsShowSchool;
-    const ftcMode = isFTCMode();
-    const autoTele = ftcMode && rankingsShowAutoTele;
     const viewToggle = `<button class="rankings-view-toggle" onclick="toggleRankingsView()">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
         ${rankingsCardView ? 'Table View' : 'Card View'}
@@ -1395,7 +1285,6 @@ function renderTeamTable(teams, sortCol, asc) {
     const toolbar = `<div class="rankings-toolbar">
         <label class="toggle-label"><input type="checkbox" ${compact ? 'checked' : ''} onchange="toggleRankingsCompact(this.checked)"> Compact</label>
         <label class="toggle-label school-toggle"><input type="checkbox" ${school ? 'checked' : ''} onchange="toggleRankingsSchool(this.checked)"> School / Org</label>
-        ${ftcMode ? `<label class="toggle-label"><input type="checkbox" ${autoTele ? 'checked' : ''} onchange="toggleRankingsAutoTele(this.checked)"> Auto / TeleOp</label>` : ''}
         ${viewToggle}
     </div>`;
 
@@ -1412,10 +1301,8 @@ function renderTeamTable(teams, sortCol, asc) {
                 ${school ? th('school_name', 'School / Org') : ''}
                 ${th('record', 'Record')}
                 ${th('opr', 'OPR')}
-                ${autoTele ? th('opr_auto', 'Auto') : ''}
-                ${autoTele ? th('opr_dc', 'TeleOp') : ''}
-                ${compact || ftcMode ? '' : th('epa', 'EPA')}
-                ${ftcMode ? '' : `<th class="sortable-th col-ranking_points${teamsSortCol === 'ranking_points' ? ' sorted' : ''}" onclick="sortTeams('ranking_points')"><span class="rp-header-note" title="Unofficial, calculated by TBA">RP*</span>${teamsSortCol === 'ranking_points' ? arrow : ''}</th>`}
+                ${compact ? '' : th('epa', 'EPA')}
+                <th class="sortable-th col-ranking_points${teamsSortCol === 'ranking_points' ? ' sorted' : ''}" onclick="sortTeams('ranking_points')"><span class="rp-header-note" title="Unofficial, calculated by TBA">RP*</span>${teamsSortCol === 'ranking_points' ? arrow : ''}</th>
             </tr>
         </thead>
         <tbody>
@@ -1449,10 +1336,8 @@ function renderTeamTable(teams, sortCol, asc) {
                 ${school ? `<td class="location">${t.school_name || ''}</td>` : ''}
                 <td class="stat">${t.wins}-${t.losses}-${t.ties}</td>
                 <td class="stat stat-opr${oprAboveCls}">${t.opr}</td>
-                ${autoTele ? `<td class="stat">${t.opr_auto != null ? Number(t.opr_auto).toFixed(1) : '\u2013'}</td>` : ''}
-                ${autoTele ? `<td class="stat">${t.opr_dc != null ? Number(t.opr_dc).toFixed(1) : '\u2013'}</td>` : ''}
-                ${compact || ftcMode ? '' : `<td class="stat stat-epa${epaAboveCls}">${t.epa != null ? t.epa : '\u2013'}</td>`}
-                ${ftcMode ? '' : `<td class="stat">${t.ranking_points != null ? t.ranking_points : '\u2013'}</td>`}
+                ${compact ? '' : `<td class="stat stat-epa${epaAboveCls}">${t.epa != null ? t.epa : '\u2013'}</td>`}
+                <td class="stat">${t.ranking_points != null ? t.ranking_points : '\u2013'}</td>
             </tr>`;
             }).join('');
             })()}

@@ -515,7 +515,7 @@ function renderPbpMatch() {
 
     // Statbotics prediction bar
     let predHtml = '';
-    if (showPredictions && !(typeof isFTCMode === 'function' && isFTCMode())) {
+    if (showPredictions) {
         if (m.pred) {
             const p = m.pred;
             const redPct = p.red_win_prob != null ? Math.round(p.red_win_prob * 100) : null;
@@ -910,7 +910,7 @@ async function renderPbpConnections(match) {
                 <span class="conn-range-side${!_pbpConnAllTime ? ' active' : ''}">Past 3yr</span>
                 <input type="checkbox"${checkedAttr} data-action="toggle-range">
                 <span class="conn-toggle-slider"></span>
-                <span class="conn-range-side${_pbpConnAllTime ? ' active' : ''}">${isFTCMode() ? 'Since 2019' : 'All time'}</span>
+                <span class="conn-range-side${_pbpConnAllTime ? ' active' : ''}">All time</span>
             </label>
         </div>
         <div class="pbp-conn-body">
@@ -956,8 +956,6 @@ function renderPbpTeam(t, sideCls, opts = {}) {
     const shortLoc = [t.state_prov, t.country].filter(Boolean).join(', ');
     const foreignCls = highlightForeign && t.country && eventCountry && t.country !== eventCountry ? 'foreign-team' : '';
     const rookieCls = highlightRookie && t.rookie_year && currentEventYear && t.rookie_year >= currentEventYear ? 'rookie-team' : '';
-    const ftcMode = isFTCMode();
-
     // Streak indicator
     let streakHtml = '';
     if (t.wins != null && t.losses != null) {
@@ -976,7 +974,7 @@ function renderPbpTeam(t, sideCls, opts = {}) {
 
     // Delta indicator: (OPR - EPA) / avgEventOPR × 100 — positive = outperforming
     let deltaHtml = '';
-    if (!ftcMode && t._delta != null && (t._delta > 15 || t._delta < -15)) {
+    if (t._delta != null && (t._delta > 15 || t._delta < -15)) {
         const pct = Math.round(Math.abs(t._delta));
         if (t._delta > 15) {
             deltaHtml = `<span class="pbp-delta pbp-delta-up" title="Outperforming Statbotics predictions by ${pct}%">\u2191</span>`;
@@ -1021,14 +1019,14 @@ function renderPbpTeam(t, sideCls, opts = {}) {
                 <div class="pbp-stat-label">OPR</div>
                 <div class="pbp-stat-value opr-val${oprCls}">${t.opr}</div>
             </div>
-            ${ftcMode ? '' : `<div class="pbp-stat">
+            <div class="pbp-stat">
                 <div class="pbp-stat-label">EPA${deltaHtml}</div>
                 <div class="pbp-stat-value epa-val${epaCls}">${t.epa != null ? t.epa : '\u2013'}</div>
-            </div>`}
-            ${ftcMode ? '' : `<div class="pbp-stat">
+            </div>
+            <div class="pbp-stat">
                 <div class="pbp-stat-label">Avg RP</div>
                 <div class="pbp-stat-value">${t.avg_rp}</div>
-            </div>`}
+            </div>
         </div>
         <div class="pbp-awards-slot" data-team="${t.team_number}"></div>
         <div class="pbp-bottom-row">
@@ -1047,11 +1045,10 @@ var _playoffFirstsCache = null;  // var: read by event_select.js / summary.js
 async function _injectPlayoffFirsts(teams, matchIdx, compLevel) {
     // Lazy-load once per event
     if (_playoffFirstsCache === null) {
-        if (isFTCMode()) { _playoffFirstsCache = {}; return; }
         try {
             _playoffFirstsCache = await API.playoffFirsts(currentEvent);
         } catch {
-            _playoffFirstsCache = {};  // mark as loaded but empty
+            _playoffFirstsCache = {};
             return;
         }
     }
@@ -1131,10 +1128,7 @@ async function _injectPbpAwards(teams, matchIdx) {
 
     if (uncached.length) {
         try {
-            // Use FTC or FRC awards endpoint depending on mode
-            const data = isFTCMode()
-                ? await FTC_API.teamAwardsSummary(uncached)
-                : await API.teamAwardsSummary(uncached);
+            const data = await API.teamAwardsSummary(uncached);
             for (const [key, val] of Object.entries(data)) {
                 _pbpAwardsCache[parseInt(key)] = val;
             }

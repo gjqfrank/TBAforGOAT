@@ -26,10 +26,6 @@ TRUSTED_API_KEYS: set[str] = {
 # Set via environment variable FRC_EVENTS_API_TOKEN
 FRC_EVENTS_API_TOKEN = os.environ.get("FRC_EVENTS_API_TOKEN", "")
 
-# FIRST FTC Events API Token (Base64-encoded "username:authkey")
-# Set via environment variable FTC_EVENTS_API_TOKEN
-FTC_EVENTS_API_TOKEN = os.environ.get("FTC_EVENTS_API_TOKEN", "")
-
 # Anthropic API Key for AI Storylines (optional)
 # Set via environment variable ANTHROPIC_API_KEY
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")

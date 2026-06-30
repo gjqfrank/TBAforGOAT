@@ -100,7 +100,6 @@ async function compareCurrentMatch() {
     }
 
     try {
-        if (isFTCMode()) throw new Error('use-fallback');
         const data = await API.compareTeams(currentEvent, allKeys);
         renderComparison(data, { redKeys, blueKeys, matchLabel: m.label });
     } catch {
@@ -211,7 +210,7 @@ function closeLookup() {
 async function launchLookupFromSelection() {
     if (compareSelection.size !== 1) return;
     const teamKey = [...compareSelection][0];
-    const num = parseInt(teamKey.replace(/^(frc|ftc)/, ''), 10);
+    const num = parseInt(teamKey.replace(/^frc/, ''), 10);
     if (!num) return;
 
     openLookup();
@@ -219,14 +218,8 @@ async function launchLookupFromSelection() {
     $('lookup-body').innerHTML = '<p class="loading-msg">Loading team data\u2026</p>';
 
     try {
-        if (isFTCMode()) {
-            const data = await _buildFtcTeamLookup(num, currentEventYear);
-            $('lookup-body').innerHTML = renderFtcTeamStats(data);
-            FTC_API.teamOprHistory(num, currentEventYear).then(h => renderFtcOprChart(h)).catch(() => {});
-        } else {
-            const data = await API.teamStats(num, null);
-            $('lookup-body').innerHTML = renderTeamStats(data);
-        }
+        const data = await API.teamStats(num, null);
+        $('lookup-body').innerHTML = renderTeamStats(data);
     } catch (err) {
         $('lookup-body').innerHTML = `<p class="empty">Error: ${err.message}</p>`;
     }

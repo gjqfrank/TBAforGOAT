@@ -79,14 +79,8 @@ async function floatLookupTeam() {
     _updateFloatTitleBadge('#' + num);
 
     try {
-        if (isFTCMode()) {
-            const data = await _buildFtcTeamLookup(num, year);
-            body.innerHTML = renderFtcTeamStats(data);
-            FTC_API.teamOprHistory(num, year).then(h => renderFtcOprChart(h)).catch(() => {});
-        } else {
-            const data = await API.teamStats(num, year);
-            body.innerHTML = renderTeamStats(data);
-        }
+        const data = await API.teamStats(num, year);
+        body.innerHTML = renderTeamStats(data);
     } catch (err) {
         body.innerHTML = `<div class="float-lookup-empty"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg><p>${err.message}</p></div>`;
         _updateFloatTitleBadge('');
@@ -192,8 +186,7 @@ async function showComparison(teamKeys, opts = {}) {
     } else {
         openCompare();
     }
-    const prefix = isFTCMode() ? 'ftc' : 'frc';
-    _syncUrl({ compare: teamKeys.map(k => k.replace(prefix,'')).join(',') });
+    _syncUrl({ compare: teamKeys.map(k => k.replace('frc','')).join(',') });
     $('compare-body').innerHTML = '<p class="loading-msg">Fetching comparison data\u2026</p>';
     if (!isMob) {
         $('compare-title').textContent = opts.matchLabel
@@ -202,10 +195,6 @@ async function showComparison(teamKeys, opts = {}) {
     }
 
     try {
-        if (isFTCMode()) {
-            // FTC: use cached teamsData directly (no dedicated compare endpoint)
-            throw new Error('use-fallback');
-        }
         const data = await API.compareTeams(currentEvent, teamKeys);
         renderComparison(data, opts);
     } catch (err) {
@@ -215,7 +204,7 @@ async function showComparison(teamKeys, opts = {}) {
                 const t = teamsData.find(x => x.team_key === tk) || {};
                 return {
                     team_key: tk,
-                    team_number: t.team_number || parseInt(tk.replace(/^(frc|ftc)/, '')),
+                    team_number: t.team_number || parseInt(tk.replace(/^frc/, '')),
                     nickname: t.nickname || '',
                     city: t.city || '',
                     state_prov: t.state_prov || '',
@@ -258,15 +247,7 @@ function renderComparison(data, opts) {
     const blueKeys = new Set(opts.blueKeys || []);
     const isMatchMode = redKeys.size > 0;
 
-    const ftcMode = isFTCMode();
-    const stats = ftcMode ? [
-        { key: 'rank',         label: 'Rank',        fmt: v => v === '-' ? '\u2013' : `#${v}`, lower: true },
-        { key: 'opr',          label: 'OPR',         fmt: v => v.toFixed(1) },
-        { key: 'avg_total',    label: 'Avg Score',    fmt: v => v != null ? v.toFixed(1) : '\u2013' },
-        { key: 'max_total',    label: 'High Score',   fmt: v => v != null ? Math.round(v) : '\u2013' },
-        { key: 'min_total',    label: 'Low Score',    fmt: v => v != null ? Math.round(v) : '\u2013', lower: true },
-        { key: 'dev_total',    label: 'Consistency',  fmt: v => v != null ? `\u00b1${v.toFixed(1)}` : '\u2013', lower: true },
-    ] : [
+    const stats = [
         { key: 'rank',         label: 'Rank',       fmt: v => v === '-' ? '\u2013' : `#${v}`, lower: true },
         { key: 'opr',          label: 'OPR',        fmt: v => v.toFixed(2) },
         { key: 'epa',          label: 'EPA',        fmt: v => v != null ? v.toFixed(2) : '\u2013' },
@@ -360,83 +341,8 @@ function renderComparison(data, opts) {
         }
     });
 
-    // OPR sub-rows for FTC (Auto/TeleOp number rows + global rank)
-    if (ftcMode) {
-        const hasOprBreakdown = teams.some(t => t.opr_auto != null || t.opr_dc != null);
-        if (hasOprBreakdown) {
-            // Auto OPR / TeleOp OPR number rows
-            const oprParts = [
-                { key: 'opr_auto', label: 'Auto OPR',   color: 'epa-lbl-auto' },
-                { key: 'opr_dc',   label: 'TeleOp OPR', color: 'epa-lbl-teleop' },
-            ];
-            oprParts.forEach(ep => {
-                const vals = teams.map(t => typeof t[ep.key] === 'number' ? t[ep.key] : 0);
-                const absVals = vals.map(v => Math.abs(v));
-                const best = Math.max(...vals);
-                const maxV = Math.max(...absVals, 0.01);
-                html += `<div class="comp-label"><span class="${ep.color}">${ep.label}</span></div>`;
-                teams.forEach((t, i) => {
-                    const raw = t[ep.key];
-                    const v = typeof raw === 'number' ? raw : 0;
-                    const display = typeof raw === 'number' ? raw.toFixed(1) : '\u2013';
-                    const isBest = teams.length > 1 && v === best && v > 0;
-                    const pct = maxV > 0 ? Math.round((Math.abs(v) / maxV) * 100) : 0;
-                    let sideCls = '';
-                    if (redKeys.has(t.team_key)) sideCls = 'comp-red';
-                    else if (blueKeys.has(t.team_key)) sideCls = 'comp-blue';
-                    html += `
-                    <div class="comp-cell ${sideCls} ${isBest ? 'comp-best' : ''}">
-                        <div class="comp-bar-bg"><div class="comp-bar" style="width:${pct}%"></div></div>
-                        <span class="comp-val">${display}</span>
-                    </div>`;
-                });
-                if (isH2H) {
-                    const v0 = typeof teams[0][ep.key] === 'number' ? teams[0][ep.key] : 0;
-                    const v1 = typeof teams[1][ep.key] === 'number' ? teams[1][ep.key] : 0;
-                    const diff = v0 - v1;
-                    const sign = diff > 0 ? '+' : '';
-                    const cls = diff > 0 ? 'positive' : diff < 0 ? 'negative' : 'neutral';
-                    html += `<div class="comp-delta ${cls}">${sign}${diff.toFixed(1)}</div>`;
-                }
-            });
-        }
-
-        // Global ranking row (QuickStats — rank out of all FTC teams)
-        const hasQS = teams.some(t => t.quick_stats && t.quick_stats.tot);
-        if (hasQS) {
-            const totalCount = teams.reduce((c, t) => {
-                const cnt = t.quick_stats?.count;
-                return cnt > c ? cnt : c;
-            }, 0);
-            const suffix = totalCount ? ` / ${totalCount.toLocaleString()}` : '';
-
-            html += `<div class="comp-label">Global Rank</div>`;
-            teams.forEach(t => {
-                const qs = t.quick_stats?.tot;
-                const rank = qs?.rank;
-                const display = rank != null ? `#${rank}${suffix}` : '\u2013';
-                const isBest = teams.length > 1 && rank != null && rank === Math.min(...teams.map(x => x.quick_stats?.tot?.rank ?? Infinity));
-                let sideCls = '';
-                if (redKeys.has(t.team_key)) sideCls = 'comp-red';
-                else if (blueKeys.has(t.team_key)) sideCls = 'comp-blue';
-                html += `
-                <div class="comp-cell ${sideCls} ${isBest ? 'comp-best' : ''}">
-                    <span class="comp-val">${display}</span>
-                </div>`;
-            });
-            if (isH2H) {
-                const r0 = teams[0].quick_stats?.tot?.rank ?? 0;
-                const r1 = teams[1].quick_stats?.tot?.rank ?? 0;
-                const diff = r0 - r1;
-                const sign = diff > 0 ? '+' : '';
-                const cls = diff < 0 ? 'positive' : diff > 0 ? 'negative' : 'neutral'; // lower rank = better
-                html += `<div class="comp-delta ${cls}">${sign}${diff}</div>`;
-            }
-        }
-    }
-
     // EPA Breakdown stacked bar row (visual only) + number rows
-    const hasEpaBreakdown = !ftcMode && teams.some(t => t.epa_auto != null || t.epa_teleop != null || t.epa_endgame != null);
+    const hasEpaBreakdown = teams.some(t => t.epa_auto != null || t.epa_teleop != null || t.epa_endgame != null);
     if (hasEpaBreakdown) {
         // Visual bar row
         html += '<div class="comp-label">EPA Breakdown</div>';
@@ -508,7 +414,7 @@ function renderComparison(data, opts) {
 
     // Alliance totals row for match mode
     if (isMatchMode) {
-        const allianceStats = ftcMode ? ['opr'] : ['opr', 'epa'];
+        const allianceStats = ['opr', 'epa'];
         html += '<div class="comp-divider" style="grid-column: 1 / -1"></div>';
 
         const redTeamsList = teams.filter(t => redKeys.has(t.team_key));

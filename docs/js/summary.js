@@ -11,225 +11,10 @@
 // 1b. EVENT SUMMARY
 // ═══════════════════════════════════════════════════════════
 
-// Pre-fetch cache for FTC awards (populated in background during event load)
-let _ftcPrefetchedAwards = null;
-let _ftcPrefetchedSeasonAwards = null;
-let _ftcPrefetchEventKey = null;
-
-async function _ftcPrefetchSummary(code) {
-    _ftcPrefetchedAwards = null;
-    _ftcPrefetchedSeasonAwards = null;
-    _ftcPrefetchEventKey = code;
-    try {
-        // Fire both slow API calls in parallel
-        const [awards, seasonResp] = await Promise.all([
-            FTC_API.eventAwards(code).catch(() => null),
-            FTC_API.eventSeasonAwards(code).catch(() => null),
-        ]);
-        if (_ftcPrefetchEventKey !== code) return; // stale
-        _ftcPrefetchedAwards = awards;
-        _ftcPrefetchedSeasonAwards = (seasonResp && Array.isArray(seasonResp.season_awards))
-            ? seasonResp.season_awards : [];
-    } catch { /* ignore */ }
-}
-
 async function loadSummary() {
     if (!currentEvent) return;
     hide('summary-empty');
     hideInlineError('summary-error');
-
-    // FTC mode: build summary from event teams data (no TBA)
-    if (isFTCMode()) {
-        // If we have teamsData, build a demographic summary from it
-        if (!teamsData || !teamsData.length) {
-            showInlineError('summary-error', 'Load an event first to see its summary. Team data is required.');
-            return;
-        }
-        showSkeleton('summary-loading', 'summary-loading-status', 'Analysing FTC event data\u2026');
-        try {
-            const teams = teamsData;
-            const countries = [...new Set(teams.map(t => t.country).filter(Boolean))];
-            const eventCtry = (eventInfoData && eventInfoData.country) || (countries.length === 1 ? countries[0] : '');
-            const foreignCount = eventCtry ? teams.filter(t => t.country && t.country !== eventCtry).length : 0;
-            const rookies = teams.filter(t => t.rookie_year && currentEventYear && t.rookie_year >= currentEventYear);
-
-            const demographics = {
-                total_teams: teams.length,
-                rookie_count: rookies.length,
-                rookie_pct: Math.round((rookies.length / teams.length) * 100),
-                veteran_count: teams.length - rookies.length,
-                veteran_pct: Math.round(((teams.length - rookies.length) / teams.length) * 100),
-                avg_team_age: teams.length > 0
-                    ? Math.round(teams.reduce((s, t) => s + ((currentEventYear || 2026) - (t.rookie_year || (currentEventYear || 2026))), 0) / teams.length * 10) / 10
-                    : 0,
-                foreign_count: foreignCount,
-                foreign_pct: Math.round((foreignCount / teams.length) * 100),
-                event_country: eventCtry,
-                country_count: countries.length,
-                countries: countries,
-            };
-            // ── Build top scorers from OPR ──
-            const sorted = [...teams].filter(t => t.opr > 0).sort((a, b) => b.opr - a.opr);
-            const top_scorers = sorted.slice(0, 3).map(t => ({
-                team_number: t.team_number,
-                nickname: t.nickname || `Team ${t.team_number}`,
-                opr: t.opr,
-                rank: t.rank || '-',
-            }));
-
-            // ── Build event high scores from match data ──
-            let high_scores = [];
-            try {
-                setLoadingStatus('summary-loading-status', 'Fetching event high scores…');
-                // Use already-loaded PbP matches if available, otherwise fetch fresh
-                let eventMatches = (typeof pbpData !== 'undefined' && pbpData && pbpData.matches && pbpData.matches.length)
-                    ? pbpData.matches
-                    : null;
-                if (!eventMatches) {
-                    const allData = await FTC_API.allMatches(currentEvent);
-                    eventMatches = (allData && Array.isArray(allData.matches)) ? allData.matches : [];
-                }
-                // Collect all alliance scores, sort descending, take top 10
-                const allScores = [];
-                for (const m of eventMatches) {
-                    const label = m.label || m.match_label || '';
-                    for (const side of ['red', 'blue']) {
-                        const score = m[side]?.score ?? -1;
-                        if (score < 0) continue;
-                        allScores.push({
-                            score,
-                            match: label,
-                            color: side,
-                            teams: (m[side]?.teams || []).map(t => ({
-                                team_number: t.team_number,
-                                nickname: t.nickname || '',
-                            })),
-                        });
-                    }
-                }
-                allScores.sort((a, b) => b.score - a.score);
-                high_scores = allScores.slice(0, 3);
-            } catch (e) {
-                console.warn('[FTC Summary] Could not build event high scores:', e);
-            }
-
-            // ── Fetch awards for Inspire winners ──
-            let inspire_finalists = [];
-            let champMap = new Map();
-            try {
-                setLoadingStatus('summary-loading-status', 'Fetching event awards\u2026');
-                // Use pre-fetched data if available (from _ftcPrefetchSummary), or fetch fresh
-                const awards = (_ftcPrefetchEventKey === currentEvent && _ftcPrefetchedAwards != null)
-                    ? _ftcPrefetchedAwards
-                    : await FTC_API.eventAwards(currentEvent);
-                if (Array.isArray(awards)) {
-                    // Inspire Award (awardId varies, match by name)
-                    const inspireAwards = awards.filter(a =>
-                        a.name && /inspire/i.test(a.name) && a.team_number
-                    );
-                    // Winner / Finalist awards
-                    const winnerAwards = awards.filter(a =>
-                        a.name && /^(winning|winner)/i.test(a.name) && a.team_number
-                    );
-                    const finalistAwards = awards.filter(a =>
-                        a.name && /^(finalist)/i.test(a.name) && a.team_number
-                    );
-
-                    // Determine if this event is FIRST Championship or Premier
-                    // (type 6 = "FIRST Championship", type 17 = "Premier")
-                    // Excludes regional/country championships (type 4 = "Championship")
-                    const evType = (eventInfoData && eventInfoData.event_type_string) || '';
-                    const isChampOrPremier = /^FIRST Championship$/i.test(evType) || /premier/i.test(evType);
-
-                    // If Championship/Premier, 1st-place Inspire winners go in the ⭐ prestige section
-                    if (isChampOrPremier) {
-                        const inspireMap = new Map();
-                        const inspire1st = inspireAwards.filter(a => !/2nd|3rd|4th|5th/i.test(a.name));
-                        inspire1st.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-                        inspire1st.forEach(a => {
-                            if (!inspireMap.has(a.team_number)) {
-                                const tm = teams.find(t => t.team_number === a.team_number);
-                                const typeTag = /championship/i.test(evType) ? ' (Championship)' : ' (Premier)';
-                                inspireMap.set(a.team_number, {
-                                    team_number: a.team_number,
-                                    nickname: tm ? tm.nickname : `Team ${a.team_number}`,
-                                    impact_years: [a.name + typeTag],
-                                });
-                            }
-                        });
-                        inspire_finalists = [...inspireMap.values()];
-                    }
-
-                    // Build Event Winners & Finalists from winner/finalist awards
-                    champMap = new Map();
-                    [...winnerAwards, ...finalistAwards].forEach(a => {
-                        if (!champMap.has(a.team_number)) {
-                            const tm = teams.find(t => t.team_number === a.team_number);
-                            champMap.set(a.team_number, {
-                                team_number: a.team_number,
-                                nickname: tm ? tm.nickname : `Team ${a.team_number}`,
-                                years_won: [],
-                                years_finalist: [],
-                                years_inspire: [],
-                            });
-                        }
-                        const entry = champMap.get(a.team_number);
-                        if (/^(winning|winner)/i.test(a.name)) entry.years_won.push(a.name);
-                        else entry.years_finalist.push(a.name);
-                    });
-
-                    // Add only 1st-place Inspire winners to Event Winners & Finalists box
-                    inspireAwards.filter(a => !/2nd|3rd|4th|5th/i.test(a.name)).forEach(a => {
-                        if (!champMap.has(a.team_number)) {
-                            const tm = teams.find(t => t.team_number === a.team_number);
-                            champMap.set(a.team_number, {
-                                team_number: a.team_number,
-                                nickname: tm ? tm.nickname : `Team ${a.team_number}`,
-                                years_won: [],
-                                years_finalist: [],
-                                years_inspire: [],
-                            });
-                        }
-                        const entry = champMap.get(a.team_number);
-                        if (!entry.years_inspire) entry.years_inspire = [];
-                        entry.years_inspire.push(a.name);
-                    });
-                }
-            } catch (e) {
-                console.warn('Could not fetch FTC awards for summary:', e);
-            }
-
-            // Show Inspire at all FTC events (it's the top award in FTC)
-            const ftcChampions = [...champMap.values()];
-
-            // Collect season-wide big 3 award winners (from prior events this season)
-            let ftcSeasonAwards = [];
-            try {
-                // Use pre-fetched data if available
-                if (_ftcPrefetchEventKey === currentEvent && _ftcPrefetchedSeasonAwards != null) {
-                    ftcSeasonAwards = _ftcPrefetchedSeasonAwards;
-                } else {
-                    const resp = await FTC_API.eventSeasonAwards(currentEvent);
-                    if (resp && Array.isArray(resp.season_awards)) {
-                        ftcSeasonAwards = resp.season_awards;
-                    }
-                }
-            } catch (e) {
-                console.warn('Could not fetch FTC season awards:', e);
-            }
-
-            const data = { demographics, hall_of_fame: [], impact_finalists: inspire_finalists, ftc_event_champions: ftcChampions, ftc_season_awards: ftcSeasonAwards, top_scorers, high_scores };
-            summaryData = data;
-            hideSkeleton('summary-loading');
-            renderSummary(data);
-            fadeIn('summary-container');
-            updateTabDots();
-        } catch (err) {
-            hideSkeleton('summary-loading');
-            showInlineError('summary-error', `Failed to build FTC summary: ${err.message}`, loadSummary);
-        }
-        return;
-    }
 
     showSkeleton('summary-loading', 'summary-loading-status', 'Fetching event summary\u2026');
     hide('summary-container');
@@ -453,69 +238,16 @@ function switchAwardSeason(season, btn) {
     if (body) body.querySelectorAll('.past-awards-filter-btn').forEach(b => {
         b.classList.toggle('active', b.dataset.awardFilter === 'all');
     });
-    // Get appropriate data
     const awards = season === 'current'
         ? summaryData?.season_awards
-        : (summaryData?.past_season_awards || summaryData?.ftc_past_season_awards);
+        : summaryData?.past_season_awards;
     if (awards && awards.length > 0) {
         renderPastSeasonAwards(awards);
     } else if (season === 'current' && !summaryData?.season_awards) {
         $('summary-past-awards-list').innerHTML = '<p class="empty" style="margin:.5rem 0;font-size:.82rem">Loading\u2026</p>';
-        if (isFTCMode()) {
-            // FTC current-season awards are populated from summary data (not lazy-loaded)
-            $('summary-past-awards-list').innerHTML = '<p class="empty" style="margin:.5rem 0;font-size:.82rem">No award winners found.</p>';
-        } else {
-            loadSeasonAwards();
-        }
-    } else if (season === 'past' && !summaryData?.past_season_awards && !summaryData?.ftc_past_season_awards) {
-        $('summary-past-awards-list').innerHTML = '<p class="empty" style="margin:.5rem 0;font-size:.82rem">Loading\u2026</p>';
-        if (isFTCMode()) loadFtcPastAwards();
+        loadSeasonAwards();
     } else {
         $('summary-past-awards-list').innerHTML = '<p class="empty" style="margin:.5rem 0;font-size:.82rem">No award winners found.</p>';
-    }
-}
-
-/** Lazy-load FTC past-season awards (Inspire/Winner/Finalist from previous season). */
-let _loadingFtcPastAwards = false;
-async function loadFtcPastAwards() {
-    if (!currentEvent || !summaryData || _loadingFtcPastAwards) return;
-    _loadingFtcPastAwards = true;
-    const eventKey = currentEvent;
-    try {
-        const data = await FTC_API.eventPastAwards(eventKey);
-        if (currentEvent !== eventKey || !summaryData) return;
-        summaryData.ftc_past_season_awards = data.past_season_awards || [];
-        summaryData.past_season_awards = data.past_season_awards || [];
-        summaryData.ftc_past_season_year = data.prev_season;
-
-        const awardsEl = $('summary-past-awards');
-        if (data.past_season_awards && data.past_season_awards.length > 0) {
-            // Update the past-season toggle button label
-            const tog = $('award-season-toggle');
-            if (tog) {
-                const btns = tog.querySelectorAll('.award-season-btn');
-                if (btns[1]) btns[1].textContent = String(data.prev_season);
-            }
-            // Only render if we're currently on the past tab
-            if (currentAwardSeason === 'past') {
-                renderPastSeasonAwards(data.past_season_awards);
-            }
-            awardsEl.classList.remove('hidden');
-        } else {
-            // If nothing loaded & we're on past tab, hide
-            if (currentAwardSeason === 'past') awardsEl.classList.add('hidden');
-        }
-    } catch (err) {
-        if (currentEvent !== eventKey) return;
-        const msg = /429|rate.?limit/i.test(err?.message || '')
-            ? 'Rate limited — retrying shortly\u2026'
-            : 'Could not load — switch tabs to retry.';
-        $('summary-past-awards-list').innerHTML = `<p class="empty" style="margin:.5rem 0;font-size:.82rem">${msg}</p>`;
-        if (/429|rate.?limit/i.test(err?.message || '')) {
-            setTimeout(() => { _loadingFtcPastAwards = false; loadFtcPastAwards(); }, 5000);
-        }
-    } finally {
-        _loadingFtcPastAwards = false;
     }
 }
 
@@ -660,7 +392,7 @@ function renderPrequalifiedTeams() {
     if (!el || !content) return;
 
     // Only for FRC 2026+ non-championship events with loaded team data
-    if (isFTCMode() || !teamsData || !teamsData.length || (currentEventYear && currentEventYear < 2026)
+    if (!teamsData || !teamsData.length || (currentEventYear && currentEventYear < 2026)
         || (summaryData && summaryData.is_championship)) {
         el.classList.add('hidden');
         return;
@@ -939,14 +671,9 @@ function filterPastAwards(filter, btn) {
     if (body) body.querySelectorAll('.past-awards-filter-btn').forEach(b => b.classList.remove('active'));
     if (btn) btn.classList.add('active');
     // Use data from the active season
-    let awards;
-    if (isFTCMode()) {
-        awards = summaryData?.ftc_past_season_awards;
-    } else if (currentAwardSeason === 'current') {
-        awards = summaryData?.season_awards;
-    } else {
-        awards = summaryData?.past_season_awards;
-    }
+    const awards = currentAwardSeason === 'current'
+        ? summaryData?.season_awards
+        : summaryData?.past_season_awards;
     if (awards) renderPastSeasonAwards(awards);
 }
 
@@ -956,7 +683,7 @@ function renderPastSeasonAwards(awards) {
         ? awards
         : awards.map(t => ({
             ...t,
-            // 'impact' filter also matches 'inspire' (FTC equivalent)
+            // 'impact' filter also matches 'inspire' awards
             awards: t.awards.filter(a => a.type === currentAwardFilter
                 || (currentAwardFilter === 'impact' && a.type === 'inspire')
                 || (currentAwardFilter === 'inspire' && a.type === 'impact')),
@@ -1003,12 +730,6 @@ async function refreshSummaryStats() {
     if (btn) { btn.disabled = true; btn.textContent = '↻ Refreshing…'; }
 
     try {
-        if (isFTCMode()) {
-            // FTC: re-run the full summary load (stats are built client-side)
-            summaryData = null;
-            await loadSummary();
-            return;
-        }
         const data = await API.eventSummaryRefresh(currentEvent);
         if (data.top_scorers && summaryData) {
             summaryData.top_scorers = data.top_scorers;
@@ -1090,13 +811,13 @@ function renderSummary(data) {
         hofEl.classList.add('hidden');
     }
 
-    // Impact Award Finalists (FRC) / Inspire Winners (FTC)
+    // Impact Award Finalists
     const impactEl = $('summary-impact');
     if (data.impact_finalists && data.impact_finalists.length > 0) {
         // Update section label based on program
         const impactLabel = impactEl.querySelector('.highlight-label');
         if (impactLabel) {
-            impactLabel.textContent = isFTCMode() ? '⭐ Inspire Award Winners' : '⭐ Impact Award Finalists';
+            impactLabel.textContent = '⭐ Impact Award Finalists';
         }
         $('summary-impact-list').innerHTML = [...data.impact_finalists]
             .sort((a, b) => {
@@ -1139,101 +860,6 @@ function renderSummary(data) {
         _renderChampsSummaryAwards(data);
         const seasonToggleHideChamps = $('award-season-toggle');
         if (seasonToggleHideChamps) seasonToggleHideChamps.classList.add('hidden');
-    } else if (isFTCMode()) {
-        // FTC: Event Winners & Finalists above Prior Playoff Connections, full width
-        const historyEl = $('summary-history');
-        const container = historyEl?.parentNode;
-        if (container && pastChampsEl) {
-            container.insertBefore(pastChampsEl, historyEl);
-            pastChampsEl.classList.add('ftc-full-width-card');
-        }
-        // FTC: show event winners & finalists if available (left card)
-        if (data.ftc_event_champions && data.ftc_event_champions.length > 0) {
-            pastChampsEl.querySelector('h3').textContent = 'Event Winners & Finalists';
-            const champsFilterBar = $('champs-filter-bar');
-            if (champsFilterBar) champsFilterBar.classList.add('hidden');
-            // Sort by award weight: Inspire 1st > Winner > Finalist
-            const _awardWeight = t => {
-                const inspire1st = (t.years_inspire || []).filter(n => !/2nd/i.test(n));
-                return (inspire1st.length ? 4 : 0)
-                    + (t.years_won.length ? 2 : 0)
-                    + (t.years_finalist.length ? 1 : 0);
-            };
-            const sorted = [...data.ftc_event_champions].sort((a, b) => _awardWeight(b) - _awardWeight(a));
-            $('summary-past-champs-list').innerHTML = sorted.map(t => {
-                const wonBadge = t.years_won.length ? '<span class="badge badge-winner">Winner</span>' : '';
-                const finBadge = t.years_finalist.length ? '<span class="badge badge-finalist">Finalist</span>' : '';
-                // Only highlight 1st-place Inspire (exclude 2nd place)
-                const inspire1st = (t.years_inspire || []).filter(n => !/2nd/i.test(n));
-                const inspireBadge = inspire1st.length ? '<span class="badge badge-inspire">Inspire</span>' : '';
-                return '<div class="adv-qual-row">'
-                    + '<span class="adv-team-num">' + t.team_number + '</span>'
-                    + '<span class="adv-team-name">' + t.nickname + '</span>'
-                    + '<span class="adv-right-group">' + inspireBadge + wonBadge + finBadge + '</span>'
-                    + '</div>';
-            }).join('');
-            pastChampsEl.classList.remove('hidden');
-        } else {
-            pastChampsEl.classList.add('hidden');
-        }
-
-        // Hide FTC dynamic awards card if it exists (migrated to unified card)
-        const ftcAwardsOld = $('summary-current-awards');
-        if (ftcAwardsOld) ftcAwardsOld.classList.add('hidden');
-
-        // FTC: Unified Award-Winning Teams card with season switcher
-        // Reuse the same pastAwardsEl card that FRC uses — move to full-width above connections
-        const historyEl2 = $('summary-history');
-        const container2 = historyEl2?.parentNode;
-        if (container2 && pastAwardsEl) {
-            container2.insertBefore(pastAwardsEl, historyEl2);
-            pastAwardsEl.classList.add('ftc-full-width-card');
-        }
-        const impactFilterBtn = pastAwardsEl.querySelector('[data-award-filter="impact"]');
-        if (impactFilterBtn) impactFilterBtn.textContent = 'Inspire';
-        pastAwardsEl.querySelector('h3').textContent = 'Award-Winning Teams';
-        const ftcSeasonToggle = $('award-season-toggle');
-        if (ftcSeasonToggle) {
-            ftcSeasonToggle.classList.remove('hidden');
-            const btns = ftcSeasonToggle.querySelectorAll('.award-season-btn');
-            btns[0].textContent = String(currentEventYear);
-            btns[1].textContent = String(data.ftc_past_season_year || (currentEventYear - 1));
-        }
-        const ftcFilterBar = pastAwardsEl.querySelector('.past-awards-filter-bar');
-        if (ftcFilterBar) ftcFilterBar.classList.remove('hidden');
-
-        // Store FTC season awards in summaryData so switchAwardSeason can find them
-        if (data.ftc_season_awards && data.ftc_season_awards.length > 0) {
-            // Convert FTC season awards to the same shape as FRC (past-award-chip format)
-            summaryData.season_awards = data.ftc_season_awards;
-        }
-        if (data.ftc_past_season_awards && data.ftc_past_season_awards.length > 0) {
-            summaryData.past_season_awards = data.ftc_past_season_awards;
-        }
-
-        // Default to current season tab
-        currentAwardSeason = 'current';
-        currentAwardFilter = 'all';
-        if (ftcSeasonToggle) {
-            ftcSeasonToggle.querySelectorAll('.award-season-btn').forEach(b =>
-                b.classList.toggle('active', b.dataset.season === 'current'));
-        }
-
-        pastAwardsEl.classList.remove('hidden');
-        if (summaryData.season_awards && summaryData.season_awards.length > 0) {
-            renderPastSeasonAwards(summaryData.season_awards);
-        } else if (summaryData.past_season_awards && summaryData.past_season_awards.length > 0) {
-            // No current season awards — fall back to past
-            currentAwardSeason = 'past';
-            if (ftcSeasonToggle) ftcSeasonToggle.querySelectorAll('.award-season-btn').forEach(b =>
-                b.classList.toggle('active', b.dataset.season === 'past'));
-            renderPastSeasonAwards(summaryData.past_season_awards);
-        } else if (!data.ftc_past_season_awards) {
-            $('summary-past-awards-list').innerHTML = '<p class="empty" style="margin:.5rem 0;font-size:.82rem">Loading\u2026</p>';
-            loadFtcPastAwards();
-        } else {
-            pastAwardsEl.classList.add('hidden');
-        }
     } else {
         // FRC: restore past-champs and past-awards into pair-row
         const pairRow = document.querySelector('.summary-pair-row');
@@ -1243,19 +869,11 @@ function renderSummary(data) {
         if (pairRow && !pairRow.contains(pastAwardsEl)) {
             pairRow.appendChild(pastAwardsEl);
         }
-        pastChampsEl.classList.remove('ftc-full-width-card');
-        pastAwardsEl.classList.remove('ftc-full-width-card');
         // Reset titles in case we're switching from a champs to a regular event
         pastChampsEl.querySelector('h3').textContent = 'Returning Champions & Finalists';
         pastAwardsEl.querySelector('h3').textContent = 'Award-Winning Teams';
         const filterBar = pastAwardsEl.querySelector('.past-awards-filter-bar');
         if (filterBar) filterBar.classList.remove('hidden');
-        // Reset "Inspire" back to "Impact" for FRC
-        const impactBtn = pastAwardsEl.querySelector('[data-award-filter="impact"]');
-        if (impactBtn) impactBtn.textContent = 'Impact';
-        // Hide FTC awards card in FRC mode
-        const ftcAwardsElHide = $('summary-current-awards');
-        if (ftcAwardsElHide) ftcAwardsElHide.classList.add('hidden');
         const champsFilterBar = $('champs-filter-bar');
         if (champsFilterBar) champsFilterBar.classList.add('hidden');
 
@@ -1316,13 +934,10 @@ function renderSummary(data) {
 
     // If awards haven't been loaded yet (undefined) or came back empty
     // (possibly due to a transient API failure), retry the fetch.
-    // Skip for FTC — no past-event-champion / past-season-award API.
     const _noChamps = !data.is_championship && (!data.past_event_champions || data.past_event_champions.length === 0);
     const _noAwards = !data.is_championship && (!data.past_season_awards  || data.past_season_awards.length === 0);
-    // For championship divisions, loadSummaryAwards fetches the champs-specific
-    // payload (season_winners, einstein_contenders etc). Trigger it if not cached yet.
     const _noChampAwards = data.is_championship && !data.einstein_contenders;
-    if ((_noChamps && _noAwards && !isFTCMode()) || _noChampAwards) {
+    if ((_noChamps && _noAwards) || _noChampAwards) {
         loadSummaryAwards();
     }
 
@@ -1331,7 +946,7 @@ function renderSummary(data) {
 
     // Advancement — lazy-load (only for completed events)
     const advEl = $('summary-advancement');
-    if (currentEventStatus === 'completed' && !isFTCMode()) {
+    if (currentEventStatus === 'completed') {
         advEl.classList.remove('hidden');
         if (data.advancement && (data.advancement.qualified_teams?.length || data.advancement.district_rankings?.length)) {
             renderAdvancement(data.advancement);

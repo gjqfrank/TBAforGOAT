@@ -286,7 +286,7 @@ var highlightRookie = false;   // settings: highlight rookie teams
 var showOffseason = false;     // settings: show offseason events
 var rankingsCompact = window.innerWidth <= 768;  // default compact on mobile
 var rankingsShowSchool = false;   // toggle: show school/org column
-var rankingsShowAutoTele = false; // toggle: show Auto/TeleOp columns (FTC)
+
 var rankingsCardView = window.innerWidth <= 768;  // card view default on mobile
 var allianceShowEpa = false;      // toggle: show EPA breakdown in alliance cards
 var allianceShowPlayoff = false;  // toggle: show playoff ribbons/status
@@ -440,7 +440,6 @@ Realtime.onReconnect((_eventKey) => {
     if (renderedTabs.breakdown && bdData) refreshBdList();
 });
 
-// ── Reset event data (used when switching FRC/FTC mode) ────
 function resetEventData() {
     Realtime.unsubscribe();
     currentEvent = null;
@@ -512,297 +511,10 @@ function toggleTheme(isLight) {
     }
 })();
 
-// ── Competition Mode Toggle (FRC / FTC) ────────────────────
-let competitionMode = 'frc';  // 'frc' or 'ftc'
-let _lastModeSwitch = 0;     // timestamp of last mode switch (cooldown)
-let _modeSwitchGeneration = 0; // increments on each switch; guards delayed loadEvent
-
-function getActiveAPI() {
-    return competitionMode === 'ftc' ? FTC_API : API;
-}
-
-function isFTCMode() {
-    return competitionMode === 'ftc';
-}
-
-function updateFavicon(mode) {
-    const color = mode === 'ftc' ? '#f97316' : '#6366f1';
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5 12 2"/><line x1="12" y1="22" x2="12" y2="15.5"/><polyline points="22 8.5 12 15.5 2 8.5"/><polyline points="2 15.5 12 8.5 22 15.5"/><line x1="12" y1="2" x2="12" y2="8.5"/></svg>`;
-    const blob = new Blob([svg], { type: 'image/svg+xml' });
-    const url = URL.createObjectURL(blob);
-    let link = document.querySelector('link[rel="icon"]');
-    if (!link) {
-        link = document.createElement('link');
-        link.rel = 'icon';
-        link.type = 'image/svg+xml';
-        document.head.appendChild(link);
-    }
-    const old = link.href;
-    link.href = url;
-    if (old && old.startsWith('blob:')) URL.revokeObjectURL(old);
-}
-
-function toggleCompetitionMode() {
-    // 5-second cooldown between mode switches
-    const now = Date.now();
-    if (now - _lastModeSwitch < 5000) {
-        showToast('Please wait a few seconds before switching again', 'info', 2000);
-        return;
-    }
-    _lastModeSwitch = now;
-
-    const icon = document.getElementById('brand-icon-svg');
-    if (icon) {
-        icon.classList.add('switching');
-        icon.addEventListener('animationend', () => icon.classList.remove('switching'), { once: true });
-    }
-
-    // ── Cache current event for this mode before switching ──
-    const prevMode = competitionMode;
-    if (currentEvent) {
-        localStorage.setItem(`lastEvent_${prevMode}`, currentEvent);
-    }
-
-    competitionMode = competitionMode === 'frc' ? 'ftc' : 'frc';
-    document.documentElement.setAttribute('data-mode', competitionMode);
-    localStorage.setItem('competitionMode', competitionMode);
-
-    // Update UI text
-    const sub = document.getElementById('brand-sub');
-    if (sub) sub.textContent = 'Events at a glance!';
-
-    const toggleBtn = document.getElementById('mode-toggle-btn');
-    if (toggleBtn) toggleBtn.title = competitionMode === 'ftc' ? 'Switch to FRC Mode' : 'Switch to FTC Mode';
-
-    // Update page title
-    document.title = competitionMode === 'ftc'
-        ? "Caster's Tool: FTC DECODE"
-        : "Caster's Tool: Events at a glance!";
-
-    // Update favicon color
-    updateFavicon(competitionMode);
-
-    // Hide/show FRC-only settings
-    const frcOnlySettings = ['toggle-highlight-foreign', 'toggle-predictions',
-                             'toggle-world-record', 'toggle-offseason'];
-    frcOnlySettings.forEach(id => {
-        const el = document.getElementById(id);
-        if (el) {
-            const row = el.closest('.settings-toggle');
-            if (row) row.style.display = competitionMode === 'ftc' ? 'none' : '';
-        }
-    });
-
-    // Show FTC toast
-    const _ftcSeasonY = (typeof currentFtcSeason === 'function') ? currentFtcSeason() : 2025;
-    const _ftcSeasonLabel = `${_ftcSeasonY}-${_ftcSeasonY + 1}`;
-    const _ftcGameByYear = { 2025: 'DECODE' };
-    const _ftcGameSuffix = _ftcGameByYear[_ftcSeasonY] ? ` — ${_ftcGameByYear[_ftcSeasonY]} ${_ftcSeasonLabel}` : ` — ${_ftcSeasonLabel}`;
-    showToast(competitionMode === 'ftc' ? `Switched to FTC Mode${_ftcGameSuffix}` : 'Switched to FRC Mode', 'info', 2500);
-
-    // Hide Regional Pool in FTC mode, show in FRC
-    const rpCard = $('regional-pool-card');
-    if (rpCard) rpCard.classList.toggle('hidden', competitionMode === 'ftc');
-
-    // ── Update event code placeholder for mode ──
-    const ecInput = $('event-code');
-    if (ecInput) ecInput.placeholder = competitionMode === 'ftc' ? 'Event code (e.g. TRTUQ1)' : 'Event code (e.g. txda)';
-
-    // ── Update footer credits for mode ──
-    const statusFrc = $('status-frc');   // TBA
-    const statusTba = $('status-tba');   // FIRST FRC Events
-    const statusStat = $('status-statbotics'); // Statbotics + GATool
-    if (competitionMode === 'ftc') {
-        if (statusFrc) statusFrc.style.display = 'none';
-        // Hide TBA separator
-        if (statusFrc) { const sep = statusFrc.nextElementSibling; if (sep && sep.classList.contains('footer-sep')) sep.style.display = 'none'; }
-        if (statusTba) statusTba.innerHTML = 'Event Data provided by <a href="https://ftc-events.firstinspires.org/services/API" target="_blank" rel="noopener"><em>FIRST</em></a>';
-        if (statusStat) statusStat.innerHTML = 'Additional data provided by <a href="https://gatool.org" target="_blank" rel="noopener">GATool</a> and <a href="https://ftcscout.org" target="_blank" rel="noopener">FTC Scout</a>';
-    } else {
-        if (statusFrc) statusFrc.style.display = '';
-        if (statusFrc) { const sep = statusFrc.nextElementSibling; if (sep && sep.classList.contains('footer-sep')) sep.style.display = ''; }
-        if (statusTba) statusTba.innerHTML = 'Event Data provided by <a href="https://frc-events.firstinspires.org/services/API" target="_blank" rel="noopener"><em>FIRST</em></a>';
-        if (statusStat) statusStat.innerHTML = 'Additional data provided by <a href="https://gatool.org" target="_blank" rel="noopener">GATool</a> and <a href="https://www.statbotics.io" target="_blank" rel="noopener">Statbotics</a>';
-    }
-
-    // ── Hide EPA / Playoff Status toggles on alliances tab in FTC ──
-    const epaToggle = document.getElementById('alliance-toggle-epa');
-    if (epaToggle) {
-        const row = epaToggle.closest('label');
-        if (row) row.style.display = competitionMode === 'ftc' ? 'none' : '';
-    }
-    const playoffToggle = document.getElementById('alliance-toggle-playoff');
-    if (playoffToggle) {
-        const row = playoffToggle.closest('label');
-        if (row) row.style.display = competitionMode === 'ftc' ? 'none' : '';
-    }
-
-    // ── Clear pending season selection ──
-    if (typeof clearSeasonSelection === 'function') clearSeasonSelection();
-
-    // ── Update season events title for mode ──
-    const seasonTitle = document.querySelector('.event-section-card .event-section-title');
-    if (seasonTitle) {
-        if (competitionMode === 'ftc') {
-            const y = (typeof currentFtcSeason === 'function') ? currentFtcSeason() : 2025;
-            seasonTitle.textContent = `${y}-${y + 1} Season Events`;
-        } else {
-            seasonTitle.textContent = '2026 Season Events';
-        }
-    }
-    const seasonRefresh = document.getElementById('season-refresh-btn');
-    if (seasonRefresh) seasonRefresh.title = competitionMode === 'ftc' ? 'Refresh event list from FIRST' : 'Refresh event list from TBA';
-
-    // ── Close any open lookups so FRC data doesn't leak into FTC ──
-    if (typeof closeFloatingLookup === 'function') closeFloatingLookup();
-    if (typeof closeLookup === 'function') closeLookup();
-
-    // ── Clear current event + all tab data fully ──
-    if (typeof clearActiveEvent === 'function') clearActiveEvent();
-    resetEventData();
-
-    // Re-load regional pool on FRC return (after clearing event so year defaults to 2026)
-    if (competitionMode === 'frc') {
-        if (typeof loadRegionalPool === 'function') loadRegionalPool();
-    }
-
-    // Also hide all tab content/skeletons so stale data doesn't show
-    ['pbp-container','bd-container','summary-container','history-container'].forEach(id => {
-        const el = $(id); if (el) el.classList.add('hidden');
-    });
-    ['pbp-empty','bd-empty','summary-empty','history-empty','rankings-empty',
-     'playoff-empty','alliance-empty'].forEach(id => {
-        const el = $(id); if (el) el.classList.remove('hidden');
-    });
-
-    // ── Nuke ALL inner rendered content so no stale data survives ──
-    ['event-teams', 'playoff-bracket', 'alliance-grid',
-     'pbp-arena', 'pbp-match-select', 'pbp-match-label',
-     'bd-content', 'bd-status', 'bd-match-select', 'bd-spotlight',
-     'summary-title', 'summary-demographics',
-     'summary-advancement-content', 'summary-past-champs-list',
-     'summary-past-awards-list', 'summary-history-list',
-     'summary-hof-list', 'summary-impact-list',
-     'summary-top-list', 'summary-high-list',
-     'summary-prequalified-content',
-     'history-region-body', 'history-event-body'
-    ].forEach(id => {
-        const el = $(id);
-        if (el) {
-            if (el.tagName === 'SELECT') { el.innerHTML = ''; el.value = ''; }
-            else el.innerHTML = '';
-        }
-    });
-    // Hide summary sub-cards
-    ['summary-advancement', 'summary-prestige-row', 'summary-hof', 'summary-impact',
-     'summary-past-champs', 'summary-past-awards', 'summary-history',
-     'summary-top-scorers', 'summary-high-scores', 'summary-prequalified'
-    ].forEach(id => {
-        const el = $(id); if (el) el.classList.add('hidden');
-    });
-
-    // Reset tab data dots
-    if (typeof updateTabDots === 'function') updateTabDots();
-
-    // Refresh world record for the new mode
-    fetchWorldRecord();
-    _seasonHighScoresCache = null;  // clear stale high-scores panel data
-
-    // Pre-load FTC avatar map when switching to FTC mode
-    if (competitionMode === 'ftc') loadFtcAvatarMap();
-    else _ftcAvatarMap = null;  // clear on FRC switch to free memory
-
-    // Load season events for the new mode (prefers cached/static data to avoid rate limits)
-    if (typeof loadSeasonEvents === 'function') loadSeasonEvents();
-
-    // ── Update range toggle labels for FTC ("Since 2019") vs FRC ("All time") ──
-    const _allLabel = competitionMode === 'ftc' ? 'Since 2019' : 'All time';
-    const _allShort = competitionMode === 'ftc' ? 'Since 2019' : 'All';
-    const h2hSides = document.querySelectorAll('.h2h-range-side');
-    if (h2hSides.length === 2) h2hSides[1].textContent = _allLabel;
-    const summConnCard = $('summary-history');
-    if (summConnCard) {
-        const cSides = summConnCard.querySelectorAll('.conn-range-side');
-        if (cSides.length === 2) cSides[1].textContent = _allShort;
-    }
-
-    // ── Restore cached event for the new mode (if any) ──
-    const cachedKey = localStorage.getItem(`lastEvent_${competitionMode}`);
-
-    // Always switch to Events tab first so user sees the event list
-    if (typeof switchToTab === 'function') switchToTab('event');
-
-    if (cachedKey) {
-        const gen = ++_modeSwitchGeneration;
-        setTimeout(() => {
-            // Only load if no further mode switch happened in the meantime
-            if (gen !== _modeSwitchGeneration) return;
-            if (typeof loadEvent === 'function') loadEvent(cachedKey);
-        }, 600);
-    } else {
-        ++_modeSwitchGeneration;
-    }
-}
-
-// Restore saved competition mode
-(function initCompetitionMode() {
-    const saved = localStorage.getItem('competitionMode');
-    if (saved === 'ftc') {
-        competitionMode = 'ftc';
-        document.documentElement.setAttribute('data-mode', 'ftc');
-        document.addEventListener('DOMContentLoaded', () => {
-            const sub = document.getElementById('brand-sub');
-            if (sub) sub.textContent = 'Events at a glance!';
-            const toggleBtn = document.getElementById('mode-toggle-btn');
-            if (toggleBtn) toggleBtn.title = 'Switch to FRC Mode';
-            document.title = "Caster's Tool: FTC DECODE";
-            updateFavicon('ftc');
-            // Hide Regional Pool in FTC mode
-            const rpCard = document.getElementById('regional-pool-card');
-            if (rpCard) rpCard.classList.add('hidden');
-            // Hide FRC-only settings
-            ['toggle-highlight-foreign', 'toggle-predictions',
-             'toggle-world-record', 'toggle-offseason'].forEach(id => {
-                const el = document.getElementById(id);
-                if (el) {
-                    const row = el.closest('.settings-toggle');
-                    if (row) row.style.display = 'none';
-                }
-            });
-            // Update event code placeholder
-            const ecInput = document.getElementById('event-code');
-            if (ecInput) ecInput.placeholder = 'Event code (e.g. TRTUQ1)';
-            // Update credits for FTC
-            const statusFrc = document.getElementById('status-frc');
-            const statusTba = document.getElementById('status-tba');
-            const statusStat = document.getElementById('status-statbotics');
-            if (statusFrc) { statusFrc.style.display = 'none'; const sep = statusFrc.nextElementSibling; if (sep && sep.classList.contains('footer-sep')) sep.style.display = 'none'; }
-            if (statusTba) statusTba.innerHTML = 'Event Data provided by <a href="https://ftc-events.firstinspires.org/services/API" target="_blank" rel="noopener"><em>FIRST</em></a>';
-            if (statusStat) statusStat.innerHTML = 'Additional data provided by <a href="https://gatool.org" target="_blank" rel="noopener">GATool</a> and <a href="https://ftcscout.org" target="_blank" rel="noopener">FTC Scout</a>';
-            // Hide EPA / Playoff Status toggles on alliances tab
-            const epaToggle = document.getElementById('alliance-toggle-epa');
-            if (epaToggle) { const row = epaToggle.closest('label'); if (row) row.style.display = 'none'; }
-            const playoffToggle = document.getElementById('alliance-toggle-playoff');
-            if (playoffToggle) { const row = playoffToggle.closest('label'); if (row) row.style.display = 'none'; }
-            // Update season events title for FTC
-            const seasonTitle = document.querySelector('.event-section-card .event-section-title');
-            if (seasonTitle) {
-                const y = (typeof currentFtcSeason === 'function') ? currentFtcSeason() : 2025;
-                seasonTitle.textContent = `${y}-${y + 1} Season Events`;
-            }
-            const seasonRefresh = document.getElementById('season-refresh-btn');
-            if (seasonRefresh) seasonRefresh.title = 'Refresh event list from FIRST';
-            // Update range toggle labels for FTC
-            const h2hSides = document.querySelectorAll('.h2h-range-side');
-            if (h2hSides.length === 2) h2hSides[1].textContent = 'Since 2019';
-            const summConnCard = document.getElementById('summary-history');
-            if (summConnCard) {
-                const cSides = summConnCard.querySelectorAll('.conn-range-side');
-                if (cSides.length === 2) cSides[1].textContent = 'Since 2019';
-            }
-        });
-    }
-})();
+// ── Competition Mode (FRC only) ────────────────────────────
+const competitionMode = 'frc';
+function getActiveAPI() { return API; }
+function isFTCMode() { return false; }
 
 function toggleHighlightForeign(on) {
     highlightForeign = on;
@@ -990,9 +702,7 @@ function toggleSponsorFirstOnly(on) {
 async function _fetchGatoolUpdates(eventKey) {
     if (_gatoolUpdatesCache[eventKey]) return _gatoolUpdatesCache[eventKey];
     try {
-        const data = isFTCMode()
-            ? await FTC_API.gatoolUpdates(eventKey)
-            : await API.gatoolUpdates(eventKey);
+        const data = await API.gatoolUpdates(eventKey);
         _gatoolUpdatesCache[eventKey] = data || {};
         return _gatoolUpdatesCache[eventKey];
     } catch {
@@ -1138,7 +848,7 @@ document.querySelectorAll('.tab').forEach(btn => {
                 }
                 sc && sc.classList.remove('hidden');
                 // Stale-while-revalidate: for ongoing events, silently refresh in background (5-min cooldown)
-                if (currentEventStatus === 'ongoing' && !isFTCMode() && Date.now() - _summaryRevalidatedAt > _SUMMARY_REVALIDATE_COOLDOWN) {
+                if (currentEventStatus === 'ongoing' && Date.now() - _summaryRevalidatedAt > _SUMMARY_REVALIDATE_COOLDOWN) {
                     _summaryRevalidatedAt = Date.now();
                     const _code = currentEvent;
                     API.eventSummary(_code).then(freshData => {
@@ -1168,7 +878,7 @@ document.querySelectorAll('.tab').forEach(btn => {
                 if (playoffData?.length) {
                     hide('playoff-empty');
                     hideSkeleton('playoff-loading');
-                    if (isFTCMode()) renderFtcBracket(); else renderBracketTree();
+                    renderBracketTree();
                     fadeIn('playoff-bracket');
                     renderedTabs.playoff = true;
                 } else {
@@ -1231,9 +941,7 @@ document.querySelectorAll('.tab').forEach(btn => {
             hide('bd-container');
             const el = $('bd-empty');
             if (el) {
-                el.innerHTML = isFTCMode()
-                    ? 'Score breakdown is only available for the 2025-2026 DECODE\u2122 season and later.'
-                    : 'Score breakdown is only available for 2025 events onwards.';
+                el.innerHTML = 'Score breakdown is only available for 2025 events onwards.';
                 el.classList.remove('hidden');
             }
         } else if (btn.dataset.tab === 'breakdown' && currentEvent && !renderedTabs.breakdown) {
@@ -1613,51 +1321,6 @@ function loading(on) {
     }
 }
 
-// ── FTC Avatar Map (from FIRST FTC Scoring Server CSS, proxied via backend) ──
-const _FTC_AVATAR_CSS_URL = () => `/api/ftc/events/avatar-css/${currentEventYear || new Date().getFullYear()}`;
-const _FTC_AVATAR_BASE = 'https://ftc-scoring.firstinspires.org';
-let _ftcAvatarMap = null;  // Map<teamNumber, fullUrl> — null = not loaded yet
-
-async function loadFtcAvatarMap() {
-    if (_ftcAvatarMap) return _ftcAvatarMap;
-    try {
-        const resp = await fetch(_FTC_AVATAR_CSS_URL());
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const css = await resp.text();
-        const map = new Map();
-        // Parse: .team-{num} { background-image: url("/avatars/composed/2026/..."); }
-        const re = /\.team-(\d+)\s*\{\s*background-image:\s*url\("([^"]+)"\)/g;
-        let m;
-        while ((m = re.exec(css)) !== null) {
-            map.set(parseInt(m[1], 10), _FTC_AVATAR_BASE + m[2]);
-        }
-        _ftcAvatarMap = map;
-        console.log(`[FTC Avatars] Loaded ${map.size} avatars from FIRST scoring server`);
-        // If teams are already rendered, re-patch and re-render
-        if (teamsData && teamsData.length && isFTCMode()) {
-            patchFtcAvatars(teamsData);
-            const el = $('event-teams');
-            if (el && el.innerHTML) el.innerHTML = rankingsCardView ? renderTeamCards(teamsData) : renderTeamTable(teamsData, teamsSortCol, teamsSortAsc);
-        }
-        return map;
-    } catch (err) {
-        console.warn('[FTC Avatars] Failed to load avatar CSS:', err.message);
-        _ftcAvatarMap = new Map();  // empty map — don't retry
-        return _ftcAvatarMap;
-    }
-}
-
-/** Patch avatar URLs into an array of team objects using the FTC avatar map. */
-function patchFtcAvatars(teams) {
-    if (!isFTCMode() || !_ftcAvatarMap || _ftcAvatarMap.size === 0) return;
-    for (const t of teams) {
-        if (!t.avatar && t.team_number) {
-            const url = _ftcAvatarMap.get(t.team_number);
-            if (url) t.avatar = url;
-        }
-    }
-}
-
 // ── World Record in footer ────────────────────────────────
 let _worldRecord = null;
 
@@ -1670,12 +1333,7 @@ async function fetchWorldRecord() {
             await new Promise(r => setTimeout(r, 400));
         }
 
-        let rec;
-        if (isFTCMode()) {
-            rec = await FTC_API.worldRecord();
-        } else {
-            rec = await API.worldRecord();
-        }
+        let rec = await API.worldRecord();
         if (rec && rec.score > 0) {
             _worldRecord = rec;
             renderWorldRecord(rec, false);
@@ -1784,8 +1442,7 @@ async function toggleSeasonHighScoresPanel() {
         return;
     }
 
-    // FTC mode — no Statbotics high-scores panel
-    if (isFTCMode()) return;
+    
 
     const year = currentEventYear || 2026;
 
@@ -1907,7 +1564,6 @@ document.addEventListener('keydown', (e) => {
 });
 
 fetchWorldRecord();
-if (isFTCMode()) loadFtcAvatarMap();
 
 
 // ═══════════════════════════════════════════════════════════
@@ -1951,12 +1607,12 @@ if (isFTCMode()) loadFtcAvatarMap();
 // ── Initial event-list bootstrap ───────────────────────────
 // Pre-v3.0.0, event_select.js called loadSeasonEvents() and
 // loadRegionalPool() at top-level. Those calls were removed because
-// they ran before app.js parsed (so isFTCMode was undefined).
+// they ran before app.js parsed (so getActiveAPI was undefined).
 // Bring the boot back here, where every helper is guaranteed defined.
 (function bootstrapEventList() {
     const boot = () => {
         if (typeof loadSeasonEvents === 'function') loadSeasonEvents();
-        if (typeof loadRegionalPool === 'function' && competitionMode === 'frc') {
+        if (typeof loadRegionalPool === 'function') {
             loadRegionalPool();
         }
     };

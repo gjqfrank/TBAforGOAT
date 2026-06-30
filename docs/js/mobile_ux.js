@@ -442,7 +442,7 @@ function _buildMobSettings(container) {
         ]},
         { title: 'Play-by-Play', toggles: [
             { id: 'toggle-pbp-awards', label: 'Show Awards', fn: 'togglePbpAwards' },
-            { id: 'toggle-predictions', label: 'Show Win Predictions (Statbotics)', fn: 'toggleShowPredictions', ftcHide: true },
+            { id: 'toggle-predictions', label: 'Show Win Predictions (Statbotics)', fn: 'toggleShowPredictions' },
             { id: 'toggle-gatool-sponsors', label: 'Sponsors', fn: 'toggleGatoolSponsors' },
             { id: 'toggle-sponsor-first-only', label: 'Hide Sponsors After First Appearance', fn: 'toggleSponsorFirstOnly' },
             { id: 'toggle-team-attrs', label: 'Show Team Attributes', fn: 'toggleTeamAttrs' },
@@ -455,7 +455,6 @@ function _buildMobSettings(container) {
         hdr.textContent = g.title;
         container.appendChild(hdr);
         g.toggles.forEach(t => {
-            if (t.ftcHide && typeof isFTCMode === 'function' && isFTCMode()) return;
             const orig = document.getElementById(t.id);
             const checked = orig ? orig.checked : false;
             const lbl = document.createElement('label');
@@ -504,13 +503,8 @@ async function _mobUtilLookupTeam() {
 
     result.innerHTML = '<div class="mob-util-lookup-empty">Loading\u2026</div>';
     try {
-        if (typeof isFTCMode === 'function' && isFTCMode()) {
-            const data = await _buildFtcTeamLookup(num, year);
-            result.innerHTML = renderFtcTeamStats(data);
-        } else {
-            const data = await API.teamStats(num, year);
-            result.innerHTML = renderTeamStats(data);
-        }
+        const data = await API.teamStats(num, year);
+        result.innerHTML = renderTeamStats(data);
     } catch (err) {
         result.innerHTML = '<div class="mob-util-lookup-empty">' + err.message + '</div>';
     }
@@ -931,8 +925,6 @@ function toggleRankingsView() {
 function renderTeamCards(teams) {
     const compact = rankingsCompact;
     const school = rankingsShowSchool;
-    const ftcMode = isFTCMode();
-    const autoTele = ftcMode && rankingsShowAutoTele;
     const viewToggle = `<button class="rankings-view-toggle" onclick="toggleRankingsView()">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
         ${rankingsCardView ? 'Table View' : 'Card View'}
@@ -940,7 +932,6 @@ function renderTeamCards(teams) {
     const toolbar = `<div class="rankings-toolbar">
         <label class="toggle-label"><input type="checkbox" ${compact ? 'checked' : ''} onchange="toggleRankingsCompact(this.checked)"> Compact</label>
         <label class="toggle-label school-toggle"><input type="checkbox" ${school ? 'checked' : ''} onchange="toggleRankingsSchool(this.checked)"> School / Org</label>
-        ${ftcMode ? `<label class="toggle-label"><input type="checkbox" ${autoTele ? 'checked' : ''} onchange="toggleRankingsAutoTele(this.checked)"> Auto / TeleOp</label>` : ''}
         ${viewToggle}
     </div>`;
 
@@ -978,10 +969,8 @@ function renderTeamCards(teams) {
             <div class="rank-card-stats">
                 <div class="rank-card-stat"><div class="rank-card-stat-val">${t.wins}-${t.losses}-${t.ties}</div><div class="rank-card-stat-label">W-L-T</div></div>
                 <div class="rank-card-stat"><div class="rank-card-stat-val stat-opr${oprCls}">${t.opr}</div><div class="rank-card-stat-label">OPR</div></div>
-                ${autoTele ? `<div class="rank-card-stat"><div class="rank-card-stat-val">${t.opr_auto != null ? Number(t.opr_auto).toFixed(1) : '\u2013'}</div><div class="rank-card-stat-label">Auto</div></div>` : ''}
-                ${autoTele ? `<div class="rank-card-stat"><div class="rank-card-stat-val">${t.opr_dc != null ? Number(t.opr_dc).toFixed(1) : '\u2013'}</div><div class="rank-card-stat-label">TeleOp</div></div>` : ''}
-                ${ftcMode ? '' : `<div class="rank-card-stat"><div class="rank-card-stat-val stat-epa${epaCls}">${t.epa != null ? t.epa : '\u2013'}</div><div class="rank-card-stat-label">EPA</div></div>`}
-                ${ftcMode ? '' : `<div class="rank-card-stat"><div class="rank-card-stat-val">${t.ranking_points != null ? t.ranking_points : '\u2013'}</div><div class="rank-card-stat-label">RP</div></div>`}
+                <div class="rank-card-stat"><div class="rank-card-stat-val stat-epa${epaCls}">${t.epa != null ? t.epa : '\u2013'}</div><div class="rank-card-stat-label">EPA</div></div>
+                <div class="rank-card-stat"><div class="rank-card-stat-val">${t.ranking_points != null ? t.ranking_points : '\u2013'}</div><div class="rank-card-stat-label">RP</div></div>
             </div>
         </div>`;
     }).join('');

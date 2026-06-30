@@ -26,7 +26,7 @@ const BattleStation = (() => {
     let _matchStartTime = null;
 
     // ── Helpers ────────────────────────────────────────────
-    function _teamPrefix() { return (typeof isFTCMode === 'function' && isFTCMode()) ? 'ftc' : 'frc'; }
+    function _teamPrefix() { return 'frc'; }
 
     // ── Lexicon ────────────────────────────────────────────
     const LEXICON = {

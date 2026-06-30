@@ -15,7 +15,6 @@ from starlette.responses import Response
 
 from .config import TRUSTED_API_KEYS
 from .routers import events, matches, alliances, teams, storylines
-from .routers import ftc_events, ftc_matches, ftc_alliances
 from .routers import sync, snapshot
 from .routers import auth, passkey
 
@@ -47,13 +46,9 @@ async def lifespan(app: FastAPI):
     if supabase_url and not disable_workers:
         from .workers.match_poller import run_match_poller
         from .workers.event_sync import run_event_sync
-        from .workers.ftc_event_sync import run_ftc_event_sync
-        from .workers.ftc_match_poller import run_ftc_match_poller
 
         tasks.append(asyncio.create_task(run_event_sync(), name="event-sync"))
         tasks.append(asyncio.create_task(run_match_poller(), name="match-poller"))
-        tasks.append(asyncio.create_task(run_ftc_event_sync(), name="ftc-event-sync"))
-        tasks.append(asyncio.create_task(run_ftc_match_poller(), name="ftc-match-poller"))
         tasks.append(asyncio.create_task(_run_cache_cleanup(), name="cache-cleanup"))
         log.info("Ingestion workers started (%d tasks)", len(tasks))
     else:
@@ -105,11 +100,6 @@ _RATE_LIMIT_TRUSTED_HEAVY = 300     # raised from 60
 # Endpoints that fan out to many upstream calls.
 # NOTE: /summary/connections removed — play-by-play fires one request per match
 # with unique team combos; 3-tier cache + inflight.py keeps them cheap after warm-up.
-# NOTE: Patterns are kept specific to FRC paths so FTC routes are never
-# incorrectly bucketed as heavy:
-#   /api/alliances/          → FRC only (avoids /api/ftc/alliances/)
-#   /api/events/world-record → FRC only (avoids /api/ftc/events/world-record/)
-#   /tims-overrides/history  → FRC only (avoids /api/ftc/events/.../opr-history)
 _HEAVY_PATTERNS = {
     "/summary/awards", "/tims-overrides/history",
     "/api/events/world-record", "/api/alliances/", "/storylines/",
@@ -267,12 +257,6 @@ app.include_router(teams.router, prefix="/api/teams", tags=["Teams"])
 
 app.include_router(storylines.router, prefix="/api/storylines", tags=["Storylines"])
 
-# ── FTC API routers ─────────────────────────────────────────
-app.include_router(ftc_events.router, prefix="/api/ftc/events", tags=["FTC Events"])
-app.include_router(ftc_matches.router, prefix="/api/ftc/matches", tags=["FTC Matches"])
-app.include_router(ftc_alliances.router, prefix="/api/ftc/alliances", tags=["FTC Alliances"])
-app.include_router(snapshot.ftc_router, prefix="/api/ftc/events", tags=["FTC Snapshot"])
-
 # ── Sync endpoint ───────────────────────────────────────────
 app.include_router(sync.router, prefix="/api/sync", tags=["Sync"])
 
@@ -325,9 +309,8 @@ async def api_status():
     import asyncio
     from .services.tba_client import get_tba_client
     from .services.frc_client import get_frc_client
-    from .services.ftc_client import get_ftc_client
     from .services.statbotics_client import get_statbotics_client
-    from .services.circuit_breaker import tba_breaker, frc_breaker, ftc_breaker, statbotics_breaker, gatool_breaker
+    from .services.circuit_breaker import tba_breaker, frc_breaker, statbotics_breaker, gatool_breaker
 
     async def check_tba():
         try:
@@ -354,26 +337,16 @@ async def api_status():
         except Exception:
             return False
 
-    async def check_ftc():
-        try:
-            client = get_ftc_client()
-            resp = await client._client().get("/v2.0")
-            return resp.status_code == 200
-        except Exception:
-            return False
-
-    tba_ok, frc_ok, sb_ok, ftc_ok = await asyncio.gather(
-        check_tba(), check_frc(), check_statbotics(), check_ftc()
+    tba_ok, frc_ok, sb_ok = await asyncio.gather(
+        check_tba(), check_frc(), check_statbotics()
     )
     return {
         "tba": tba_ok,
         "frc": frc_ok,
-        "ftc": ftc_ok,
         "statbotics": sb_ok,
         "circuit_breakers": {
             "tba": tba_breaker.state.value,
             "frc": frc_breaker.state.value,
-            "ftc": ftc_breaker.state.value,
             "statbotics": statbotics_breaker.state.value,
             "gatool": gatool_breaker.state.value,
         },

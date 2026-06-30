@@ -25,7 +25,7 @@ function closeMatchHistory() {
 async function launchMatchHistoryFromSelection() {
     if (compareSelection.size !== 1 || !currentEvent) return;
     const teamKey = [...compareSelection][0];
-    const num = parseInt(teamKey.replace(/^(frc|ftc)/, ''), 10);
+    const num = parseInt(teamKey.replace('frc', ''), 10);
     if (!num) return;
 
     const teamInfo = teamsData?.find(t => t.team_key === teamKey);
@@ -39,12 +39,7 @@ async function _launchMatchHistoryShared(num, nick) {
         const body = document.getElementById('mob-util-body');
         if (body) body.innerHTML = '<div class="mob-util-lookup-empty">Loading\u2026</div>';
         try {
-            let perf;
-            if (typeof isFTCMode === 'function' && isFTCMode()) {
-                perf = typeof _buildFtcTeamPerf === 'function' ? _buildFtcTeamPerf(num) : null;
-            } else {
-                perf = await API.teamPerf(currentEvent, num);
-            }
+            const perf = await API.teamPerf(currentEvent, num);
             if (body) {
                 body.innerHTML = '';
                 _renderMobMatchHistory(body, perf, num, nick);
@@ -60,59 +55,11 @@ async function _launchMatchHistoryShared(num, nick) {
     $('match-history-body').innerHTML = '<p class="loading-msg">Loading match history…</p>';
 
     try {
-        if (isFTCMode()) {
-            const perf = _buildFtcTeamPerf(num);
-            renderMatchHistoryPanel(perf, num, nick);
-        } else {
-            const perf = await API.teamPerf(currentEvent, num);
-            renderMatchHistoryPanel(perf, num, nick);
-        }
+        const perf = await API.teamPerf(currentEvent, num);
+        renderMatchHistoryPanel(perf, num, nick);
     } catch (err) {
         $('match-history-body').innerHTML = `<p class="empty">Error: ${err.message}</p>`;
     }
-}
-
-function _buildFtcTeamPerf(teamNum) {
-    const matches = (pbpData && pbpData.matches) || [];
-    const teamMatches = matches.filter(m => {
-        const redTeams = (m.red && m.red.teams) || [];
-        const blueTeams = (m.blue && m.blue.teams) || [];
-        return redTeams.some(t => t.team_number === teamNum) || blueTeams.some(t => t.team_number === teamNum);
-    });
-    let wins = 0, losses = 0, ties = 0, totalScore = 0;
-    const matchList = teamMatches.map(m => {
-        const redTeams = (m.red && m.red.teams) || [];
-        const blueTeams = (m.blue && m.blue.teams) || [];
-        const onRed = redTeams.some(t => t.team_number === teamNum);
-        const myAlliance = onRed ? redTeams : blueTeams;
-        const oppAlliance = onRed ? blueTeams : redTeams;
-        const myScore = onRed ? ((m.red && m.red.score) || 0) : ((m.blue && m.blue.score) || 0);
-        const oppScore = onRed ? ((m.blue && m.blue.score) || 0) : ((m.red && m.red.score) || 0);
-        const result = myScore > oppScore ? 'W' : myScore < oppScore ? 'L' : 'T';
-        if (result === 'W') wins++; else if (result === 'L') losses++; else ties++;
-        totalScore += myScore;
-        const desc = (m.label || m.match_key || '').replace(/Qualification\s*/gi, 'Qual ');
-        return {
-            label: m.label || m.match_key || '',
-            description: desc,
-            allianceScore: myScore,
-            opponentScore: oppScore,
-            allianceColor: onRed ? 'Red' : 'Blue',
-            allianceTeams: myAlliance.filter(t => t.team_number !== teamNum).map(t => t.team_number),
-            opponentTeams: oppAlliance.map(t => t.team_number),
-            alliance_score: myScore,
-            opponent_score: oppScore,
-            result: result,
-            comp_level: m.comp_level || 'qm',
-        };
-    });
-    return {
-        team_number: teamNum,
-        record: { wins, losses, ties },
-        matches_played: teamMatches.length,
-        avg_alliance_score: teamMatches.length > 0 ? Math.round(totalScore / teamMatches.length) : 0,
-        matches: matchList,
-    };
 }
 
 function renderMatchHistoryPanel(perf, teamNum, nick) {
@@ -239,19 +186,10 @@ function lookupTeamFromMatchHistory(teamNum) {
     openLookup();
     $('lookup-title').textContent = `Team Lookup · ${teamNum}`;
     $('lookup-body').innerHTML = '<p class="loading-msg">Loading team data\u2026</p>';
-    if (isFTCMode()) {
-        _buildFtcTeamLookup(teamNum, currentEventYear).then(data => {
-            $('lookup-body').innerHTML = renderFtcTeamStats(data);
-            FTC_API.teamOprHistory(teamNum, currentEventYear).then(h => renderFtcOprChart(h)).catch(() => {});
-        }).catch(err => {
-            $('lookup-body').innerHTML = `<p class="empty">Error: ${err.message}</p>`;
-        });
-    } else {
-        API.teamStats(teamNum, null).then(data => {
-            $('lookup-body').innerHTML = renderTeamStats(data);
-        }).catch(err => {
-            $('lookup-body').innerHTML = `<p class="empty">Error: ${err.message}</p>`;
-        });
-    }
+    API.teamStats(teamNum, null).then(data => {
+        $('lookup-body').innerHTML = renderTeamStats(data);
+    }).catch(err => {
+        $('lookup-body').innerHTML = `<p class="empty">Error: ${err.message}</p>`;
+    });
 }
 

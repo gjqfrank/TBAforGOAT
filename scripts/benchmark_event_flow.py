@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Benchmark: full caster event flow for FRC + FTC.
+"""Benchmark: full caster event flow for FRC.
 
 Simulates a caster loading an event and navigating through all major tabs/actions:
   1. Load event (info + teams + rankings)
@@ -10,11 +10,10 @@ Simulates a caster loading an event and navigating through all major tabs/action
   6. Parallel burst (simulate rapid tab switching)
 
 Usage:
-    python scripts/benchmark_event_flow.py [--frc EVENT] [--ftc EVENT]
+    python scripts/benchmark_event_flow.py [--frc EVENT]
 
 Defaults:
     FRC: env BENCH_FRC_EVENT or auto-detects an active event
-    FTC: env BENCH_FTC_EVENT or 2024ftcftccmp1edis (FTC Worlds Edison)
 """
 from __future__ import annotations
 
@@ -175,90 +174,6 @@ async def benchmark_frc(client: httpx.AsyncClient, event: str):
 
 
 # ═══════════════════════════════════════════════════════════
-#  FTC EVENT FLOW
-# ═══════════════════════════════════════════════════════════
-
-async def benchmark_ftc(client: httpx.AsyncClient, event: str):
-    print(f"\n{'═' * 60}")
-    print(f"  FTC EVENT FLOW BENCHMARK — {event}")
-    print(f"{'═' * 60}\n")
-
-    all_phases: list[PhaseResult] = []
-
-    # ── Phase 1: Load event (cold) ──────────────────────
-    phase = PhaseResult("Phase 1 — Load Event (cold)")
-    phase.results.append(await timed_get(client, f"/ftc/events/{event}/info", "event info"))
-    phase.results.append(await timed_get(client, f"/ftc/events/{event}/teams", "teams + stats"))
-    phase.results.append(await timed_get(client, f"/ftc/events/{event}/fast-rankings", "rankings"))
-    all_phases.append(phase)
-    print_phase(phase)
-
-    # ── Phase 2: Match flow ─────────────────────────────
-    phase = PhaseResult("Phase 2 — Match Flow")
-    phase.results.append(await timed_get(client, f"/ftc/matches/{event}/scores", "fast scores"))
-    phase.results.append(await timed_get(client, f"/ftc/matches/{event}/all", "all matches"))
-    phase.results.append(await timed_get(client, f"/ftc/matches/{event}/playoffs", "playoffs"))
-    all_phases.append(phase)
-    print_phase(phase)
-
-    # ── Phase 3: Summary tab ────────────────────────────
-    phase = PhaseResult("Phase 3 — Summary Tab")
-    phase.results.append(await timed_get(client, f"/ftc/events/{event}/awards", "awards"))
-    phase.results.append(await timed_get(client, f"/ftc/events/{event}/past-awards", "past awards"))
-    phase.results.append(await timed_get(client, f"/ftc/events/{event}/summary/connections?all_time=false", "connections"))
-    all_phases.append(phase)
-    print_phase(phase)
-
-    # ── Phase 4: Team deep-dive ─────────────────────────
-    resp = await client.get(f"{BASE}/api/ftc/events/{event}/teams")
-    teams = resp.json() if resp.status_code == 200 else []
-    team_nums = [t.get("team_number", t.get("number", 0)) for t in teams[:2]]
-
-    phase = PhaseResult("Phase 4 — Team Deep-Dive")
-    for tn in team_nums:
-        phase.results.append(await timed_get(client, f"/ftc/events/team/{tn}", f"team {tn} lookup"))
-    if len(team_nums) >= 2:
-        a, b = team_nums[0], team_nums[1]
-        phase.results.append(await timed_get(client, f"/ftc/matches/head-to-head/{a}/{b}", f"H2H {a} vs {b}"))
-    all_phases.append(phase)
-    print_phase(phase)
-
-    # ── Phase 5: Warm cache re-run ──────────────────────
-    phase = PhaseResult("Phase 5 — Warm Cache Re-Run (phases 1-3)")
-    warm_paths = [
-        (f"/ftc/events/{event}/info", "info (warm)"),
-        (f"/ftc/events/{event}/teams", "teams (warm)"),
-        (f"/ftc/events/{event}/fast-rankings", "rankings (warm)"),
-        (f"/ftc/matches/{event}/scores", "scores (warm)"),
-        (f"/ftc/matches/{event}/all", "all matches (warm)"),
-        (f"/ftc/events/{event}/awards", "awards (warm)"),
-    ]
-    for path, lbl in warm_paths:
-        phase.results.append(await timed_get(client, path, lbl))
-    all_phases.append(phase)
-    print_phase(phase)
-
-    # ── Phase 6: Parallel burst (rapid tab switching) ───
-    burst_paths = [
-        (f"/ftc/events/{event}/info", "info"),
-        (f"/ftc/events/{event}/teams", "teams"),
-        (f"/ftc/events/{event}/fast-rankings", "rankings"),
-        (f"/ftc/matches/{event}/scores", "scores"),
-        (f"/ftc/matches/{event}/all", "all matches"),
-        (f"/ftc/matches/{event}/playoffs", "playoffs"),
-        (f"/ftc/events/{event}/awards", "awards"),
-    ]
-    phase = PhaseResult("Phase 6 — Parallel Burst (7 concurrent)")
-    phase.results = list(await timed_parallel(client, burst_paths))
-    all_phases.append(phase)
-    print_phase(phase)
-
-    # ── Summary ─────────────────────────────────────────
-    _print_summary("FTC", event, all_phases)
-    return all_phases
-
-
-# ═══════════════════════════════════════════════════════════
 #  SUMMARY & MAIN
 # ═══════════════════════════════════════════════════════════
 
@@ -321,11 +236,8 @@ async def find_active_frc_event(client: httpx.AsyncClient) -> str:
 
 
 async def main():
-    parser = argparse.ArgumentParser(description="Benchmark FRC + FTC event flow")
+    parser = argparse.ArgumentParser(description="Benchmark FRC event flow")
     parser.add_argument("--frc", default=os.environ.get("BENCH_FRC_EVENT", ""), help="FRC event key")
-    parser.add_argument("--ftc", default=os.environ.get("BENCH_FTC_EVENT", "2024ftcftccmp1edis"), help="FTC event key")
-    parser.add_argument("--skip-frc", action="store_true", help="Skip FRC benchmark")
-    parser.add_argument("--skip-ftc", action="store_true", help="Skip FTC benchmark")
     args = parser.parse_args()
 
     async with httpx.AsyncClient(timeout=60.0) as client:
@@ -342,12 +254,8 @@ async def main():
         print(f"Server: {BASE}")
         print(f"Date: 2026-04-09")
 
-        if not args.skip_frc:
-            frc_event = args.frc or await find_active_frc_event(client)
-            await benchmark_frc(client, frc_event)
-
-        if not args.skip_ftc:
-            await benchmark_ftc(client, args.ftc)
+        frc_event = args.frc or await find_active_frc_event(client)
+        await benchmark_frc(client, frc_event)
 
 
 if __name__ == "__main__":

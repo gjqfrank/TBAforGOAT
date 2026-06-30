@@ -283,8 +283,7 @@ async function _handleEditorResetToDefaults() {
     if (!_editorTeam) return;
     if (!confirm('Reset all TIMS edits for this team to FIRST defaults? This cannot be undone.')) return;
 
-    const prefix = typeof isFTCMode === 'function' && isFTCMode() ? 'ftc' : 'frc';
-    const teamKey = `${prefix}${_editorTeam}`;
+    const teamKey = `frc${_editorTeam}`;
     const btn = document.getElementById('editor-reset-defaults-btn');
     if (btn) { btn.disabled = true; btn.textContent = 'Resetting…'; }
 
@@ -309,8 +308,7 @@ async function _handleEditorResetToDefaults() {
 // ═══════════════════════════════════════════════════════════
 
 async function saveOverrideData(teamNumber, payload) {
-    const prefix = typeof isFTCMode === 'function' && isFTCMode() ? 'ftc' : 'frc';
-    const teamKey = `${prefix}${teamNumber}`;
+    const teamKey = `frc${teamNumber}`;
 
     // Build the Supabase-compatible payload
     const body = { author_device_id: _getDeviceId() };
@@ -454,8 +452,7 @@ function _findTeamElement(target) {
         const num = parseInt(raw, 10);
         if (num > 0 && num < 100000) {
             // Synthesize a team key and attach it so the rest of the pipeline works
-            const prefix = (typeof competitionMode !== 'undefined' && competitionMode === 'ftc') ? 'ftc' : 'frc';
-            teamNumEl.dataset.teamKey = prefix + num;
+            teamNumEl.dataset.teamKey = 'frc' + num;
             return teamNumEl;
         }
     }
@@ -580,10 +577,7 @@ async function _launchMatchHistoryForTeam(teamKey) {
     if (bodyEl) bodyEl.innerHTML = '<p class="loading-msg">Loading match history…</p>';
 
     try {
-        if (typeof isFTCMode === 'function' && isFTCMode()) {
-            const perf = typeof _buildFtcTeamPerf === 'function' ? _buildFtcTeamPerf(num) : null;
-            if (perf && typeof renderMatchHistoryPanel === 'function') renderMatchHistoryPanel(perf, num, nick);
-        } else if (typeof API !== 'undefined' && API.teamPerf) {
+        if (typeof API !== 'undefined' && API.teamPerf) {
             const perf = await API.teamPerf(currentEvent, num);
             if (typeof renderMatchHistoryPanel === 'function') renderMatchHistoryPanel(perf, num, nick);
         }
@@ -664,7 +658,7 @@ document.addEventListener('keydown', e => {
 function launchEditorFromSelection() {
     if (compareSelection.size !== 1) return;
     const teamKey = [...compareSelection][0];
-    const num = parseInt(teamKey.replace(/^(frc|ftc)/, ''), 10);
+    const num = parseInt(teamKey.replace(/^frc/, ''), 10);
     if (!num) return;
     openEditor(num, 'identity');
 }

@@ -11,83 +11,16 @@
 // 3. ALLIANCE SELECTION
 // ═══════════════════════════════════════════════════════════
 
-/** Wrap a flat FTC alliance array into the object shape renderAlliances expects. */
-function _wrapFtcAlliances(data) {
-    const wrapped = {
-        alliances: data.map(a => ({
-            number: a.number,
-            name: a.name,
-            teams: (a.pick_numbers || []).map(num => ({
-                team_key: `ftc${num}`,
-                team_number: num,
-                nickname: '',
-                avatar: null,
-                opr: 0,
-                epa: null,
-                rank: '-',
-                wins: 0, losses: 0, ties: 0,
-                country: '',
-                rookie_year: null,
-            })),
-            combined_opr: 0,
-            combined_epa: null,
-            playoff_result: null,
-            playoff_type: null,
-            playoff_record: null,
-        })),
-        partnerships: [],
-        max_combined_opr: 0,
-    };
-    if (teamsData) {
-        const nameMap = new Map(teamsData.map(t => [t.team_number, t]));
-        wrapped.alliances.forEach(a => {
-            a.teams.forEach(t => {
-                const td = nameMap.get(t.team_number);
-                if (td) {
-                    t.nickname = td.nickname || '';
-                    t.opr = td.opr || 0;
-                    t.avatar = td.avatar || null;
-                    t.rank = td.rank || '-';
-                    t.wins = td.wins || 0;
-                    t.losses = td.losses || 0;
-                    t.ties = td.ties || 0;
-                    t.country = td.country || '';
-                    t.rookie_year = td.rookie_year || null;
-                }
-            });
-            a.combined_opr = a.teams.reduce((s, t) => s + (parseFloat(t.opr) || 0), 0);
-        });
-        wrapped.max_combined_opr = Math.max(...wrapped.alliances.map(a => a.combined_opr), 0);
-    }
-    // Patch any remaining missing avatars from the FTC avatar map
-    if (_ftcAvatarMap && _ftcAvatarMap.size > 0) {
-        wrapped.alliances.forEach(a => a.teams.forEach(t => {
-            if (!t.avatar) { const url = _ftcAvatarMap.get(t.team_number); if (url) t.avatar = url; }
-        }));
-    }
-    return wrapped;
-}
-
+/** Fetch and render alliance selection data for the current event. */
 async function loadAlliances() {
     if (!currentEvent) return;
     hide('alliance-empty');
     hideInlineError('alliance-error');
     showSkeleton('alliance-loading', 'alliance-loading-status', 'Fetching alliance selections\u2026');
     try {
-        setLoadingStatus('alliance-loading-status', isFTCMode() ? 'Loading alliance selections\u2026' : 'Loading partnerships & EPA data\u2026');
-        const data = await getActiveAPI().alliances(currentEvent);
-
-        // FTC returns a flat array; normalise to the object shape FRC uses
-        if (isFTCMode()) {
-            if (!data || !Array.isArray(data) || data.length === 0) {
-                hideSkeleton('alliance-loading');
-                showInlineError('alliance-error', 'Alliance selections are not available for this event yet.', loadAlliances);
-                return;
-            }
-            allianceData = _wrapFtcAlliances(data);
-        } else {
-            allianceData = data;
-        }
+        setLoadingStatus('alliance-loading-status', 'Loading partnerships & EPA data\u2026');
+        const data = await API.alliances(currentEvent);
+        allianceData = data;
 
         hideSkeleton('alliance-loading');
         renderAlliances(allianceData);
@@ -210,7 +143,7 @@ function renderAlliances(data) {
                     const avatarHtml = allianceShowAvatars
                         ? (t.avatar
                             ? `<img class="alliance-team-avatar" src="${t.avatar}" alt="">`
-                            : `<div class="alliance-team-avatar-placeholder">${isFTCMode() ? 'FTC' : 'FRC'}</div>`)
+                            : `<div class="alliance-team-avatar-placeholder">FRC</div>`)
                         : '';
 
                     const isIntl = highlightForeign && t.country && eventCountry && t.country !== eventCountry;

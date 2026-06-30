@@ -405,9 +405,6 @@ async def gatool_updates(event_key: str):
     try:
         year = int(event_key[:4])
         event_code = event_key[4:]
-        # Strip "ftc" prefix for FTC event keys (e.g. "ftcTRTUQ1" → "TRTUQ1")
-        if event_code.lower().startswith("ftc"):
-            event_code = event_code[3:]
         client = get_gatool_client()
         return await client.get_event_community_updates(year, event_code)
     except HTTPException:

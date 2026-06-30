@@ -16,13 +16,6 @@ async function loadHistory() {
     hide('history-empty');
     hideInlineError('history-error');
 
-    // FTC mode: history temporarily out of order
-    if (isFTCMode()) {
-        hideSkeleton('history-loading');
-        showInlineError('history-error', 'Event history is not yet available for FTC events.');
-        return;
-    }
-
     showSkeleton('history-loading', 'history-loading-status', 'Loading region & event history\u2026');
     hide('history-container');
 
