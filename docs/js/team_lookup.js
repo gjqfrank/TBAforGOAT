@@ -263,58 +263,6 @@ async function loadH2H() {
     }
 }
 
-function _buildFtcH2H(teamA, teamB) {
-    const matches = (pbpData && pbpData.matches) || [];
-    const nickA = teamsData?.find(t => t.team_number === teamA)?.nickname || '';
-    const nickB = teamsData?.find(t => t.team_number === teamB)?.nickname || '';
-    let aWins = 0, bWins = 0, draws = 0, asAllies = 0;
-    const opponentMatches = [], allyMatches = [];
-    matches.forEach(m => {
-        const reds = (m.red_teams || []).map(t => t.team_number || t);
-        const blues = (m.blue_teams || []).map(t => t.team_number || t);
-        const aOnRed = reds.includes(teamA), aOnBlue = blues.includes(teamA);
-        const bOnRed = reds.includes(teamB), bOnBlue = blues.includes(teamB);
-        if (!aOnRed && !aOnBlue) return; // teamA not in this match
-        if (!bOnRed && !bOnBlue) return; // teamB not in this match
-        const sameAlliance = (aOnRed && bOnRed) || (aOnBlue && bOnBlue);
-        const label = m.label || m.match_key || '';
-        if (sameAlliance) {
-            asAllies++;
-            allyMatches.push({ match_label: label, red_score: m.red_score || 0, blue_score: m.blue_score || 0 });
-        } else {
-            const aScore = aOnRed ? (m.red_score || 0) : (m.blue_score || 0);
-            const bScore = bOnRed ? (m.red_score || 0) : (m.blue_score || 0);
-            if (aScore > bScore) aWins++;
-            else if (bScore > aScore) bWins++;
-            else draws++;
-            opponentMatches.push({
-                match_label: label,
-                year: currentEventYear,
-                event_key: currentEvent,
-                team_a_alliance: aOnRed ? 'red' : 'blue',
-                team_b_alliance: bOnRed ? 'red' : 'blue',
-                red_score: m.red_score || 0,
-                blue_score: m.blue_score || 0,
-            });
-        }
-    });
-    return {
-        team_a: teamA,
-        team_b: teamB,
-        team_nicknames: { [teamA]: nickA, [teamB]: nickB },
-        years_checked: [currentEventYear],
-        h2h_summary: {
-            team_a_wins: aWins,
-            team_b_wins: bWins,
-            draws: draws,
-            total_opponent_matches: opponentMatches.length,
-            total_ally_matches: asAllies,
-        },
-        opponent_matches: opponentMatches,
-        ally_matches: allyMatches,
-    };
-}
-
 function toggleH2HRange(allTime) {
     _h2hAllTime = allTime;
     const sides = document.querySelectorAll('.h2h-range-side');

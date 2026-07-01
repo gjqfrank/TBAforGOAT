@@ -11,6 +11,8 @@
 // 1. EVENT SELECTION
 // ═══════════════════════════════════════════════════════════
 
+let _modeSwitchGeneration = 0;
+
 // ── Season events loader ──────────────────────────────────
 async function loadSeasonEvents() {
     const status = $('season-status');
@@ -1143,7 +1145,6 @@ function applyRankChangeIndicators(oldMap) {
 async function buildTeamTable(teams) {
     teamsData = teams;
     _bumpEnrichmentVersion();
-    patchFtcAvatars(teamsData);
     // Apply the current sort so upcoming events (sorted by team_number) render correctly
     sortTeamsData();
     // Render immediately with available data — don't block on TIMS overrides

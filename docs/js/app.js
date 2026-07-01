@@ -514,7 +514,6 @@ function toggleTheme(isLight) {
 // ── Competition Mode (FRC only) ────────────────────────────
 const competitionMode = 'frc';
 function getActiveAPI() { return API; }
-function isFTCMode() { return false; }
 
 function toggleHighlightForeign(on) {
     highlightForeign = on;
