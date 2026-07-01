@@ -54,12 +54,18 @@ async def season_high_scores(year: int = Query(2026)):
 
         try:
             sb = get_statbotics_client()
-            data = await sb.get_season_high_scores(year, limit=10)
+            data = await asyncio.wait_for(
+                sb.get_season_high_scores(year, limit=10),
+                timeout=30,
+            )
 
             # Resolve event keys → friendly names from season data
             event_names: dict[str, str] = {}
             try:
-                events = await event_service.get_season_events(year)
+                events = await asyncio.wait_for(
+                    event_service.get_season_events(year),
+                    timeout=15,
+                )
                 for ev in events:
                     event_names[ev.get("key", "")] = ev.get("short_name") or ev.get("name") or ev.get("key", "")
             except Exception:
@@ -80,7 +86,7 @@ async def season_high_scores(year: int = Query(2026)):
         except Exception:
             if stale:
                 return stale
-            raise
+            return {"matches": [], "teams": []}
     except HTTPException:
         raise
     except Exception as e:
