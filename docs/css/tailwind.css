@@ -21229,6 +21229,26 @@ td .pick-flip-back {
   --gs-team-col-w: 80px;
 }
 
+/* Kill any transform/overflow on ancestors that would break
+   position:sticky on td cells (transform creates a new containing
+   block, making sticky relative to the wrong ancestor). */
+#tab-goatscout.tab-content {
+  animation: none !important;
+  transform: none !important;
+}
+
+#goatscout-container,
+#gs-content {
+  transform: none !important;
+  overflow: visible !important;
+}
+
+.gs-table tbody,
+.gs-table tbody tr {
+  transform: none;
+  overflow: visible;
+}
+
 .gs-table th,
 .gs-table td {
   border: 1px solid var(--border, rgba(255,255,255,.18)) !important;
@@ -21299,7 +21319,7 @@ td .pick-flip-back {
 
 /* Sticky team-number column (left edge) — OPAQUE background, high z-index */
 .gs-sticky-col {
-  position: sticky;
+  position: sticky !important;
   left: 0;
   z-index: 10;
   background-color: #0d0d1a !important;
@@ -21311,7 +21331,6 @@ td .pick-flip-back {
   min-width: var(--gs-team-col-w, 80px);
   max-width: var(--gs-team-col-w, 80px);
   border-right: 2px solid rgba(99, 102, 241, .5) !important;
-  will-change: transform;
 }
 
 /* Team header gets an opaque indigo tint (not see-through) */
@@ -21327,12 +21346,11 @@ td .pick-flip-back {
 
 /* Sticky Meta column — frozen right next to the Team column */
 .gs-meta-sticky {
-  position: sticky;
+  position: sticky !important;
   left: var(--gs-team-col-w, 80px);
   z-index: 10;
   background-color: #0d0d1a !important;
   border-right: 2px solid rgba(99, 102, 241, .5) !important;
-  will-change: transform;
 }
 
 /* Header version of Meta sticky — opaque indigo tint, high z-index */
