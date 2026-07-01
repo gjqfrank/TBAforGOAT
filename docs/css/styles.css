@@ -2560,6 +2560,78 @@ input.input-loading {
 
 .alliance-teams-list { padding: .5rem; }
 
+/* ── GoatScout tab ───────────────────────────────────────── */
+.goatscout-toolbar {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .75rem 0;
+    flex-wrap: wrap;
+}
+.gs-btn {
+    padding: .4rem .8rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+    font-size: .85rem;
+}
+.gs-btn-primary { background: var(--primary); color: #fff; border-color: var(--primary); }
+.gs-btn-active { background: var(--primary-hover); color: #fff; }
+.gs-btn-save { background: var(--success, #22c55e); color: #fff; border-color: var(--success, #22c55e); margin-top: .5rem; }
+.gs-status { font-size: .8rem; color: var(--text-muted); }
+
+.goatscout-empty { padding: 2rem; text-align: center; color: var(--text-muted); }
+
+.gs-list { display: flex; flex-direction: column; gap: .5rem; }
+.gs-team-row {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+}
+.gs-team-header {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .6rem .8rem;
+    cursor: pointer;
+    background: var(--surface);
+}
+.gs-team-num { font-weight: 700; font-size: 1rem; min-width: 3rem; }
+.gs-team-key { color: var(--text-muted); font-size: .8rem; flex: 1; }
+.gs-summary { font-size: .75rem; color: var(--text-muted); }
+.gs-chevron { font-size: .7rem; color: var(--text-muted); }
+
+.gs-metrics { padding: .8rem; }
+.gs-group { margin-bottom: 1rem; }
+.gs-group h4 {
+    font-size: .8rem;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: var(--text-muted);
+    margin: 0 0 .4rem 0;
+}
+.gs-metric-row {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .25rem 0;
+    font-size: .85rem;
+}
+.gs-metric-label { min-width: 220px; color: var(--text-muted); }
+.gs-metric-value { font-weight: 500; }
+.gs-metric-row input {
+    flex: 1;
+    padding: .2rem .4rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg);
+    color: var(--text);
+    font-size: .85rem;
+}
+.gs-metric-row label { min-width: 220px; color: var(--text-muted); }
+
 .alliance-team-row {
     display: flex;
     align-items: center;

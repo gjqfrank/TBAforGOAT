@@ -69,6 +69,21 @@ const API = {
         return resp.json();
     },
 
+    async post(path, body) {
+        const resp = await fetch(`${API_BASE}/api${path}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        if (!resp.ok) {
+            const data = await resp.json().catch(() => ({}));
+            const err = new Error(data.detail || `Request failed (HTTP ${resp.status})`);
+            err.status = resp.status;
+            throw err;
+        }
+        return resp.json();
+    },
+
     // ── Events ──────────────────────────────────────────
     seasonEvents:       (yr, includeOffseason) => API.get(`/events/season/${yr}${includeOffseason ? '?include_offseason=true' : ''}`),
     eventInfo:          (ek) => API.get(`/events/${ek}/info`),
@@ -109,6 +124,14 @@ const API = {
     timsPut:     (teamKey, body) => API.put(`/teams/${teamKey}/tims-overrides`, body),
     timsHistory: (teamKey) => API.get(`/teams/${teamKey}/tims-overrides/history`),
     timsDelete:  (teamKey) => fetch(`${API_BASE}/api/teams/${teamKey}/tims-overrides`, { method: 'DELETE' })
+                     .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))),
+
+    // ── GoatScout ───────────────────────────────────────
+    goatscoutList:   (ek) => API.get(`/goatscout/${ek}`),
+    goatscoutGet:    (ek, tk) => API.get(`/goatscout/${ek}/${tk}`),
+    goatscoutPut:    (ek, tk, body) => API.put(`/goatscout/${ek}/${tk}`, body),
+    goatscoutImport: (ek, body) => API.post(`/goatscout/${ek}/import`, body),
+    goatscoutDelete: (ek, tk) => fetch(`${API_BASE}/api/goatscout/${ek}/${tk}`, { method: 'DELETE' })
                      .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))),
 
     // ── Compare ─────────────────────────────────────────

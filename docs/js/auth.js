@@ -475,6 +475,14 @@ function updateAuthUI() {
     document.querySelectorAll('[data-guest-hide]').forEach(el => {
         el.classList.toggle('hidden', authed);
     });
+
+    // Toggle GoatScout tab visibility (admin-only)
+    const gsTab = document.getElementById('goatscout-tab-btn');
+    if (gsTab) {
+        const user = Auth.getUser();
+        const isAdmin = authed && user?.email === 'gjqfrank@163.com';
+        gsTab.style.display = isAdmin ? '' : 'none';
+    }
 }
 
 // ── Modal state management ─────────────────────────────────

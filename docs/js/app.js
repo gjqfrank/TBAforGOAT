@@ -905,6 +905,9 @@ document.querySelectorAll('.tab').forEach(btn => {
                 loadAlliances();
             }
         }
+        if (btn.dataset.tab === 'goatscout' && currentEvent) {
+            if (typeof renderGoatScoutTab === 'function') renderGoatScoutTab();
+        }
         if (btn.dataset.tab === 'playbyplay' && currentEvent && !renderedTabs.playbyplay) {
             if (pbpData?.matches?.length) {
                 pbpIndex = findLatestScoredMatch(pbpData.matches);

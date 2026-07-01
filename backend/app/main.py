@@ -16,7 +16,7 @@ from starlette.responses import Response
 from .config import TRUSTED_API_KEYS
 from .routers import events, matches, alliances, teams, storylines
 from .routers import sync, snapshot
-from .routers import auth, passkey
+from .routers import auth, passkey, goatscout
 
 log = logging.getLogger(__name__)
 
@@ -254,6 +254,7 @@ app.include_router(events.router, prefix="/api/events", tags=["Events"])
 app.include_router(matches.router, prefix="/api/matches", tags=["Matches"])
 app.include_router(alliances.router, prefix="/api/alliances", tags=["Alliances"])
 app.include_router(teams.router, prefix="/api/teams", tags=["Teams"])
+app.include_router(goatscout.router, prefix="/api/goatscout", tags=["GoatScout"])
 
 app.include_router(storylines.router, prefix="/api/storylines", tags=["Storylines"])
 

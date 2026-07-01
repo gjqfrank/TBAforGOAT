@@ -1,4 +1,4 @@
-﻿-- ═══════════════════════════════════════════════════════════════
+-- ═══════════════════════════════════════════════════════════════
 -- TBAforGOAT — Combined Supabase Schema (migrations 00-14, 16-17, 19)
 -- Skip 15 & 18: Nexus polling (requires Edge Functions + pg_cron)
 -- Run this in Supabase Dashboard -> SQL Editor in your NEW project
@@ -1174,4 +1174,47 @@ CREATE POLICY "passkey_no_direct_write"
     ON passkey_credentials
     FOR ALL
     USING (false);
+
+
+-- ════════════════════════════════════════════════════════════════
+-- GoatScout Data (team scouting metrics per event)
+-- ════════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS goatscout_data (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    team_key TEXT NOT NULL,
+    event_key TEXT NOT NULL,
+    metrics JSONB NOT NULL DEFAULT '{}',
+    author_device_id TEXT NOT NULL,
+    author_name TEXT,
+    is_deleted BOOLEAN NOT NULL DEFAULT false,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_goatscout_team_event_unique
+    ON goatscout_data (team_key, event_key) WHERE NOT is_deleted;
+CREATE INDEX IF NOT EXISTS idx_goatscout_event
+    ON goatscout_data (event_key) WHERE NOT is_deleted;
+
+CREATE OR REPLACE FUNCTION goatscout_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = now();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_goatscout_updated_at ON goatscout_data;
+CREATE TRIGGER trg_goatscout_updated_at
+    BEFORE UPDATE ON goatscout_data
+    FOR EACH ROW EXECUTE FUNCTION goatscout_updated_at();
+
+CREATE TABLE IF NOT EXISTS goatscout_data_history (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    team_key TEXT NOT NULL,
+    event_key TEXT NOT NULL,
+    author_name TEXT,
+    snapshot JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 
