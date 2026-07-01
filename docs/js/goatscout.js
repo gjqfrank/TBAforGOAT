@@ -220,6 +220,14 @@ function renderGoatScoutTable() {
 
     content.innerHTML = html;
 
+    // Dynamically set header row 1 height so row 2's sticky top offset is exact
+    const firstHeaderCell = content.querySelector('.gs-table thead tr:first-child th');
+    if (firstHeaderCell) {
+        const h = firstHeaderCell.offsetHeight;
+        const table = content.querySelector('.gs-table');
+        if (table) table.style.setProperty('--gs-header-row1-h', h + 'px');
+    }
+
     if (_goatscoutEditMode) {
         const saveBtn = document.getElementById('gs-save-all');
         if (saveBtn) saveBtn.addEventListener('click', saveAllGoatScout);

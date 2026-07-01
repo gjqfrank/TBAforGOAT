@@ -21258,23 +21258,28 @@ td .pick-flip-back {
   vertical-align: middle;
 }
 
-/* Header — two rows: group names + metric names */
+/* Header — two rows: group names + metric names.
+   OPAQUE backgrounds are required so sticky headers don't show
+   body content underneath when scrolling.
+   z-index: header (11) > body sticky cols (10) > body cells (0).
+   Header sticky cols (20) > everything. */
 .gs-table thead th {
-  background: rgba(99, 102, 241, .14);
+  background-color: #1a1830 !important;
   color: var(--text, #e5e7eb);
   font-weight: 600;
   position: sticky;
   top: 0;
-  z-index: 2;
+  z-index: 11;
 }
 
 .gs-table thead tr:nth-child(2) th {
-  top: 36px; /* offset for the first header row */
+  top: var(--gs-header-row1-h, 42px);
+  z-index: 11;
 }
 
 /* Group header cells (row 1) — center-aligned, span multiple columns */
 .gs-group-head {
-  background: rgba(99, 102, 241, .22) !important;
+  background-color: #241f3d !important;
   font-size: .78rem;
   letter-spacing: .02em;
   border-bottom: 2px solid rgba(99, 102, 241, .4) !important;
@@ -21309,11 +21314,11 @@ td .pick-flip-back {
 }
 
 .gs-sortable:hover {
-  background: rgba(99, 102, 241, .3) !important;
+  background-color: #2a2548 !important;
 }
 
 .gs-sort-active {
-  background: rgba(99, 102, 241, .35) !important;
+  background-color: #312c55 !important;
   color: #fff;
 }
 
@@ -21336,7 +21341,7 @@ td .pick-flip-back {
 /* Team header gets an opaque indigo tint (not see-through) */
 .gs-table thead .gs-sticky-col {
   background-color: #1a1830 !important;
-  z-index: 12;
+  z-index: 20;
 }
 
 /* When hovered on a row, sticky col highlights with OPAQUE color */
@@ -21355,7 +21360,7 @@ td .pick-flip-back {
 
 /* Header version of Meta sticky — opaque indigo tint, high z-index */
 .gs-table thead .gs-meta-sticky {
-  z-index: 12;
+  z-index: 20;
   background-color: #1a1830 !important;
 }
 
@@ -21461,12 +21466,12 @@ td .pick-flip-back {
 }
 
 [data-theme="light"] .gs-table thead th {
-  background: rgba(99, 102, 241, .1);
+  background-color: #e8eaff !important;
   color: #1a1a2e;
 }
 
 [data-theme="light"] .gs-group-head {
-  background-color: rgba(99, 102, 241, .18) !important;
+  background-color: #d4d6ff !important;
 }
 
 [data-theme="light"] .gs-team-head {
@@ -21508,6 +21513,15 @@ td .pick-flip-back {
 
 [data-theme="light"] .gs-table tbody tr:hover {
   background: rgba(99, 102, 241, .08) !important;
+}
+
+[data-theme="light"] .gs-sortable:hover {
+  background-color: #c8cbf5 !important;
+}
+
+[data-theme="light"] .gs-sort-active {
+  background-color: #b8bced !important;
+  color: #1a1a2e;
 }
 
 [data-theme="light"] .gs-cell-edit input {
