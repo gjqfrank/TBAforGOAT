@@ -981,7 +981,8 @@ async function loadEvent(eventKey) {
                     }
                 }
             });
-        } // end !_snap fallback
+        } // end summary pre-fetch block
+        } // end else (!_snap)
 
     } catch (err) {
         if (btn) { btn.disabled = false; btn.textContent = btn.dataset.origText || 'Load Event'; btn.classList.remove('btn-loading'); }
