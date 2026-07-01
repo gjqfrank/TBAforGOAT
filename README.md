@@ -8,11 +8,11 @@ app_port: 8000
 pinned: false
 ---
 
-# Caster's Tool v3.0
+# TBAforGOAT
 
-A real-time companion app for **FIRST Robotics Competition (FRC)** and **FIRST Tech Challenge (FTC)** broadcasters, commentators, and the FIRST community. Surfaces team stats, alliance breakdowns, playoff brackets, play-by-play data, AI-generated broadcast storylines, live caster notes, and historical context — all at a glance.
+A real-time companion app for **FIRST Robotics Competition (FRC)** broadcasters, commentators, and the FIRST community. Surfaces team stats, alliance breakdowns, playoff brackets, play-by-play data, AI-generated broadcast storylines, live caster notes, and historical context — all at a glance.
 
-Built by **Gürsel & [Team 9020](https://www.thebluealliance.com/team/9020)** for the community.
+Built by **[Team 6907 The G.O.A.T.](https://www.thebluealliance.com/team/6907)** for the community.
 
 ---
 
