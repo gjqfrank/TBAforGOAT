@@ -51,23 +51,30 @@ async def season_high_scores(year: int = Query(2026)):
             payload_cache.write_payload("season_high", str(year), payload)
             return payload
 
-        # 3. Try Statbotics first (with timeout)
-        data = None
-        try:
-            sb = get_statbotics_client()
-            data = await asyncio.wait_for(
-                sb.get_season_high_scores(year, limit=10),
-                timeout=20,
-            )
-        except Exception:
-            data = None
+        # 3. Try Statbotics and TBA in parallel — use whichever succeeds
+        async def _try_statbotics():
+            try:
+                sb = get_statbotics_client()
+                return await asyncio.wait_for(
+                    sb.get_season_high_scores(year, limit=10),
+                    timeout=40,
+                )
+            except Exception:
+                return None
 
-        # 4. If Statbotics failed, fall back to TBA for match scores
-        if not data:
-            data = await asyncio.wait_for(
-                _tba_season_high_scores(year, limit=10),
-                timeout=60,
-            )
+        async def _try_tba():
+            try:
+                return await asyncio.wait_for(
+                    _tba_season_high_scores(year, limit=10),
+                    timeout=60,
+                )
+            except Exception:
+                return None
+
+        sb_data, tba_data = await asyncio.gather(_try_statbotics(), _try_tba())
+
+        # Prefer Statbotics (has EPA), fall back to TBA (match scores only)
+        data = sb_data or tba_data or {"matches": [], "epa_teams": [], "team_names": {}}
 
         # 5. Resolve event names from TBA season data
         if data.get("matches"):
