@@ -152,8 +152,11 @@ async def _ingest_and_build(event_key: str) -> dict:
     Lives behind coalesce() so a cmptx-style burst of cold loaders that all
     arrive in the same second collapses to a single TBA fan-out.
     """
+    from ..config import SUPABASE_URL
     from ..services import ingestion_service
-    if not await ingestion_service.is_ingested(event_key):
+    # Ingestion writes to Supabase — skip it when Supabase isn't configured
+    # and build the snapshot directly from upstream APIs (TBA/FRC) instead.
+    if SUPABASE_URL and not await ingestion_service.is_ingested(event_key):
         await ingestion_service.ingest_event(event_key)
     payload = await _build_snapshot(event_key)
     _write_snapshot(event_key, payload)
