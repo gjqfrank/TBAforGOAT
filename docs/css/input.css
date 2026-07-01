@@ -18037,12 +18037,17 @@ td .pick-flip-back {
 
 .login-toggle-mode {
   display: block;
+  width: 100%;
   text-align: center;
   font-size: .8rem;
   color: var(--text-muted);
   text-decoration: none;
   margin-bottom: .75rem;
   cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: inherit;
 }
 .login-toggle-mode:hover {
   color: var(--text-primary, rgba(255,255,255,.9));

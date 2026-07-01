@@ -517,7 +517,10 @@ function hideLoginModal() {
     const passwordGroup = document.getElementById('password-group');
     if (passwordGroup) passwordGroup.classList.add('hidden');
     const toggleLink = document.getElementById('toggle-mode-link');
-    if (toggleLink) toggleLink.textContent = 'Sign in with password';
+    if (toggleLink) {
+        toggleLink.textContent = 'Sign in with password';
+        toggleLink.dataset.mode = 'otp';
+    }
     // Reset passkey UI
     const passkeyBtn = document.getElementById('passkey-signin-btn');
     const passkeyDivider = document.getElementById('passkey-divider');
