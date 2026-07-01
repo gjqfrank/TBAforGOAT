@@ -2585,97 +2585,119 @@ input.input-loading {
 .goatscout-empty { padding: 2rem; text-align: center; color: var(--text-muted); }
 
 .gs-table-wrap {
-    overflow-x: auto;
-    overflow-y: visible;
-    max-height: 70vh;
-    overflow-y: auto;
-    border: 1px solid var(--border);
+    overflow: auto;
+    max-height: 75vh;
+    border: 2px solid var(--border, #ccc);
     border-radius: 8px;
-    position: relative;
 }
 .gs-table {
     border-collapse: collapse;
-    font-size: .83rem;
+    font-size: .82rem;
     width: 100%;
 }
 .gs-table th,
 .gs-table td {
-    border: 1px solid var(--border);
+    border: 1px solid var(--border, #ccc);
+    padding: .65rem .85rem;
+    white-space: nowrap;
 }
+[data-theme="dark"] .gs-table th,
+[data-theme="dark"] .gs-table td {
+    border-color: rgba(255,255,255,0.12);
+}
+
+/* ── Header ── */
 .gs-table thead th {
     position: sticky;
     top: 0;
     z-index: 3;
-    background: var(--surface);
-    padding: .6rem .8rem;
+    background: var(--surface, #f5f5f5);
     text-align: center;
     font-weight: 700;
-    white-space: nowrap;
 }
-.gs-table thead .gs-sticky-col {
-    left: 0;
-    z-index: 4;
-    text-align: left;
-    min-width: 200px;
+.gs-table thead tr:nth-child(2) th {
+    top: 2.2em;
+    font-size: .72rem;
+    font-family: monospace;
+    color: var(--text-muted);
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    min-width: 32px;
+    height: 120px;
+    padding: .5rem .2rem;
 }
-.gs-table tbody .gs-sticky-col {
+.gs-table .gs-sticky-col {
     position: sticky;
     left: 0;
     z-index: 2;
-    background: var(--bg);
+    background: var(--bg, #fff);
 }
-.gs-table th.gs-team-col {
-    min-width: 80px;
-    max-width: 110px;
-    position: relative;
+.gs-table thead .gs-sticky-col {
+    z-index: 5;
+    background: var(--surface, #f5f5f5);
+}
+.gs-team-head {
+    text-align: center;
+    font-size: .85rem;
+    min-width: 60px;
+}
+.gs-group-head {
+    background: var(--primary, #3b82f6);
+    color: #fff;
+    font-size: .72rem;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    padding: .5rem .6rem;
+    border-color: rgba(255,255,255,0.2) !important;
+}
+
+/* ── Team column (first col) ── */
+.gs-team-name {
+    text-align: center;
+    font-weight: 700;
     font-size: .9rem;
     color: var(--text);
+    min-width: 60px;
 }
-.gs-table td.gs-sticky-col.gs-metric-name {
-    text-align: left;
-    padding: .5rem .8rem;
-    color: var(--text-muted);
-    white-space: nowrap;
-    font-family: monospace;
-    font-size: .78rem;
-}
+
+/* ── Data cells ── */
 .gs-table td.gs-cell {
     text-align: center;
-    padding: .5rem .7rem;
     color: var(--text);
-    white-space: nowrap;
 }
 .gs-table td.gs-cell-edit {
     text-align: center;
-    padding: .25rem .3rem;
+    padding: .3rem .25rem;
 }
 .gs-table td.gs-cell-edit input {
     width: 100%;
-    min-width: 50px;
-    max-width: 80px;
-    padding: .25rem .35rem;
-    border: 1px solid var(--border);
+    min-width: 45px;
+    max-width: 70px;
+    padding: .3rem .35rem;
+    border: 1px solid var(--border, #ccc);
     border-radius: 4px;
-    background: var(--bg);
+    background: var(--bg, #fff);
     color: var(--text);
     font-size: .78rem;
     text-align: center;
 }
 .gs-table td.gs-cell-edit input:focus {
-    border-color: var(--primary);
+    border-color: var(--primary, #3b82f6);
     outline: none;
-    box-shadow: 0 0 0 2px rgba(59, 130, 246, .15);
+    box-shadow: 0 0 0 2px rgba(59,130,246,.15);
 }
-.gs-group-row td.gs-group-label {
-    background: var(--surface);
-    font-weight: 700;
-    font-size: .75rem;
-    text-transform: uppercase;
-    letter-spacing: .05em;
-    color: var(--primary);
-    padding: .55rem .8rem;
-    text-align: left;
-}
+
+/* ── Zebra striping ── */
+.gs-table tbody tr.gs-row-odd td { background: rgba(0,0,0,0.025); }
+[data-theme="dark"] .gs-table tbody tr.gs-row-odd td { background: rgba(255,255,255,0.03); }
+.gs-table tbody tr.gs-row-odd td.gs-sticky-col { background: rgba(0,0,0,0.04); }
+[data-theme="dark"] .gs-table tbody tr.gs-row-odd td.gs-sticky-col { background: rgba(255,255,255,0.05); }
+
+/* ── Hover ── */
+.gs-table tbody tr:hover > td { background-color: rgba(59,130,246,0.08); }
+.gs-table tbody tr:hover > td.gs-sticky-col { background-color: rgba(59,130,246,0.12); }
+
+/* ── Misc ── */
 .gs-remove-team {
     margin-left: .3rem;
     color: #ef4444;
@@ -2685,43 +2707,22 @@ input.input-loading {
     line-height: 1;
 }
 .gs-remove-team:hover { color: #dc2626; }
-.gs-add-col { color: var(--text-muted); font-size: 1.1rem; }
-.gs-cell-empty { background: var(--surface); }
-.gs-empty-val {
-    color: var(--text-muted);
-    opacity: 0.35;
-    font-size: .8rem;
-}
+.gs-add-col { color: var(--text-muted); font-size: 1.1rem; text-align: center; }
+.gs-empty-val { color: var(--text-muted); opacity: 0.3; }
 .gs-save-bar {
     display: flex;
     justify-content: center;
     padding: 1rem 0;
-    position: sticky;
-    bottom: 0;
-    background: var(--bg);
 }
 
-/* ── GoatScout sortable metric names ─────────────────────── */
-.gs-metric-head { font-size: .8rem; color: var(--text-muted); }
+/* ── Sortable metric headers ── */
 .gs-sortable {
     cursor: pointer;
-    transition: color .15s, background-color .15s;
+    transition: background-color .15s;
     user-select: none;
 }
-.gs-sortable:hover {
-    color: var(--primary);
-    background-color: rgba(59, 130, 246, .06);
-}
-.gs-sort-active {
-    color: var(--primary);
-    font-weight: 700;
-}
-.gs-table tbody tr:hover > td.gs-cell {
-    background-color: rgba(0,0,0,0.03);
-}
-[data-theme="dark"] .gs-table tbody tr:hover > td.gs-cell {
-    background-color: rgba(255,255,255,0.04);
-}
+.gs-sortable:hover { background-color: rgba(59,130,246,0.12); }
+.gs-sort-active { color: var(--primary, #3b82f6); font-weight: 700; }
 
 .alliance-team-row {
     display: flex;

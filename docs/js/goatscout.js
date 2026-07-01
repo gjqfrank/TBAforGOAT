@@ -154,31 +154,44 @@ function renderGoatScoutTable() {
         return parseInt(a.team_key.replace('frc','')) - parseInt(b.team_key.replace('frc',''));
     }) : _gsSortedTeams();
 
-    let html = '<div class="gs-table-wrap"><table class="gs-table"><thead><tr>';
-    html += '<th class="gs-sticky-col gs-metric-head">Metric</th>';
-    sorted.forEach(entry => {
-        const num = entry.team_key.replace('frc', '');
-        if (_goatscoutEditMode) {
-            html += `<th class="gs-team-col" data-team-col="${entry.team_key}">${num}<span class="gs-remove-team" data-remove="${entry.team_key}" title="Remove">×</span></th>`;
-        } else {
-            html += `<th class="gs-team-col">${num}</th>`;
-        }
+    let html = '<div class="gs-table-wrap"><table class="gs-table">';
+
+    // ── Header: two rows (group names + metric names) ──
+    html += '<thead>';
+    html += '<tr>';
+    html += '<th class="gs-sticky-col gs-team-head" rowspan="2">Team</th>';
+    GOATSCOUT_METRIC_GROUPS.forEach(group => {
+        html += `<th class="gs-group-head" colspan="${group.metrics.length}">${group.label}</th>`;
     });
     if (_goatscoutEditMode) {
-        html += '<th class="gs-team-col gs-add-col">+</th>';
+        html += '<th class="gs-add-col" rowspan="2">+</th>';
     }
-    html += '</tr></thead><tbody>';
-
+    html += '</tr>';
+    html += '<tr>';
     GOATSCOUT_METRIC_GROUPS.forEach(group => {
-        html += `<tr class="gs-group-row"><td class="gs-sticky-col gs-group-label" colspan="${sorted.length + (_goatscoutEditMode ? 2 : 1)}">${group.label}</td></tr>`;
         group.metrics.forEach(m => {
-            const isSortable = !_goatscoutEditMode;
             const isActive = _gsSortMetric === m;
             const arrow = isActive ? (_gsSortDir === 'asc' ? ' \u2191' : ' \u2193') : '';
-            const sortCls = isSortable ? 'gs-sortable' : '';
+            const sortCls = !_goatscoutEditMode ? 'gs-sortable' : '';
             const activeCls = isActive ? 'gs-sort-active' : '';
-            html += `<tr><td class="gs-sticky-col gs-metric-name ${sortCls} ${activeCls}" ${isSortable ? `data-sort="${m}"` : ''}>${m}${arrow}</td>`;
-            sorted.forEach(entry => {
+            html += `<th class="gs-metric-col ${sortCls} ${activeCls}" ${!_goatscoutEditMode ? `data-sort="${m}"` : ''} title="${m}">${m}${arrow}</th>`;
+        });
+    });
+    html += '</tr>';
+    html += '</thead><tbody>';
+
+    // ── Team rows ──
+    sorted.forEach((entry, idx) => {
+        const num = entry.team_key.replace('frc', '');
+        const zebra = idx % 2 === 0 ? 'gs-row-even' : 'gs-row-odd';
+        html += `<tr class="${zebra}">`;
+        if (_goatscoutEditMode) {
+            html += `<td class="gs-sticky-col gs-team-name">${num}<span class="gs-remove-team" data-remove="${entry.team_key}" title="Remove">\u00d7</span></td>`;
+        } else {
+            html += `<td class="gs-sticky-col gs-team-name">${num}</td>`;
+        }
+        GOATSCOUT_METRIC_GROUPS.forEach(group => {
+            group.metrics.forEach(m => {
                 const val = (entry.metrics || {})[m] ?? '';
                 if (_goatscoutEditMode) {
                     html += `<td class="gs-cell-edit"><input type="text" data-team="${entry.team_key}" data-metric="${m}" value="${_esc(val)}" /></td>`;
@@ -187,11 +200,8 @@ function renderGoatScoutTable() {
                     html += `<td class="gs-cell">${display}</td>`;
                 }
             });
-            if (_goatscoutEditMode) {
-                html += '<td class="gs-cell-empty"></td>';
-            }
-            html += '</tr>';
         });
+        html += '</tr>';
     });
 
     html += '</tbody></table></div>';
