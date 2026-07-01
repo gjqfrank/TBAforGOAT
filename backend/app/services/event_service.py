@@ -173,7 +173,7 @@ async def get_season_events(year: int, include_offseason: bool = False) -> list[
                 ),
             })
         events.sort(key=lambda e: (e["name"] or "").lower())
-        return events
+        return await _inject_custom_events(events, year)
 
     # ── Fallback: TBA ───────────────────────────────────────
     client = get_tba_client()
@@ -213,7 +213,134 @@ async def get_season_events(year: int, include_offseason: bool = False) -> list[
         })
 
     events.sort(key=lambda e: (e["name"] or "").lower())
+    return await _inject_custom_events(events, year)
+
+
+async def _inject_custom_events(events: list[dict], year: int) -> list[dict]:
+    """Inject custom (placeholder) events when TBA doesn't have them yet.
+
+    For each custom event, check if TBA already has a matching event.  If
+    TBA has it, the real TBA event stays (or is added) and the placeholder
+    is skipped.  If TBA doesn't have it, the placeholder is appended.
+    """
+    from .custom_events import (
+        SANYA_EVENT_KEY,
+        check_tba_for_sanya,
+        season_entry_from_custom,
+    )
+
+    if year != 2026:
+        return events
+
+    existing_keys = {e["key"] for e in events}
+
+    # ── Sanya check ─────────────────────────────────────
+    # If TBA already has a Sanya event (matched by name/city), make sure
+    # it's in the list and skip the placeholder.
+    sanya_in_tba = False
+    for e in events:
+        name = (e.get("name", "") + " " + e.get("city", "")).lower()
+        if "sanya" in name:
+            sanya_in_tba = True
+            break
+
+    if not sanya_in_tba:
+        # Double-check via TBA directly (the season list might be from
+        # Supabase cache which could be stale)
+        try:
+            tba = get_tba_client()
+            tba_match = await check_tba_for_sanya(tba)
+            if tba_match:
+                from .custom_events import tba_event_to_season_entry
+                entry = tba_event_to_season_entry(tba_match)
+                if entry["key"] not in existing_keys:
+                    events.append(entry)
+                sanya_in_tba = True
+        except Exception as exc:
+            log.debug("Sanya TBA check failed: %s", exc)
+
+    if not sanya_in_tba and SANYA_EVENT_KEY not in existing_keys:
+        events.append(season_entry_from_custom(SANYA_EVENT_KEY))
+
+    events.sort(key=lambda e: (e["name"] or "").lower())
     return events
+
+
+async def _get_custom_event_teams(
+    event_key: str, year: int, team_numbers: list[int],
+) -> list[dict]:
+    """Fetch team info for a custom (placeholder) event.
+
+    Since the event doesn't exist on TBA, we fetch each team's basic info
+    from TBA individually and return a list matching the normal event
+    teams format (without rank/record/OPR since no matches have been played).
+    """
+    from .avatar_cache import get_avatars
+    from .tba_client import get_tba_client
+
+    tba = get_tba_client()
+    team_keys = [f"frc{n}" for n in team_numbers]
+
+    # Fetch all team info in parallel (limited concurrency)
+    sem = asyncio.Semaphore(10)
+
+    async def _fetch_one(num: int):
+        async with sem:
+            try:
+                return await asyncio.wait_for(tba.get_team(f"frc{num}"), timeout=10)
+            except Exception:
+                return None
+
+    infos = await asyncio.gather(*[_fetch_one(n) for n in team_numbers])
+
+    # Fetch avatars (fire-and-forget cache warm; use cached results)
+    try:
+        avatar_map = await asyncio.wait_for(get_avatars(team_keys, year), timeout=30)
+    except Exception:
+        avatar_map = {}
+
+    result = []
+    for num, info in zip(team_numbers, infos):
+        if not info:
+            result.append({
+                "team_number": num,
+                "team_key": f"frc{num}",
+                "nickname": f"Team {num}",
+                "school_name": "",
+                "city": "",
+                "state_prov": "",
+                "country": "",
+                "rookie_year": None,
+                "website": "",
+                "avatar": avatar_map.get(f"frc{num}", ""),
+                "rank": None,
+                "record": None,
+                "matches_played": 0,
+                "epa": None,
+                "opr": None,
+            })
+            continue
+
+        result.append({
+            "team_number": num,
+            "team_key": f"frc{num}",
+            "nickname": info.get("nickname", f"Team {num}"),
+            "school_name": info.get("school_name", ""),
+            "city": info.get("city", ""),
+            "state_prov": info.get("state_prov", ""),
+            "country": info.get("country", ""),
+            "rookie_year": info.get("rookie_year"),
+            "website": info.get("website", ""),
+            "avatar": avatar_map.get(f"frc{num}", ""),
+            "rank": None,
+            "record": None,
+            "matches_played": 0,
+            "epa": None,
+            "opr": None,
+        })
+
+    result.sort(key=lambda t: t["team_number"])
+    return result
 
 
 async def _safe(coro):
@@ -334,6 +461,27 @@ async def get_event_info(event_key: str) -> dict:
 
 
 async def _get_event_info_impl(event_key: str) -> dict:
+    # ── Custom (placeholder) event ─────────────────────────
+    from .custom_events import is_custom_event, get_custom_event
+    if is_custom_event(event_key):
+        ev = get_custom_event(event_key)
+        start = ev.get("start_date", "")
+        end = ev.get("end_date", "")
+        return {
+            "key": ev["key"],
+            "name": ev.get("name", ""),
+            "year": 2026,
+            "city": ev.get("city", ""),
+            "state_prov": ev.get("state_prov", ""),
+            "country": ev.get("country", ""),
+            "event_type_string": ev.get("event_type_string", ""),
+            "event_type": ev.get("event_type", -1),
+            "start_date": start,
+            "end_date": end,
+            "status": _event_status(start, end),
+            "region": ev.get("region", ""),
+        }
+
     # ── Try Supabase first ──────────────────────────────────
     try:
         row = await read_event(event_key)
@@ -414,6 +562,11 @@ async def get_event_teams_with_stats(event_key: str) -> list[dict]:
 async def _get_event_teams_with_stats_impl(event_key: str) -> list[dict]:
     """Inner implementation — always called at most once per key."""
     year = int(event_key[:4]) if event_key[:4].isdigit() else date.today().year
+
+    # ── Custom (placeholder) event ─────────────────────────
+    from .custom_events import is_custom_event, SANYA_TEAM_NUMBERS
+    if is_custom_event(event_key):
+        return await _get_custom_event_teams(event_key, year, SANYA_TEAM_NUMBERS)
 
     # ── Try Supabase first ──────────────────────────────────
     try:

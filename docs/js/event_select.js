@@ -36,6 +36,17 @@ async function loadSeasonEvents() {
         status.textContent = '';
         const badge = $('season-count-badge');
         if (badge) badge.textContent = `${seasonEventsRaw.length} events`;
+
+        // Background-fetch from API to pick up custom events & TBA updates
+        API.seasonEvents(seasonYear).then(events => {
+            if (Array.isArray(events) && events.length) {
+                seasonEventsRaw = events;
+                populateSeasonFilters();
+                filterSeasonEvents();
+                const badge2 = $('season-count-badge');
+                if (badge2) badge2.textContent = `${seasonEventsFiltered.length} events`;
+            }
+        }).catch(() => {});
     } catch (err) {
         try {
             seasonEventsRaw = await API.seasonEvents(seasonYear);
@@ -100,8 +111,8 @@ function filterSeasonEvents() {
     const search = ($('season-search').value || '').toLowerCase().trim();
 
     seasonEventsFiltered = seasonEventsRaw.filter(e => {
-        // Hide offseason events unless the setting is on
-        if (!showOffseason && e.event_type === 99) return false;
+        // Hide offseason events unless the setting is on (custom events always visible)
+        if (!showOffseason && e.event_type === 99 && !e.key.includes('cnsanya')) return false;
         if (region && e.region !== region) return false;
         if (eventType && e.event_type_string !== eventType) return false;
         if (week !== '') {
