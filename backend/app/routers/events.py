@@ -35,31 +35,42 @@ async def world_record():
 
 @router.get("/season-high-scores")
 async def season_high_scores(year: int = Query(2026)):
-    """Top match scores and top EPA teams for a season (from Statbotics)."""
+    """Top match scores and top EPA teams for a season."""
     try:
-        # 1. Disk cache — Statbotics data changes infrequently
+        # 1. Disk cache
         cached = payload_cache.read_payload("season_high", str(year), 600)
         if cached:
             return cached
 
-        # Keep stale data on hand so we can fall back if Statbotics is down
         stale = payload_cache.read_stale("season_high", str(year))
 
-        # 2. Supabase cache — survives process restarts / cold starts
+        # 2. Supabase cache
         sb_row = await get_season_record(f"frc_season_high_{year}")
         if sb_row and sb_row.get("payload"):
             payload = sb_row["payload"]
             payload_cache.write_payload("season_high", str(year), payload)
             return payload
 
+        # 3. Try Statbotics first (with timeout)
+        data = None
         try:
             sb = get_statbotics_client()
             data = await asyncio.wait_for(
                 sb.get_season_high_scores(year, limit=10),
-                timeout=30,
+                timeout=20,
+            )
+        except Exception:
+            data = None
+
+        # 4. If Statbotics failed, fall back to TBA for match scores
+        if not data:
+            data = await asyncio.wait_for(
+                _tba_season_high_scores(year, limit=10),
+                timeout=60,
             )
 
-            # Resolve event keys → friendly names from season data
+        # 5. Resolve event names from TBA season data
+        if data.get("matches"):
             event_names: dict[str, str] = {}
             try:
                 events = await asyncio.wait_for(
@@ -71,26 +82,102 @@ async def season_high_scores(year: int = Query(2026)):
             except Exception:
                 pass
 
-            for m in data.get("matches", []):
+            for m in data["matches"]:
                 ek = m.get("event_key", "")
                 m["event_name"] = event_names.get(ek, ek)
-                # Pretty match label from key (e.g. 2026caclv_sf1m1 → SF1-1)
                 raw = m.get("key", "")
                 m["match_label"] = _parse_match_label(raw)
 
-            payload_cache.write_payload("season_high", str(year), data)
-            asyncio.create_task(
-                set_season_record(f"frc_season_high_{year}", year, "frc_season_high_scores", data)
-            )
-            return data
-        except Exception:
-            if stale:
-                return stale
-            return {"matches": [], "teams": []}
+        payload_cache.write_payload("season_high", str(year), data)
+        asyncio.create_task(
+            set_season_record(f"frc_season_high_{year}", year, "frc_season_high_scores", data)
+        )
+        return data
     except HTTPException:
         raise
     except Exception as e:
         raise_api_error(e, fallback_detail=f"Could not load season high scores for {year}.")
+
+
+async def _tba_season_high_scores(year: int, limit: int = 10) -> dict:
+    """Fetch top match scores directly from TBA (fallback when Statbotics is unavailable)."""
+    import time
+    from datetime import date as dt_date
+
+    tba = get_tba_client()
+    events = await tba.get_events_by_year(year)
+    if not events:
+        return {"matches": [], "epa_teams": [], "team_names": {}}
+
+    now = time.time()
+    started = []
+    for ev in events:
+        etype = ev.get("event_type", 99)
+        if etype > 5:
+            continue
+        start_date = ev.get("start_date", "")
+        if not start_date:
+            continue
+        try:
+            y, m, d = map(int, start_date.split("-"))
+            if dt_date(y, m, d) <= dt_date.today():
+                started.append(ev)
+        except (ValueError, TypeError):
+            continue
+
+    if not started:
+        return {"matches": [], "epa_teams": [], "team_names": {}}
+
+    sem = asyncio.Semaphore(6)
+
+    async def _scan_event(ev: dict) -> list:
+        async with sem:
+            matches = await tba.get_event_matches(ev["key"])
+        results = []
+        if not matches:
+            return results
+        event_key = ev["key"]
+        event_name = ev.get("short_name") or ev.get("name") or event_key
+        for m in matches:
+            alliances = m.get("alliances", {})
+            for color in ("red", "blue"):
+                a = alliances.get(color) or {}
+                s = a.get("score", -1)
+                if s is None or s < 0:
+                    continue
+                team_keys = a.get("team_keys", [])
+                team_nums = []
+                for tk in team_keys:
+                    try:
+                        team_nums.append(int(str(tk).replace("frc", "")))
+                    except (ValueError, TypeError):
+                        pass
+                results.append({
+                    "key": m.get("key", ""),
+                    "score": s,
+                    "event_key": event_key,
+                    "event_name": event_name,
+                    "teams": team_nums,
+                })
+        return results
+
+    all_scores = []
+    results = await asyncio.gather(
+        *[_scan_event(ev) for ev in started],
+        return_exceptions=True,
+    )
+    for r in results:
+        if isinstance(r, list):
+            all_scores.extend(r)
+
+    all_scores.sort(key=lambda x: x["score"], reverse=True)
+    top_matches = all_scores[:limit]
+
+    return {
+        "matches": top_matches,
+        "epa_teams": [],
+        "team_names": {},
+    }
 
 
 @router.get("/season-most-wins")
