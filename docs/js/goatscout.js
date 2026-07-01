@@ -161,7 +161,8 @@ function renderGoatScoutTable() {
     html += '<tr>';
     html += '<th class="gs-sticky-col gs-team-head" rowspan="2">Team</th>';
     GOATSCOUT_METRIC_GROUPS.forEach(group => {
-        html += `<th class="gs-group-head" colspan="${group.metrics.length}">${group.label}</th>`;
+        const metaCls = group.label === 'Meta' ? 'gs-meta-sticky' : '';
+        html += `<th class="gs-group-head ${metaCls}" colspan="${group.metrics.length}">${group.label}</th>`;
     });
     if (_goatscoutEditMode) {
         html += '<th class="gs-add-col" rowspan="2">+</th>';
@@ -169,12 +170,13 @@ function renderGoatScoutTable() {
     html += '</tr>';
     html += '<tr>';
     GOATSCOUT_METRIC_GROUPS.forEach(group => {
+        const metaCls = group.label === 'Meta' ? 'gs-meta-sticky' : '';
         group.metrics.forEach(m => {
             const isActive = _gsSortMetric === m;
             const arrow = isActive ? (_gsSortDir === 'asc' ? ' \u2191' : ' \u2193') : '';
             const sortCls = !_goatscoutEditMode ? 'gs-sortable' : '';
             const activeCls = isActive ? 'gs-sort-active' : '';
-            html += `<th class="gs-metric-col ${sortCls} ${activeCls}" ${!_goatscoutEditMode ? `data-sort="${m}"` : ''} title="${m}">${m}${arrow}</th>`;
+            html += `<th class="gs-metric-col ${sortCls} ${activeCls} ${metaCls}" ${!_goatscoutEditMode ? `data-sort="${m}"` : ''} title="${m}">${m}${arrow}</th>`;
         });
     });
     html += '</tr>';
@@ -191,13 +193,14 @@ function renderGoatScoutTable() {
             html += `<td class="gs-sticky-col gs-team-name">${num}</td>`;
         }
         GOATSCOUT_METRIC_GROUPS.forEach(group => {
+            const metaCls = group.label === 'Meta' ? 'gs-meta-sticky' : '';
             group.metrics.forEach(m => {
                 const val = (entry.metrics || {})[m] ?? '';
                 if (_goatscoutEditMode) {
-                    html += `<td class="gs-cell-edit"><input type="text" data-team="${entry.team_key}" data-metric="${m}" value="${_esc(val)}" /></td>`;
+                    html += `<td class="gs-cell-edit ${metaCls}"><input type="text" data-team="${entry.team_key}" data-metric="${m}" value="${_esc(val)}" /></td>`;
                 } else {
                     const display = val ? _esc(val) : '<span class="gs-empty-val">\u2014</span>';
-                    html += `<td class="gs-cell">${display}</td>`;
+                    html += `<td class="gs-cell ${metaCls}">${display}</td>`;
                 }
             });
         });

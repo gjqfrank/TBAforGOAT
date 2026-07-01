@@ -21223,6 +21223,7 @@ td .pick-flip-back {
   font-size: .8rem;
   font-family: 'JetBrains Mono', ui-monospace, monospace;
   table-layout: fixed;
+  --gs-team-col-w: 80px;
 }
 
 .gs-table th,
@@ -21297,17 +21298,39 @@ td .pick-flip-back {
 .gs-sticky-col {
   position: sticky;
   left: 0;
-  z-index: 3;
+  z-index: 4;
   background: var(--surface, rgba(20,20,35,.96)) !important;
   font-weight: 700;
   font-size: .85rem;
   color: var(--text, #e5e7eb);
   white-space: nowrap !important;
-  min-width: 70px;
+  width: var(--gs-team-col-w, 80px);
+  min-width: var(--gs-team-col-w, 80px);
+  max-width: var(--gs-team-col-w, 80px);
 }
 
 /* When hovered on a row, sticky col also highlights */
 .gs-table tbody tr:hover .gs-sticky-col {
+  background: rgba(99, 102, 241, .18) !important;
+}
+
+/* Sticky Meta column — frozen right next to the Team column */
+.gs-meta-sticky {
+  position: sticky;
+  left: var(--gs-team-col-w, 80px);
+  z-index: 4;
+  background: var(--surface, rgba(20,20,35,.96)) !important;
+}
+
+/* Header version of Meta sticky — needs to stay above body rows but
+   coordinate with the sticky thead. Same z-index as .gs-sticky-col. */
+.gs-table thead .gs-meta-sticky {
+  z-index: 5;
+  background: rgba(99, 102, 241, .28) !important;
+}
+
+/* When row is hovered, the Meta sticky cell highlights too */
+.gs-table tbody tr:hover .gs-meta-sticky {
   background: rgba(99, 102, 241, .18) !important;
 }
 
@@ -21423,6 +21446,14 @@ td .pick-flip-back {
 [data-theme="light"] .gs-sticky-col {
   background: #fff !important;
   color: #1a1a2e;
+}
+
+[data-theme="light"] .gs-meta-sticky {
+  background: #fff !important;
+}
+
+[data-theme="light"] .gs-table thead .gs-meta-sticky {
+  background: rgba(99, 102, 241, .22) !important;
 }
 
 [data-theme="light"] .gs-row-even {
