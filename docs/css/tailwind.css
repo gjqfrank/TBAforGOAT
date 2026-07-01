@@ -21138,6 +21138,318 @@ td .pick-flip-back {
 }
 
 /* ═══════════════════════════════════════════════════════════
+   GoatScout tab — table with visible grid lines, wrapping headers
+   NOTE: !important on borders overrides Tailwind Preflight
+   (tailwind.css line 125: border-width:0 on all elements)
+   ═══════════════════════════════════════════════════════════ */
+
+.goatscout-toolbar {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  padding: .75rem 0;
+  flex-wrap: wrap;
+}
+
+.gs-btn {
+  padding: .45rem .9rem;
+  border: 1px solid var(--border, rgba(255,255,255,.12)) !important;
+  border-radius: 8px;
+  background: var(--surface, rgba(255,255,255,.04));
+  color: var(--text, #e5e7eb);
+  font-size: .82rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background .15s, border-color .15s;
+}
+
+.gs-btn:hover {
+  background: rgba(99, 102, 241, .12);
+  border-color: var(--primary, #6366f1) !important;
+}
+
+.gs-btn-primary {
+  background: var(--primary, #6366f1);
+  color: #fff;
+  border-color: var(--primary, #6366f1) !important;
+}
+
+.gs-btn-primary:hover {
+  background: #4f46e5;
+}
+
+.gs-btn-active {
+  background: rgba(99, 102, 241, .2);
+  border-color: var(--primary, #6366f1) !important;
+}
+
+.gs-btn-save {
+  background: #10b981;
+  color: #fff;
+  border-color: #10b981 !important;
+}
+
+.gs-btn-save:hover {
+  background: #059669;
+}
+
+.gs-status {
+  font-size: .78rem;
+  color: var(--text-muted, #94a3b8);
+  margin-left: auto;
+}
+
+.goatscout-empty {
+  padding: 2rem;
+  text-align: center;
+  color: var(--text-muted, #94a3b8);
+  font-size: .9rem;
+}
+
+/* Scrollable wrapper so wide tables don't break layout */
+.gs-table-wrap {
+  overflow: auto;
+  max-height: 75vh;
+  border: 1px solid var(--border, rgba(255,255,255,.14)) !important;
+  border-radius: 8px;
+  background: var(--surface, rgba(0,0,0,.2));
+}
+
+/* The table itself — visible grid lines via !important */
+.gs-table {
+  border-collapse: collapse;
+  width: max-content;
+  min-width: 100%;
+  font-size: .8rem;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  table-layout: fixed;
+}
+
+.gs-table th,
+.gs-table td {
+  border: 1px solid var(--border, rgba(255,255,255,.18)) !important;
+  padding: .7rem .9rem !important;
+  white-space: nowrap;
+  text-align: center;
+  vertical-align: middle;
+}
+
+/* Header — two rows: group names + metric names */
+.gs-table thead th {
+  background: rgba(99, 102, 241, .14);
+  color: var(--text, #e5e7eb);
+  font-weight: 600;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.gs-table thead tr:nth-child(2) th {
+  top: 36px; /* offset for the first header row */
+}
+
+/* Group header cells (row 1) — center-aligned, span multiple columns */
+.gs-group-head {
+  background: rgba(99, 102, 241, .22) !important;
+  font-size: .78rem;
+  letter-spacing: .02em;
+  border-bottom: 2px solid rgba(99, 102, 241, .4) !important;
+}
+
+/* Team column header (rowspan=2, sticky) */
+.gs-team-head {
+  background: rgba(99, 102, 241, .28) !important;
+  font-size: .82rem;
+}
+
+/* Metric column headers — WRAP long names onto multiple lines */
+.gs-metric-col {
+  white-space: normal !important;
+  word-break: break-word !important;
+  overflow-wrap: break-word !important;
+  hyphens: auto;
+  max-width: 110px;
+  min-width: 70px;
+  line-height: 1.25;
+  font-size: .72rem;
+  font-weight: 500;
+  height: auto;
+  padding: .55rem .35rem !important;
+}
+
+/* Sortable column header — clickable */
+.gs-sortable {
+  cursor: pointer;
+  user-select: none;
+  transition: background .12s;
+}
+
+.gs-sortable:hover {
+  background: rgba(99, 102, 241, .3) !important;
+}
+
+.gs-sort-active {
+  background: rgba(99, 102, 241, .35) !important;
+  color: #fff;
+}
+
+/* Sticky team-number column (left edge) */
+.gs-sticky-col {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  background: var(--surface, rgba(20,20,35,.96)) !important;
+  font-weight: 700;
+  font-size: .85rem;
+  color: var(--text, #e5e7eb);
+  white-space: nowrap !important;
+  min-width: 70px;
+}
+
+/* When hovered on a row, sticky col also highlights */
+.gs-table tbody tr:hover .gs-sticky-col {
+  background: rgba(99, 102, 241, .18) !important;
+}
+
+/* Team rows — zebra striping */
+.gs-row-even {
+  background: rgba(255, 255, 255, .015);
+}
+
+.gs-row-odd {
+  background: rgba(255, 255, 255, .04);
+}
+
+.gs-table tbody tr:hover {
+  background: rgba(99, 102, 241, .1) !important;
+}
+
+/* Team name cell (sticky col body) */
+.gs-team-name {
+  text-align: left !important;
+  position: relative;
+}
+
+.gs-remove-team {
+  margin-left: .4rem;
+  color: var(--red, #ef4444);
+  cursor: pointer;
+  font-weight: 700;
+  font-size: .9rem;
+  opacity: .6;
+}
+
+.gs-remove-team:hover {
+  opacity: 1;
+}
+
+/* Data cells */
+.gs-cell {
+  color: var(--text, #e5e7eb);
+}
+
+.gs-empty-val {
+  color: var(--text-muted, #64748b);
+  opacity: .5;
+}
+
+/* Edit-mode input cells */
+.gs-cell-edit {
+  padding: .25rem !important;
+}
+
+.gs-cell-edit input {
+  width: 100%;
+  min-width: 60px;
+  padding: .3rem .4rem;
+  border: 1px solid var(--border, rgba(255,255,255,.15)) !important;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, .25);
+  color: var(--text, #e5e7eb);
+  font-size: .76rem;
+  font-family: inherit;
+  text-align: center;
+}
+
+.gs-cell-edit input:focus {
+  outline: none;
+  border-color: var(--primary, #6366f1) !important;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, .25);
+}
+
+/* Add-column header (edit mode) */
+.gs-add-col {
+  background: rgba(16, 185, 129, .14) !important;
+  color: #10b981;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+/* Save bar at the bottom of edit mode */
+.gs-save-bar {
+  display: flex;
+  justify-content: center;
+  padding: 1rem 0;
+  position: sticky;
+  bottom: 0;
+  background: var(--surface, rgba(0,0,0,.4));
+  backdrop-filter: blur(8px);
+  z-index: 5;
+}
+
+/* Light-mode overrides for GoatScout */
+[data-theme="light"] .gs-table th,
+[data-theme="light"] .gs-table td {
+  border-color: rgba(0, 0, 0, .15) !important;
+}
+
+[data-theme="light"] .gs-table-wrap {
+  background: #fff;
+}
+
+[data-theme="light"] .gs-table thead th {
+  background: rgba(99, 102, 241, .1);
+  color: #1a1a2e;
+}
+
+[data-theme="light"] .gs-group-head {
+  background: rgba(99, 102, 241, .18) !important;
+}
+
+[data-theme="light"] .gs-team-head {
+  background: rgba(99, 102, 241, .22) !important;
+}
+
+[data-theme="light"] .gs-sticky-col {
+  background: #fff !important;
+  color: #1a1a2e;
+}
+
+[data-theme="light"] .gs-row-even {
+  background: rgba(0, 0, 0, .015);
+}
+
+[data-theme="light"] .gs-row-odd {
+  background: rgba(0, 0, 0, .04);
+}
+
+[data-theme="light"] .gs-table tbody tr:hover {
+  background: rgba(99, 102, 241, .08) !important;
+}
+
+[data-theme="light"] .gs-cell-edit input {
+  background: rgba(0, 0, 0, .03);
+  color: #1a1a2e;
+  border-color: rgba(0, 0, 0, .15) !important;
+}
+
+[data-theme="light"] .gs-btn {
+  background: rgba(0, 0, 0, .03);
+  color: #1a1a2e;
+  border-color: rgba(0, 0, 0, .12) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
        UX ENHANCEMENTS — Toast / Back-to-top / Presentation /
        Empty State / Tab Indicators
        ═══════════════════════════════════════════════════════════ */
