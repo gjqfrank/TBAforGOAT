@@ -44,7 +44,6 @@ const GOATSCOUT_METRIC_GROUPS = [
 
 let _goatscoutData = [];
 let _goatscoutEditMode = false;
-let _goatscoutExpandedTeam = null;
 
 function isGoatScoutAdmin() {
     const user = (typeof Auth !== 'undefined') ? Auth.getUser() : null;
@@ -73,6 +72,7 @@ async function renderGoatScoutTab() {
         <div class="goatscout-toolbar">
             <button id="gs-import-btn" class="gs-btn gs-btn-primary">Import CSV</button>
             <button id="gs-edit-toggle" class="gs-btn">Edit Mode</button>
+            <button id="gs-add-team-btn" class="gs-btn" style="display:none">+ Add Team</button>
             <input type="file" id="gs-file-input" accept=".csv" style="display:none" />
             <span id="gs-status" class="gs-status"></span>
         </div>
@@ -85,10 +85,13 @@ async function renderGoatScoutTab() {
     document.getElementById('gs-file-input').addEventListener('change', handleGoatScoutCsvImport);
     document.getElementById('gs-edit-toggle').addEventListener('click', () => {
         _goatscoutEditMode = !_goatscoutEditMode;
-        document.getElementById('gs-edit-toggle').classList.toggle('gs-btn-active', _goatscoutEditMode);
-        document.getElementById('gs-edit-toggle').textContent = _goatscoutEditMode ? 'Exit Edit' : 'Edit Mode';
-        renderGoatScoutList();
+        const btn = document.getElementById('gs-edit-toggle');
+        btn.classList.toggle('gs-btn-active', _goatscoutEditMode);
+        btn.textContent = _goatscoutEditMode ? 'Exit Edit' : 'Edit Mode';
+        document.getElementById('gs-add-team-btn').style.display = _goatscoutEditMode ? '' : 'none';
+        renderGoatScoutTable();
     });
+    document.getElementById('gs-add-team-btn').addEventListener('click', handleAddTeamColumn);
 
     await loadGoatScoutData();
 }
@@ -98,100 +101,141 @@ async function loadGoatScoutData() {
     if (status) status.textContent = 'Loading…';
     try {
         _goatscoutData = await API.goatscoutList(currentEvent);
-        renderGoatScoutList();
+        renderGoatScoutTable();
         if (status) status.textContent = `${_goatscoutData.length} teams`;
     } catch (e) {
         if (status) status.textContent = `Error: ${e.message}`;
         _goatscoutData = [];
-        renderGoatScoutList();
+        renderGoatScoutTable();
     }
 }
 
-function renderGoatScoutList() {
+function renderGoatScoutTable() {
     const content = document.getElementById('gs-content');
     if (!content) return;
 
     if (!_goatscoutData.length) {
-        content.innerHTML = '<p class="goatscout-empty">No GoatScout data yet. Import a CSV or edit manually.</p>';
+        content.innerHTML = '<p class="goatscout-empty">No GoatScout data yet. Import a CSV or click Edit Mode to add teams manually.</p>';
         return;
     }
 
-    const rows = _goatscoutData.map(entry => {
-        const teamNum = entry.team_key.replace('frc', '');
-        const metrics = entry.metrics || {};
-        const isExpanded = _goatscoutExpandedTeam === entry.team_key;
+    const sorted = [..._goatscoutData].sort((a, b) => {
+        const na = parseInt(a.team_key.replace('frc', ''));
+        const nb = parseInt(b.team_key.replace('frc', ''));
+        return na - nb;
+    });
 
-        const metricHtml = isExpanded ? GOATSCOUT_METRIC_GROUPS.map(group => {
-            const cells = group.metrics.map(m => {
-                const val = metrics[m] ?? '';
+    let html = '<div class="gs-table-wrap"><table class="gs-table"><thead><tr>';
+    html += '<th class="gs-sticky-col">Metric</th>';
+    sorted.forEach(entry => {
+        const num = entry.team_key.replace('frc', '');
+        if (_goatscoutEditMode) {
+            html += `<th class="gs-team-col" data-team-col="${entry.team_key}">${num}<span class="gs-remove-team" data-remove="${entry.team_key}" title="Remove">×</span></th>`;
+        } else {
+            html += `<th class="gs-team-col">${num}</th>`;
+        }
+    });
+    if (_goatscoutEditMode) {
+        html += '<th class="gs-team-col gs-add-col">+</th>';
+    }
+    html += '</tr></thead><tbody>';
+
+    GOATSCOUT_METRIC_GROUPS.forEach(group => {
+        html += `<tr class="gs-group-row"><td class="gs-sticky-col gs-group-label" colspan="${sorted.length + (_goatscoutEditMode ? 2 : 1)}">${group.label}</td></tr>`;
+        group.metrics.forEach(m => {
+            html += `<tr><td class="gs-sticky-col gs-metric-name">${m}</td>`;
+            sorted.forEach(entry => {
+                const val = (entry.metrics || {})[m] ?? '';
                 if (_goatscoutEditMode) {
-                    return `<div class="gs-metric-row"><label>${m}</label><input type="text" data-team="${entry.team_key}" data-metric="${m}" value="${_esc(val)}" /></div>`;
+                    html += `<td class="gs-cell-edit"><input type="text" data-team="${entry.team_key}" data-metric="${m}" value="${_esc(val)}" /></td>`;
+                } else {
+                    html += `<td class="gs-cell">${_esc(val) || '—'}</td>`;
                 }
-                return `<div class="gs-metric-row"><span class="gs-metric-label">${m}</span><span class="gs-metric-value">${_esc(val) || '—'}</span></div>`;
-            }).join('');
-            return `<div class="gs-group"><h4>${group.label}</h4>${cells}</div>`;
-        }).join('') : '';
-
-        const summary = metrics.sessions ? `${metrics.sessions} sessions` : '';
-        const expandedEdit = isExpanded && _goatscoutEditMode
-            ? `<button class="gs-btn gs-btn-save" data-save="${entry.team_key}">Save</button>`
-            : '';
-
-        return `
-            <div class="gs-team-row ${isExpanded ? 'gs-expanded' : ''}" data-team="${entry.team_key}">
-                <div class="gs-team-header" data-toggle="${entry.team_key}">
-                    <span class="gs-team-num">${teamNum}</span>
-                    <span class="gs-team-key">${entry.team_key}</span>
-                    <span class="gs-summary">${summary}</span>
-                    <span class="gs-chevron">${isExpanded ? '▼' : '▶'}</span>
-                </div>
-                ${isExpanded ? `<div class="gs-metrics">${metricHtml}${expandedEdit}</div>` : ''}
-            </div>
-        `;
-    }).join('');
-
-    content.innerHTML = `<div class="gs-list">${rows}</div>`;
-
-    content.querySelectorAll('[data-toggle]').forEach(el => {
-        el.addEventListener('click', () => {
-            const tk = el.dataset.toggle;
-            _goatscoutExpandedTeam = _goatscoutExpandedTeam === tk ? null : tk;
-            renderGoatScoutList();
+            });
+            if (_goatscoutEditMode) {
+                html += '<td class="gs-cell-empty"></td>';
+            }
+            html += '</tr>';
         });
     });
 
-    content.querySelectorAll('[data-save]').forEach(el => {
-        el.addEventListener('click', async () => {
-            const tk = el.dataset.save;
-            await saveGoatScoutTeam(tk);
+    html += '</tbody></table></div>';
+
+    if (_goatscoutEditMode) {
+        html += '<div class="gs-save-bar"><button id="gs-save-all" class="gs-btn gs-btn-save">Save All Changes</button></div>';
+    }
+
+    content.innerHTML = html;
+
+    if (_goatscoutEditMode) {
+        const saveBtn = document.getElementById('gs-save-all');
+        if (saveBtn) saveBtn.addEventListener('click', saveAllGoatScout);
+        content.querySelectorAll('[data-remove]').forEach(el => {
+            el.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const tk = el.dataset.remove;
+                _goatscoutData = _goatscoutData.filter(d => d.team_key !== tk);
+                renderGoatScoutTable();
+            });
         });
-    });
+    }
 }
 
-async function saveGoatScoutTeam(teamKey) {
-    const inputs = document.querySelectorAll(`input[data-team="${teamKey}"]`);
-    const metrics = {};
-    inputs.forEach(inp => { metrics[inp.dataset.metric] = inp.value; });
-
-    const user = Auth.getUser();
-    const body = {
-        metrics,
-        author_device_id: localStorage.getItem('casters_device_id') || 'web',
-        author_name: user?.user_metadata?.name || user?.email || 'Unknown',
-    };
+async function saveAllGoatScout() {
+    const inputs = document.querySelectorAll('.gs-table input[data-team]');
+    const byTeam = {};
+    inputs.forEach(inp => {
+        const tk = inp.dataset.team;
+        if (!byTeam[tk]) byTeam[tk] = {};
+        byTeam[tk][inp.dataset.metric] = inp.value;
+    });
 
     const status = document.getElementById('gs-status');
     if (status) status.textContent = 'Saving…';
-    try {
-        await API.goatscoutPut(currentEvent, teamKey, body);
-        const entry = _goatscoutData.find(d => d.team_key === teamKey);
-        if (entry) entry.metrics = metrics;
-        else _goatscoutData.push({ team_key: teamKey, event_key: currentEvent, metrics });
-        if (status) status.textContent = 'Saved';
-        renderGoatScoutList();
-    } catch (e) {
-        if (status) status.textContent = `Error: ${e.message}`;
+
+    let saved = 0;
+    let errors = 0;
+    const user = Auth.getUser();
+    const deviceId = localStorage.getItem('casters_device_id') || 'web';
+    const authorName = user?.user_metadata?.name || user?.email || 'Unknown';
+
+    for (const [teamKey, metrics] of Object.entries(byTeam)) {
+        try {
+            await API.goatscoutPut(currentEvent, teamKey, {
+                metrics,
+                author_device_id: deviceId,
+                author_name: authorName,
+            });
+            const entry = _goatscoutData.find(d => d.team_key === teamKey);
+            if (entry) entry.metrics = metrics;
+            saved++;
+        } catch (e) {
+            errors++;
+        }
     }
+
+    if (status) status.textContent = `Saved ${saved} teams${errors ? `, ${errors} errors` : ''}`;
+    _goatscoutEditMode = false;
+    const btn = document.getElementById('gs-edit-toggle');
+    if (btn) {
+        btn.classList.toggle('gs-btn-active', false);
+        btn.textContent = 'Edit Mode';
+    }
+    const addBtn = document.getElementById('gs-add-team-btn');
+    if (addBtn) addBtn.style.display = 'none';
+    await loadGoatScoutData();
+}
+
+function handleAddTeamColumn() {
+    const num = prompt('Enter team number:');
+    if (!num || !/^\d+$/.test(num.trim())) return;
+    const teamKey = `frc${num.trim()}`;
+    if (_goatscoutData.find(d => d.team_key === teamKey)) {
+        alert('Team already exists in the table.');
+        return;
+    }
+    _goatscoutData.push({ team_key: teamKey, event_key: currentEvent, metrics: {} });
+    renderGoatScoutTable();
 }
 
 async function handleGoatScoutCsvImport(e) {
