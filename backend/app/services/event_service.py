@@ -138,7 +138,7 @@ async def get_season_events(year: int, include_offseason: bool = False) -> list[
         log.warning("Supabase events read failed for %d: %s", year, e)
         sb_rows = []
 
-    if sb_rows:
+    if sb_rows and len(sb_rows) >= 20:
         # When including offseason, only exclude truly junk types (-1, 100)
         exclude = {100, -1} if include_offseason else _EXCLUDE_TYPES
         events = []
