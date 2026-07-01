@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>About - Caster's Tool</title>
+    <title>About - TBAforGOAT</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -197,17 +197,17 @@
         </a>
 
         <div class="about-hero">
-            <h1>Caster's Tool</h1>
+            <h1>TBAforGOAT</h1>
             <div class="about-tagline">Events at a glance!</div>
             <span class="about-version">v2.0</span>
         </div>
 
         <!-- ── What is it ──────────────────────────────── -->
         <div class="about-section">
-            <h2>What is Caster's Tool?</h2>
+            <h2>What is TBAforGOAT?</h2>
             <p>
-                A real-time companion app for <strong>FIRST Robotics Competition</strong> and <strong>FIRST Tech Challenge</strong> broadcasters and commentators.
-                It surfaces team stats, alliance breakdowns, playoff brackets, play-by-play data, AI-generated storylines, live caster notes, and historical context — 
+                A real-time companion app for <strong>FIRST Robotics Competition</strong> broadcasters and commentators.
+                It surfaces team stats, alliance breakdowns, playoff brackets, play-by-play data, AI-generated storylines, live caster notes, and historical context —
                 everything a caster needs at a glance!
             </p>
         </div>
@@ -220,7 +220,7 @@
             </p>
             <ul>
                 <li><strong>Supabase-backed persistence</strong> — 14 tables with delta-sync triggers, JSONB merge functions, and partial indexes</li>
-                <li><strong>Background workers</strong> — event_sync (120s) and match_poller (5s) for both FRC and FTC</li>
+                <li><strong>Background workers</strong> — event_sync (120s) and match_poller (5s) for FRC</li>
                 <li><strong>Realtime WebSocket</strong> — live push updates for event_teams and matches (no polling)</li>
                 <li><strong>Circuit breaker + deadlock retry</strong> — resilient to 5xx outages and concurrent write conflicts</li>
                 <li><strong>Email OTP login</strong> — magic-link auth via Supabase GoTrue with glassmorphic account popover</li>
@@ -378,7 +378,7 @@
         <div class="about-section">
             <h2>Data Sources</h2>
             <p>
-                Caster's Tool pulls from multiple external APIs to provide comprehensive FRC and FTC data:
+                TBAforGOAT pulls from multiple external APIs to provide comprehensive FRC data:
             </p>
             <ul>
                 <li><strong><a href="https://www.thebluealliance.com" target="_blank" rel="noopener">The Blue Alliance (TBA)</a></strong>:
@@ -389,10 +389,6 @@
                     EPA (Expected Points Added) ratings and match win predictions.</li>
                 <li><strong><a href="https://gatool.org" target="_blank" rel="noopener">GATool</a></strong>:
                     Community-sourced team updates and sponsor data for Play by Play.</li>
-                <li><strong><a href="https://ftc-events.firstinspires.org/services/API" target="_blank" rel="noopener">FIRST FTC Events API</a></strong>:
-                    FTC event lists, teams, matches, alliances, and awards.</li>
-                <li><strong><a href="https://api.ftcscout.org" target="_blank" rel="noopener">FTCScout</a></strong>:
-                    FTC OPR data and team statistics.</li>
                 <li><strong><a href="https://www.anthropic.com" target="_blank" rel="noopener">Anthropic Claude</a></strong>:
                     AI-powered broadcast storyline generation (optional — requires API key).</li>
             </ul>
@@ -412,7 +408,7 @@
             <div class="credits-row">
                 <div class="credit-card">
                     <h3>Built by</h3>
-                    <p>Gürsel &amp; <a href="https://www.thebluealliance.com/team/9020" target="_blank" rel="noopener">Team 9020</a> for the FIRST community.</p>
+                    <p>Gürsel &amp; <a href="https://www.thebluealliance.com/team/6907" target="_blank" rel="noopener">Team 6907 The G.O.A.T.</a> for the FIRST community.</p>
                 </div>
                 <div class="credit-card">
                     <h3>Powered by</h3>
@@ -426,7 +422,7 @@
                 </div>
                 <div class="credit-card">
                     <h3>Open Source</h3>
-                    <p><a href="https://github.com/kleium/casters-tool" target="_blank" rel="noopener">github.com/kleium/casters-tool</a></p>
+                    <p><a href="https://github.com/gjqfrank/TBAforGOAT" target="_blank" rel="noopener">github.com/gjqfrank/TBAforGOAT</a></p>
                 </div>
             </div>
         </div>
@@ -434,7 +430,7 @@
 
     <footer class="site-footer">
         <div class="footer-top">
-            <span>Caster's Tool</span>
+            <span>TBAforGOAT</span>
             <span class="footer-sep">·</span>
             <span class="footer-version">v2.0</span>
         </div>

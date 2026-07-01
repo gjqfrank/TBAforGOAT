@@ -70,7 +70,7 @@ log = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth/passkey", tags=["passkey"])
 
 # ── Config ───────────────────────────────────────────────────────────────
-RP_NAME   = os.environ.get("PASSKEY_RP_NAME",   "Caster's Tool")
+RP_NAME   = os.environ.get("PASSKEY_RP_NAME",   "TBAforGOAT")
 RP_ID     = os.environ.get("PASSKEY_RP_ID",     "")
 ORIGIN    = os.environ.get("PASSKEY_ORIGIN",    "")
 

@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════
-   db.js — Offline-first IndexedDB data layer for Caster's Tool
+   db.js — Offline-first IndexedDB data layer for TBAforGOAT
    
    Vanilla Promise wrapper around the raw IndexedDB API.
    No external dependencies.
@@ -35,7 +35,7 @@
 const DB = (() => {
     'use strict';
 
-    const DB_NAME    = 'casters_tool_db';
+    const DB_NAME    = 'tbaforgoat_db';
     const DB_VERSION = 2;
 
     let _db = null;

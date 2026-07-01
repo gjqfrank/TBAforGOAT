@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════
-   sync.js — Network Sync Manager for Caster's Tool
+   sync.js — Network Sync Manager for TBAforGOAT
 
    Pulls delta payloads from POST /api/sync and pushes them
    into IndexedDB via DB.upsertRows().  Pushes local edits

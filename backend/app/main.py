@@ -1,4 +1,4 @@
-"""FRC Caster's Tool — FastAPI application."""
+"""TBAforGOAT — FastAPI application."""
 import asyncio
 import logging
 import os
@@ -72,7 +72,7 @@ async def lifespan(app: FastAPI):
             pass
 
 
-app = FastAPI(title="FRC Caster's Tool", version="1.2.0", lifespan=lifespan)
+app = FastAPI(title="TBAforGOAT", version="1.2.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

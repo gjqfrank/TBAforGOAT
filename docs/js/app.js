@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════
-   app.js — FRC Caster's Tool UI Controller
+   app.js — TBAforGOAT UI Controller
    ═══════════════════════════════════════════════════════════ */
 
 // ── Toast notification system ──────────────────────────────

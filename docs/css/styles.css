@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════
-   FRC Caster's Tool — Premium Dark Theme v2
+   TBAforGOAT — Premium Dark Theme v2
    ═══════════════════════════════════════════════════════════ */
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
@@ -5696,11 +5696,11 @@ tr:hover .compare-cb,
     opacity: .35;
 }
 
-.team-9020 {
+.team-6907 {
     transition: var(--transition);
     cursor: default;
 }
-.team-9020:hover {
+.team-6907:hover {
     background: linear-gradient(135deg, #fbbf24, #e30a17);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
