@@ -1,3 +1,13 @@
+---
+title: TBAforGOAT
+emoji: 🏆
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+app_port: 8000
+pinned: false
+---
+
 # Caster's Tool v3.0
 
 A real-time companion app for **FIRST Robotics Competition (FRC)** and **FIRST Tech Challenge (FTC)** broadcasters, commentators, and the FIRST community. Surfaces team stats, alliance breakdowns, playoff brackets, play-by-play data, AI-generated broadcast storylines, live caster notes, and historical context — all at a glance.
