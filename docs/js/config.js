@@ -10,4 +10,4 @@
 ═══════════════════════════════════════════════════════════ */
 
 // Backend API base URL — empty string means same-origin (local dev)
-window.API_BASE = '';
+window.API_BASE = 'https://gjqfrank-tbaforgoat.hf.space';
