@@ -84,6 +84,9 @@ async def upsert_goatscout(event_key: str, team_key: str, body: GoatScoutBody):
                 "author_device_id": body.author_device_id,
                 "is_deleted": False,
             }
+            if body.author_name:
+                row["author_name"] = body.author_name
+            resp = await sb.table("goatscout_data").update(row).eq("id", existing.data[0]["id"]).execute()
         else:
             row = {
                 "team_key": team_key,
@@ -92,11 +95,9 @@ async def upsert_goatscout(event_key: str, team_key: str, body: GoatScoutBody):
                 "author_device_id": body.author_device_id,
                 "is_deleted": False,
             }
-
-        if body.author_name:
-            row["author_name"] = body.author_name
-
-        resp = await sb.table("goatscout_data").upsert(row).execute()
+            if body.author_name:
+                row["author_name"] = body.author_name
+            resp = await sb.table("goatscout_data").upsert(row).execute()
         saved = resp.data[0] if resp.data else row
 
         # Write history log
@@ -146,8 +147,10 @@ async def import_goatscout(event_key: str, body: GoatScoutImportBody):
                     "team_key": team_key,
                     "event_key": event_key,
                     "metrics": merged,
+                    "author_device_id": existing.data[0].get("author_device_id") or entry.get("author_device_id", "csv-import"),
                     "is_deleted": False,
                 }
+                resp = await sb.table("goatscout_data").update(row).eq("id", existing.data[0]["id"]).execute()
             else:
                 row = {
                     "team_key": team_key,
@@ -156,11 +159,10 @@ async def import_goatscout(event_key: str, body: GoatScoutImportBody):
                     "author_device_id": entry.get("author_device_id", "csv-import"),
                     "is_deleted": False,
                 }
+                if entry.get("author_name"):
+                    row["author_name"] = entry["author_name"]
+                resp = await sb.table("goatscout_data").upsert(row).execute()
 
-            if entry.get("author_name"):
-                row["author_name"] = entry["author_name"]
-
-            resp = await sb.table("goatscout_data").upsert(row).execute()
             if resp.data:
                 results.append(resp.data[0])
 

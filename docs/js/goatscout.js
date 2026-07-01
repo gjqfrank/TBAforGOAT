@@ -6,6 +6,11 @@ const GOATSCOUT_ADMIN_EMAIL = 'gjqfrank@163.com';
 
 const GOATSCOUT_METRIC_GROUPS = [
     { label: 'Meta', metrics: ['sessions'] },
+    { label: 'Pre-Scout', metrics: [
+        '状态', '照片', '车高', '最大容量', 'Shooter',
+        '过坡', 'Hood', 'Intake', '自动爬升', '手动爬升',
+        '自动', '过 trench', '更新',
+    ]},
     { label: 'Start Position', metrics: [
         'start_trenchFront', 'start_trenchRide', 'start_trenchBack',
         'start_bumpFront', 'start_hub',
