@@ -1,10 +1,14 @@
 """Team lookup endpoints — stats, highest stage, head-to-head, TIMS overrides."""
 from typing import List, Optional
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import Response
 from pydantic import BaseModel
 from ..services import team_service
 from ..services.error_utils import raise_api_error
 from ..services.supabase_client import get_supabase
+from ..services.avatar_cache import get_avatars
+from ..services.tba_client import get_tba_client
+import asyncio
 
 router = APIRouter()
 
@@ -46,6 +50,23 @@ class NoteUpdateBody(BaseModel):
     match_key: Optional[str] = None
     event_key: Optional[str] = None
     category: Optional[str] = None
+
+
+@router.get("/{team_number}/avatar")
+async def get_team_avatar(team_number: int, year: int = Query(2026)):
+    """Return a team's avatar as a PNG image."""
+    team_key = f"frc{team_number}"
+    avatars = await asyncio.wait_for(
+        get_avatars([team_key], year),
+        timeout=15,
+    )
+    data_uri = avatars.get(team_key)
+    if not data_uri or not data_uri.startswith("data:image/png;base64,"):
+        raise HTTPException(status_code=404, detail="Avatar not found")
+    import base64
+    b64_data = data_uri.split(",", 1)[1]
+    png_bytes = base64.b64decode(b64_data)
+    return Response(content=png_bytes, media_type="image/png")
 
 
 @router.get("/awards-summary")

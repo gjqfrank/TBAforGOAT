@@ -1564,6 +1564,21 @@ document.addEventListener('keydown', (e) => {
 
 fetchWorldRecord();
 
+// Load team 6907 avatar as brand icon
+(async function loadBrandAvatar() {
+    try {
+        const img = document.getElementById('brand-icon-svg');
+        const fallback = document.getElementById('brand-icon-fallback');
+        if (!img) return;
+        const resp = await fetch(`${API_BASE}/api/teams/6907/avatar`);
+        if (!resp.ok) return;
+        const blob = await resp.blob();
+        img.src = URL.createObjectURL(blob);
+        img.style.display = '';
+        if (fallback) fallback.style.display = 'none';
+    } catch (e) { /* keep SVG fallback */ }
+})();
+
 
 // ═══════════════════════════════════════════════════════════
 // 1. EVENT SELECTION (extracted to docs/js/event_select.js)
