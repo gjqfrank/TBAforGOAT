@@ -20643,6 +20643,19 @@ td .pick-flip-back {
   display: none;
 }
 
+.login-toggle-mode {
+  display: block;
+  text-align: center;
+  font-size: .8rem;
+  color: var(--text-muted);
+  text-decoration: none;
+  margin-bottom: .75rem;
+  cursor: pointer;
+}
+.login-toggle-mode:hover {
+  color: var(--text-primary, rgba(255,255,255,.9));
+}
+
 .login-btn {
   display: flex;
   align-items: center;

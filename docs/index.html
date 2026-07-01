@@ -1166,8 +1166,8 @@
             <div id="login-state" class="login-state">
                 <div class="login-header">
                     <svg class="login-brand-icon" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5 12 2"/><line x1="12" y1="22" x2="12" y2="15.5"/><polyline points="22 8.5 12 15.5 2 8.5"/><polyline points="2 15.5 12 8.5 22 15.5"/><line x1="12" y1="2" x2="12" y2="8.5"/></svg>
-                    <h2 class="login-title">Caster's Login</h2>
-                    <p class="login-subtitle">Enter your email to receive a sign-in code</p>
+                    <h2 class="login-title">TBAforGOAT Login</h2>
+                    <p class="login-subtitle">Sign in with your email and password</p>
                 </div>
                 <!-- Direct passkey sign-in (discoverable credentials — no email needed) -->
                 <button class="login-btn login-btn-passkey hidden" id="passkey-discover-btn" onclick="handlePasskeyDiscover(event)" type="button">
@@ -1186,12 +1186,17 @@
                 <form id="login-form" onsubmit="return handleLogin(event)" autocomplete="off">
                     <label class="login-label" for="login-email">Email</label>
                     <input class="login-input" id="login-email" type="email" placeholder="you@example.com" required autocomplete="email" oninput="onLoginEmailInput()">
+                    <div id="password-group" class="hidden">
+                        <label class="login-label" for="login-password">Password</label>
+                        <input class="login-input" id="login-password" type="password" placeholder="Your password" autocomplete="current-password">
+                    </div>
                     <div id="otp-group" class="hidden">
                         <p id="otp-help" class="login-help">Enter the 6-digit code from your email. You can also click the link in the email on another device.</p>
                         <label class="login-label" for="login-otp">Verification Code</label>
                         <input class="login-input" id="login-otp" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="6-digit code" autocomplete="one-time-code">
                     </div>
                     <div id="login-error" class="login-error hidden"></div>
+                    <a href="#" id="toggle-mode-link" data-mode="otp" class="login-toggle-mode" onclick="toggleLoginMode(event)">Sign in with password</a>
                     <button class="login-btn login-btn-primary" type="submit" id="login-submit-btn" data-step="email">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
                         Send Code

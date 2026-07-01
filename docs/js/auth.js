@@ -192,6 +192,31 @@ const Auth = (() => {
         }
     }
 
+    // ── Password login ─────────────────────────────────────
+    async function passwordLogin(email, password) {
+        try {
+            const resp = await fetch(AUTH_BASE + '/token?grant_type=password', {
+                method: 'POST',
+                headers: _headers(),
+                body: JSON.stringify({ email, password }),
+            });
+
+            if (!resp.ok) {
+                const body = await resp.json().catch(() => ({}));
+                return { user: null, error: body.msg || body.error_description || 'Invalid email or password.' };
+            }
+
+            const data = await resp.json();
+            const session = _sessionFromResponse(data);
+            _saveSession(session);
+            _backfillName(session).catch(() => {});
+
+            return { user: session.user, error: null };
+        } catch (e) {
+            return { user: null, error: e.message || 'Network error' };
+        }
+    }
+
     // ── Backfill user_metadata.name from account_requests ──
     async function _backfillName(session) {
         const user = session?.user;
@@ -337,6 +362,7 @@ const Auth = (() => {
     return {
         sendOtp,
         verifyOtp,
+        passwordLogin,
         handleMagicLinkRedirect,
         getSession,
         getAccessToken,
@@ -487,6 +513,11 @@ function hideLoginModal() {
         submitBtn.dataset.step = 'email';
         submitBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg> Send Code';
     }
+    // Reset password mode
+    const passwordGroup = document.getElementById('password-group');
+    if (passwordGroup) passwordGroup.classList.add('hidden');
+    const toggleLink = document.getElementById('toggle-mode-link');
+    if (toggleLink) toggleLink.textContent = 'Sign in with password';
     // Reset passkey UI
     const passkeyBtn = document.getElementById('passkey-signin-btn');
     const passkeyDivider = document.getElementById('passkey-divider');
@@ -495,6 +526,39 @@ function hideLoginModal() {
     _hideEl('passkey-signin-error');
     _hideEl('passkey-offer-error');
     _passkeyEmailCache = {};
+}
+
+function toggleLoginMode(e) {
+    e?.preventDefault();
+    const link = document.getElementById('toggle-mode-link');
+    const passwordGroup = document.getElementById('password-group');
+    const otpGroup = document.getElementById('otp-group');
+    const emailInput = document.getElementById('login-email');
+    const submitBtn = document.getElementById('login-submit-btn');
+    if (!link || !submitBtn) return;
+
+    const isPassword = link.dataset.mode === 'password';
+
+    if (isPassword) {
+        // Switch to OTP mode
+        link.dataset.mode = 'otp';
+        link.textContent = 'Sign in with password';
+        passwordGroup?.classList.add('hidden');
+        if (emailInput) emailInput.readOnly = false;
+        otpGroup?.classList.add('hidden');
+        submitBtn.dataset.step = 'email';
+        submitBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg> Send Code';
+    } else {
+        // Switch to password mode
+        link.dataset.mode = 'password';
+        link.textContent = 'Sign in with code';
+        passwordGroup?.classList.remove('hidden');
+        if (emailInput) emailInput.readOnly = false;
+        otpGroup?.classList.add('hidden');
+        submitBtn.dataset.step = 'password';
+        submitBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg> Sign In';
+    }
+    _hideEl('login-error');
 }
 
 function showLoginState() {
@@ -532,6 +596,31 @@ async function handleLogin(e) {
     e.preventDefault();
     const btn = document.getElementById('login-submit-btn');
     const step = btn.dataset.step || 'email';
+
+    // Password login mode
+    if (step === 'password') {
+        const email = document.getElementById('login-email').value.trim();
+        const password = document.getElementById('login-password').value;
+        if (!email || !password) return false;
+
+        btn.disabled = true;
+        btn.textContent = 'Signing in…';
+        _hideEl('login-error');
+
+        const { user, error } = await Auth.passwordLogin(email, password);
+
+        btn.disabled = false;
+        btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg> Sign In';
+
+        if (error) {
+            _showError('login-error', error);
+            return false;
+        }
+
+        updateAuthUI();
+        await _maybeOfferPasskey();
+        return false;
+    }
 
     if (step === 'email') {
         // Step 1: send OTP
