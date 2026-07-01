@@ -21215,9 +21215,12 @@ td .pick-flip-back {
   background: var(--surface, rgba(0,0,0,.2));
 }
 
-/* The table itself — visible grid lines via !important */
+/* The table itself — visible grid lines via !important.
+   border-collapse: separate is REQUIRED for position:sticky on
+   th/td to work reliably (collapse breaks sticky in some browsers). */
 .gs-table {
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   width: max-content;
   min-width: 100%;
   font-size: .8rem;
@@ -21257,9 +21260,9 @@ td .pick-flip-back {
   border-bottom: 2px solid rgba(99, 102, 241, .4) !important;
 }
 
-/* Team column header (rowspan=2, sticky) */
+/* Team column header (rowspan=2, sticky) — opaque tint */
 .gs-team-head {
-  background: rgba(99, 102, 241, .28) !important;
+  background-color: #1a1830 !important;
   font-size: .82rem;
 }
 
@@ -21294,12 +21297,12 @@ td .pick-flip-back {
   color: #fff;
 }
 
-/* Sticky team-number column (left edge) */
+/* Sticky team-number column (left edge) — OPAQUE background, high z-index */
 .gs-sticky-col {
   position: sticky;
   left: 0;
-  z-index: 4;
-  background: var(--surface, rgba(20,20,35,.96)) !important;
+  z-index: 10;
+  background-color: #0d0d1a !important;
   font-weight: 700;
   font-size: .85rem;
   color: var(--text, #e5e7eb);
@@ -21307,31 +21310,40 @@ td .pick-flip-back {
   width: var(--gs-team-col-w, 80px);
   min-width: var(--gs-team-col-w, 80px);
   max-width: var(--gs-team-col-w, 80px);
+  border-right: 2px solid rgba(99, 102, 241, .5) !important;
+  will-change: transform;
 }
 
-/* When hovered on a row, sticky col also highlights */
+/* Team header gets an opaque indigo tint (not see-through) */
+.gs-table thead .gs-sticky-col {
+  background-color: #1a1830 !important;
+  z-index: 12;
+}
+
+/* When hovered on a row, sticky col highlights with OPAQUE color */
 .gs-table tbody tr:hover .gs-sticky-col {
-  background: rgba(99, 102, 241, .18) !important;
+  background-color: #241f3d !important;
 }
 
 /* Sticky Meta column — frozen right next to the Team column */
 .gs-meta-sticky {
   position: sticky;
   left: var(--gs-team-col-w, 80px);
-  z-index: 4;
-  background: var(--surface, rgba(20,20,35,.96)) !important;
+  z-index: 10;
+  background-color: #0d0d1a !important;
+  border-right: 2px solid rgba(99, 102, 241, .5) !important;
+  will-change: transform;
 }
 
-/* Header version of Meta sticky — needs to stay above body rows but
-   coordinate with the sticky thead. Same z-index as .gs-sticky-col. */
+/* Header version of Meta sticky — opaque indigo tint, high z-index */
 .gs-table thead .gs-meta-sticky {
-  z-index: 5;
-  background: rgba(99, 102, 241, .28) !important;
+  z-index: 12;
+  background-color: #1a1830 !important;
 }
 
-/* When row is hovered, the Meta sticky cell highlights too */
+/* When row is hovered, the Meta sticky cell highlights (opaque) */
 .gs-table tbody tr:hover .gs-meta-sticky {
-  background: rgba(99, 102, 241, .18) !important;
+  background-color: #241f3d !important;
 }
 
 /* Team rows — zebra striping */
@@ -21436,24 +21448,36 @@ td .pick-flip-back {
 }
 
 [data-theme="light"] .gs-group-head {
-  background: rgba(99, 102, 241, .18) !important;
+  background-color: rgba(99, 102, 241, .18) !important;
 }
 
 [data-theme="light"] .gs-team-head {
-  background: rgba(99, 102, 241, .22) !important;
+  background-color: #e8eaff !important;
 }
 
 [data-theme="light"] .gs-sticky-col {
-  background: #fff !important;
+  background-color: #ffffff !important;
   color: #1a1a2e;
 }
 
+[data-theme="light"] .gs-table thead .gs-sticky-col {
+  background-color: #e8eaff !important;
+}
+
+[data-theme="light"] .gs-table tbody tr:hover .gs-sticky-col {
+  background-color: #f0eeff !important;
+}
+
 [data-theme="light"] .gs-meta-sticky {
-  background: #fff !important;
+  background-color: #ffffff !important;
 }
 
 [data-theme="light"] .gs-table thead .gs-meta-sticky {
-  background: rgba(99, 102, 241, .22) !important;
+  background-color: #e8eaff !important;
+}
+
+[data-theme="light"] .gs-table tbody tr:hover .gs-meta-sticky {
+  background-color: #f0eeff !important;
 }
 
 [data-theme="light"] .gs-row-even {
