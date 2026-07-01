@@ -121,22 +121,24 @@ function _parseGsVal(val) {
     return { type: 'text', num: null, raw: s };
 }
 
-const _GS_INVERT_METRICS = new Set([
-    'noShowRate', 'noClimbRate', 'firstTouchTime', 'secondTouchTime',
-    'firstTouchMedian', 'secondTouchMedian',
-]);
+let _gsSortMetric = null;
+let _gsSortDir = 'desc';
 
-function _gsCellStyle(parsed, allParsed, metricName) {
-    if (!parsed || parsed.num === null) return '';
-    const nums = allParsed.map(p => p?.num).filter(n => n !== null && n !== undefined);
-    if (nums.length < 2) return '';
-    const min = Math.min(...nums);
-    const max = Math.max(...nums);
-    if (min === max) return '';
-    let ratio = (parsed.num - min) / (max - min);
-    if (_GS_INVERT_METRICS.has(metricName)) ratio = 1 - ratio;
-    const hue = Math.round(ratio * 120);
-    return `background-color: hsla(${hue}, 65%, 80%, 0.5);`;
+function _gsSortedTeams() {
+    const teams = [..._goatscoutData];
+    if (!_gsSortMetric) {
+        teams.sort((a, b) => parseInt(a.team_key.replace('frc','')) - parseInt(b.team_key.replace('frc','')));
+        return teams;
+    }
+    teams.sort((a, b) => {
+        const pa = _parseGsVal((a.metrics || {})[_gsSortMetric] ?? '');
+        const pb = _parseGsVal((b.metrics || {})[_gsSortMetric] ?? '');
+        const na = pa?.num, nb = pb?.num;
+        if (na === null || na === undefined) return 1;
+        if (nb === null || nb === undefined) return -1;
+        return _gsSortDir === 'asc' ? na - nb : nb - na;
+    });
+    return teams;
 }
 
 function renderGoatScoutTable() {
@@ -148,14 +150,12 @@ function renderGoatScoutTable() {
         return;
     }
 
-    const sorted = [..._goatscoutData].sort((a, b) => {
-        const na = parseInt(a.team_key.replace('frc', ''));
-        const nb = parseInt(b.team_key.replace('frc', ''));
-        return na - nb;
-    });
+    const sorted = _goatscoutEditMode ? [..._goatscoutData].sort((a, b) => {
+        return parseInt(a.team_key.replace('frc','')) - parseInt(b.team_key.replace('frc',''));
+    }) : _gsSortedTeams();
 
     let html = '<div class="gs-table-wrap"><table class="gs-table"><thead><tr>';
-    html += '<th class="gs-sticky-col">Metric</th>';
+    html += '<th class="gs-sticky-col gs-metric-head">Metric</th>';
     sorted.forEach(entry => {
         const num = entry.team_key.replace('frc', '');
         if (_goatscoutEditMode) {
@@ -171,27 +171,20 @@ function renderGoatScoutTable() {
 
     GOATSCOUT_METRIC_GROUPS.forEach(group => {
         html += `<tr class="gs-group-row"><td class="gs-sticky-col gs-group-label" colspan="${sorted.length + (_goatscoutEditMode ? 2 : 1)}">${group.label}</td></tr>`;
-        group.metrics.forEach((m, mIdx) => {
-            const allParsed = sorted.map(e => _parseGsVal((e.metrics || {})[m] ?? ''));
-            const zebra = mIdx % 2 === 0 ? 'gs-row-even' : 'gs-row-odd';
-            html += `<tr class="${zebra}"><td class="gs-sticky-col gs-metric-name">${m}</td>`;
+        group.metrics.forEach(m => {
+            const isSortable = !_goatscoutEditMode;
+            const isActive = _gsSortMetric === m;
+            const arrow = isActive ? (_gsSortDir === 'asc' ? ' \u2191' : ' \u2193') : '';
+            const sortCls = isSortable ? 'gs-sortable' : '';
+            const activeCls = isActive ? 'gs-sort-active' : '';
+            html += `<tr><td class="gs-sticky-col gs-metric-name ${sortCls} ${activeCls}" ${isSortable ? `data-sort="${m}"` : ''}>${m}${arrow}</td>`;
             sorted.forEach(entry => {
                 const val = (entry.metrics || {})[m] ?? '';
                 if (_goatscoutEditMode) {
                     html += `<td class="gs-cell-edit"><input type="text" data-team="${entry.team_key}" data-metric="${m}" value="${_esc(val)}" /></td>`;
                 } else {
-                    const parsed = _parseGsVal(val);
-                    const style = _gsCellStyle(parsed, allParsed, m);
-                    let inner = _esc(val) || '—';
-                    if (parsed && parsed.type === 'percent') {
-                        const w = Math.min(parsed.num, 100);
-                        inner = `<div class="gs-pct-wrap"><div class="gs-pct-fill" style="width:${w}%"></div><span class="gs-pct-text">${_esc(val)}</span></div>`;
-                    } else if (parsed && parsed.num !== null && val !== '') {
-                        inner = `<span class="gs-num-text">${_esc(val)}</span>`;
-                    } else if (!val) {
-                        inner = '<span class="gs-empty-val">—</span>';
-                    }
-                    html += `<td class="gs-cell" style="${style}">${inner}</td>`;
+                    const display = val ? _esc(val) : '<span class="gs-empty-val">\u2014</span>';
+                    html += `<td class="gs-cell">${display}</td>`;
                 }
             });
             if (_goatscoutEditMode) {
@@ -217,6 +210,19 @@ function renderGoatScoutTable() {
                 e.stopPropagation();
                 const tk = el.dataset.remove;
                 _goatscoutData = _goatscoutData.filter(d => d.team_key !== tk);
+                renderGoatScoutTable();
+            });
+        });
+    } else {
+        content.querySelectorAll('[data-sort]').forEach(el => {
+            el.addEventListener('click', () => {
+                const metric = el.dataset.sort;
+                if (_gsSortMetric === metric) {
+                    _gsSortDir = _gsSortDir === 'asc' ? 'desc' : 'asc';
+                } else {
+                    _gsSortMetric = metric;
+                    _gsSortDir = 'desc';
+                }
                 renderGoatScoutTable();
             });
         });
