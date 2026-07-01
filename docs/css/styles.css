@@ -2694,6 +2694,60 @@ input.input-loading {
     background: var(--bg);
 }
 
+/* ── GoatScout data visualization ────────────────────────── */
+.gs-table tbody tr.gs-row-odd td.gs-cell { background: rgba(0,0,0,0.015); }
+[data-theme="dark"] .gs-table tbody tr.gs-row-odd td.gs-cell { background: rgba(255,255,255,0.02); }
+
+.gs-pct-wrap {
+    position: relative;
+    display: inline-block;
+    min-width: 48px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    overflow: hidden;
+    line-height: 1.3;
+}
+.gs-pct-fill {
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    background: var(--primary, #3b82f6);
+    opacity: 0.28;
+    transition: width .3s ease;
+}
+.gs-pct-text {
+    position: relative;
+    z-index: 1;
+    font-weight: 700;
+    font-size: .82rem;
+    color: var(--text);
+}
+.gs-num-text {
+    font-weight: 600;
+    font-size: .82rem;
+    color: var(--text);
+}
+.gs-empty-val {
+    color: var(--text-muted);
+    opacity: 0.35;
+    font-size: .8rem;
+}
+.gs-table tbody tr:hover > td.gs-cell {
+    filter: brightness(0.92);
+}
+[data-theme="dark"] .gs-table tbody tr:hover > td.gs-cell {
+    filter: brightness(1.15);
+}
+.gs-table tbody tr:hover > td.gs-sticky-col {
+    filter: brightness(0.96);
+}
+.gs-table th.gs-team-col {
+    font-size: .9rem;
+    color: var(--text);
+}
+.gs-table tbody tr:hover > td {
+    cursor: default;
+}
+
 .alliance-team-row {
     display: flex;
     align-items: center;
