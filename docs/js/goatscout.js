@@ -220,10 +220,13 @@ function renderGoatScoutTable() {
 
     content.innerHTML = html;
 
-    // Dynamically set header row 1 height so row 2's sticky top offset is exact
-    const firstHeaderCell = content.querySelector('.gs-table thead tr:first-child th');
-    if (firstHeaderCell) {
-        const h = firstHeaderCell.offsetHeight;
+    // Dynamically set header row 1 height so row 2's sticky top offset is exact.
+    // NOTE: must measure a non-rowspan cell (a group head), NOT the Team header
+    // which has rowspan="2" and would return row1+row2 combined height — that
+    // would make the metric-name row stick one row too low.
+    const groupHeadCell = content.querySelector('.gs-table thead tr:first-child .gs-group-head');
+    if (groupHeadCell) {
+        const h = groupHeadCell.offsetHeight;
         const table = content.querySelector('.gs-table');
         if (table) table.style.setProperty('--gs-header-row1-h', h + 'px');
     }

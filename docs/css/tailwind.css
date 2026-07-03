@@ -21358,10 +21358,19 @@ td .pick-flip-back {
   border-right: 2px solid rgba(99, 102, 241, .5) !important;
 }
 
-/* Header version of Meta sticky — opaque indigo tint, high z-index */
+/* Header version of Meta sticky — opaque indigo tint, high z-index.
+   The row-2-specific override below raises z-index above the generic
+   `thead tr:nth-child(2) th { z-index: 11 }` rule (which has higher
+   specificity and would otherwise clobber the sticky col's z-index,
+   letting non-sticky cells to the right paint over sessions when
+   scrolling horizontally). */
 .gs-table thead .gs-meta-sticky {
   z-index: 20;
   background-color: #1a1830 !important;
+}
+
+.gs-table thead tr:nth-child(2) .gs-meta-sticky {
+  z-index: 20;
 }
 
 /* When row is hovered, the Meta sticky cell highlights (opaque) */
