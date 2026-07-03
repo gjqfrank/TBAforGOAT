@@ -1,0 +1,43 @@
+name: Sync to Hugging Face Space
+
+# Mirror the GitHub repo to the Hugging Face Docker Space
+# (gjqfrank/TBAforGOAT). After push, HF rebuilds the Docker image
+# automatically and redeploys the FastAPI backend + docs/ static site.
+#
+# Requires the GitHub secret `HF_TOKEN` (a Hugging Face access token
+# with WRITE permission). Create it at:
+#   https://huggingface.co/settings/tokens
+# then add it under the GitHub repo's Settings → Secrets and variables → Actions.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-hf
+  cancel-in-progress: true
+
+jobs:
+  sync-to-hf:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Push to Hugging Face Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          if [ -z "$HF_TOKEN" ]; then
+            echo "::error::HF_TOKEN secret is not set. Add it in the GitHub repo Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+          # Force-push so the HF Space exactly mirrors GitHub, even if the
+          # Space has divergent commits (e.g. edits made via the HF web UI).
+          git push -f "https://gjqfrank:${HF_TOKEN}@huggingface.co/spaces/gjqfrank/TBAforGOAT" main
