@@ -52,7 +52,13 @@ let _goatscoutEditMode = false;
 
 function isGoatScoutAdmin() {
     const user = (typeof Auth !== 'undefined') ? Auth.getUser() : null;
-    return user?.email === GOATSCOUT_ADMIN_EMAIL;
+    if (!user) return false;
+    // Grant access to the original hardcoded admin email OR any user whose
+    // JWT user_metadata.role is 'admin'. To add a new GoatScout editor,
+    // set role='admin' on their Supabase user (Authentication → Users →
+    // edit user → user_metadata: {"role":"admin","name":"..."}).
+    return user.email === GOATSCOUT_ADMIN_EMAIL
+        || user.user_metadata?.role === 'admin';
 }
 
 function shouldShowGoatScoutTab() {

@@ -476,11 +476,16 @@ function updateAuthUI() {
         el.classList.toggle('hidden', authed);
     });
 
-    // Toggle GoatScout tab visibility (admin-only)
+    // Toggle GoatScout tab visibility (admin-only).
+    // Granted to the hardcoded admin email OR any user with
+    // user_metadata.role === 'admin' (kept in sync with goatscout.js).
     const gsTab = document.getElementById('goatscout-tab-btn');
     if (gsTab) {
         const user = Auth.getUser();
-        const isAdmin = authed && user?.email === 'gjqfrank@163.com';
+        const isAdmin = authed && (
+            user?.email === 'gjqfrank@163.com'
+            || user?.user_metadata?.role === 'admin'
+        );
         gsTab.style.display = isAdmin ? '' : 'none';
     }
 }
