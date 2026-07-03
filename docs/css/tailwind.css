@@ -21425,7 +21425,8 @@ td .pick-flip-back {
   padding: .25rem !important;
 }
 
-.gs-cell-edit input {
+.gs-cell-edit input,
+.gs-cell-edit select {
   width: 100%;
   min-width: 60px;
   padding: .3rem .4rem;
@@ -21438,7 +21439,8 @@ td .pick-flip-back {
   text-align: center;
 }
 
-.gs-cell-edit input:focus {
+.gs-cell-edit input:focus,
+.gs-cell-edit select:focus {
   outline: none;
   border-color: var(--primary, #6366f1) !important;
   box-shadow: 0 0 0 2px rgba(99, 102, 241, .25);
@@ -21533,7 +21535,8 @@ td .pick-flip-back {
   color: #1a1a2e;
 }
 
-[data-theme="light"] .gs-cell-edit input {
+[data-theme="light"] .gs-cell-edit input,
+[data-theme="light"] .gs-cell-edit select {
   background: rgba(0, 0, 0, .03);
   color: #1a1a2e;
   border-color: rgba(0, 0, 0, .15) !important;

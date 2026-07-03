@@ -4,10 +4,19 @@
 
 const GOATSCOUT_ADMIN_EMAIL = 'gjqfrank@163.com';
 
+// Metrics rendered as a <select> dropdown in edit mode (key = metric name,
+// value = list of options). Anything not listed here uses a free-text input.
+const GOATSCOUT_SELECT_METRICS = {
+    robot_type: [
+        '1690', '4414', '1323', '1678', '1114', '254', '2910', '118',
+        '7769', '9483', 'WCP', 'kitbot', '6907（正赛）', '9084', 'other',
+    ],
+};
+
 const GOATSCOUT_METRIC_GROUPS = [
     { label: 'Meta', metrics: ['sessions'] },
     { label: 'Pre-Scout', metrics: [
-        '状态', '照片', '车高', '最大容量', 'Shooter',
+        '状态', 'robot_type', '照片', '车高', '最大容量', 'Shooter',
         '过坡', 'Hood', 'Intake', '自动爬升', '手动爬升',
         '自动', '过 trench', '更新',
     ]},
@@ -213,7 +222,17 @@ function renderGoatScoutTable() {
             group.metrics.forEach(m => {
                 const val = (entry.metrics || {})[m] ?? '';
                 if (_goatscoutEditMode) {
-                    html += `<td class="gs-cell-edit ${metaCls}"><input type="text" data-team="${entry.team_key}" data-metric="${m}" value="${_esc(val)}" /></td>`;
+                    const opts = GOATSCOUT_SELECT_METRICS[m];
+                    if (opts) {
+                        let optHtml = '<option value=""></option>';
+                        for (const o of opts) {
+                            const sel = (val === o) ? ' selected' : '';
+                            optHtml += `<option value="${_esc(o)}"${sel}>${_esc(o)}</option>`;
+                        }
+                        html += `<td class="gs-cell-edit ${metaCls}"><select data-team="${entry.team_key}" data-metric="${m}">${optHtml}</select></td>`;
+                    } else {
+                        html += `<td class="gs-cell-edit ${metaCls}"><input type="text" data-team="${entry.team_key}" data-metric="${m}" value="${_esc(val)}" /></td>`;
+                    }
                 } else {
                     const display = val ? _esc(val) : '<span class="gs-empty-val">\u2014</span>';
                     html += `<td class="gs-cell ${metaCls}">${display}</td>`;
@@ -270,12 +289,12 @@ function renderGoatScoutTable() {
 }
 
 async function saveAllGoatScout() {
-    const inputs = document.querySelectorAll('.gs-table input[data-team]');
+    const fields = document.querySelectorAll('.gs-table input[data-team], .gs-table select[data-team]');
     const byTeam = {};
-    inputs.forEach(inp => {
-        const tk = inp.dataset.team;
+    fields.forEach(f => {
+        const tk = f.dataset.team;
         if (!byTeam[tk]) byTeam[tk] = {};
-        byTeam[tk][inp.dataset.metric] = inp.value;
+        byTeam[tk][f.dataset.metric] = f.value;
     });
 
     const status = document.getElementById('gs-status');
