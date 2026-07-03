@@ -53,12 +53,17 @@ let _goatscoutEditMode = false;
 function isGoatScoutAdmin() {
     const user = (typeof Auth !== 'undefined') ? Auth.getUser() : null;
     if (!user) return false;
-    // Grant access to the original hardcoded admin email OR any user whose
-    // JWT user_metadata.role is 'admin'. To add a new GoatScout editor,
-    // set role='admin' on their Supabase user (Authentication → Users →
-    // edit user → user_metadata: {"role":"admin","name":"..."}).
+    // Grant access to the original hardcoded admin email, OR any user whose
+    // JWT user_metadata.role is 'admin' or 'scouter'.
+    //   - admin:   full access (also sees account_requests, profiles, etc.)
+    //   - scouter: can view/edit GoatScout only (no other admin RLS grants)
+    // To add a new GoatScout editor: create the user in Supabase Dashboard →
+    // Authentication → Users → Add user, set user_metadata to
+    // {"role":"scouter","name":"<name>"} (or "admin" for full access).
+    const role = user.user_metadata?.role;
     return user.email === GOATSCOUT_ADMIN_EMAIL
-        || user.user_metadata?.role === 'admin';
+        || role === 'admin'
+        || role === 'scouter';
 }
 
 function shouldShowGoatScoutTab() {

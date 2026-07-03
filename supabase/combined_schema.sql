@@ -935,7 +935,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     display_name    TEXT,                          -- user_metadata.name
     email           TEXT,                          -- mirrors auth.users.email for RLS queries
     role            TEXT        NOT NULL DEFAULT 'volunteer'
-                                CHECK (role IN ('volunteer', 'third_party', 'admin')),
+                                CHECK (role IN ('volunteer', 'third_party', 'admin', 'scouter')),
     is_deleted      BOOLEAN     NOT NULL DEFAULT false,
     deleted_at      TIMESTAMPTZ,                   -- set when is_deleted flips to true
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
