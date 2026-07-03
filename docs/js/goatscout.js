@@ -315,26 +315,25 @@ async function saveAllGoatScout() {
     const status = document.getElementById('gs-status');
     if (status) status.textContent = 'Saving…';
 
-    let saved = 0;
-    let errors = 0;
     const user = Auth.getUser();
     const deviceId = localStorage.getItem('casters_device_id') || 'web';
     const authorName = user?.user_metadata?.name || user?.email || 'Unknown';
 
-    for (const [teamKey, metrics] of Object.entries(byTeam)) {
-        try {
-            await API.goatscoutPut(currentEvent, teamKey, {
-                metrics,
-                author_device_id: deviceId,
-                author_name: authorName,
-            });
+    // Fire all PUTs in parallel — serial await was the main source of
+    // latency on cross-origin (GitHub Pages → HF Space) deployments.
+    const entries = Object.entries(byTeam);
+    const results = await Promise.allSettled(entries.map(([teamKey, metrics]) =>
+        API.goatscoutPut(currentEvent, teamKey, {
+            metrics,
+            author_device_id: deviceId,
+            author_name: authorName,
+        }).then(() => {
             const entry = _goatscoutData.find(d => d.team_key === teamKey);
             if (entry) entry.metrics = metrics;
-            saved++;
-        } catch (e) {
-            errors++;
-        }
-    }
+        })
+    ));
+    const saved = results.filter(r => r.status === 'fulfilled').length;
+    const errors = results.length - saved;
 
     if (status) status.textContent = `Saved ${saved} teams${errors ? `, ${errors} errors` : ''}`;
     _goatscoutEditMode = false;
@@ -345,7 +344,11 @@ async function saveAllGoatScout() {
     }
     const addBtn = document.getElementById('gs-add-team-btn');
     if (addBtn) addBtn.style.display = 'none';
-    await loadGoatScoutData();
+    const addColBtn = document.getElementById('gs-add-col-btn');
+    if (addColBtn) addColBtn.style.display = 'none';
+    // Re-render from the in-memory data we just updated (no reload round-trip),
+    // so the "Saved N teams" status text is not clobbered by loadGoatScoutData.
+    renderGoatScoutTable();
 }
 
 function handleAddTeamColumn() {
