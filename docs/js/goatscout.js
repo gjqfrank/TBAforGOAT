@@ -98,6 +98,7 @@ async function renderGoatScoutTab() {
             <button id="gs-import-btn" class="gs-btn gs-btn-primary">Import CSV</button>
             <button id="gs-edit-toggle" class="gs-btn">Edit Mode</button>
             <button id="gs-add-team-btn" class="gs-btn" style="display:none">+ Add Team</button>
+            <button id="gs-add-col-btn" class="gs-btn" style="display:none">+ Add Column</button>
             <input type="file" id="gs-file-input" accept=".csv" style="display:none" />
             <span id="gs-status" class="gs-status"></span>
         </div>
@@ -108,12 +109,14 @@ async function renderGoatScoutTab() {
         document.getElementById('gs-file-input').click();
     });
     document.getElementById('gs-file-input').addEventListener('change', handleGoatScoutCsvImport);
+    document.getElementById('gs-add-col-btn').addEventListener('click', handleAddMetricColumn);
     document.getElementById('gs-edit-toggle').addEventListener('click', () => {
         _goatscoutEditMode = !_goatscoutEditMode;
         const btn = document.getElementById('gs-edit-toggle');
         btn.classList.toggle('gs-btn-active', _goatscoutEditMode);
         btn.textContent = _goatscoutEditMode ? 'Exit Edit' : 'Edit Mode';
         document.getElementById('gs-add-team-btn').style.display = _goatscoutEditMode ? '' : 'none';
+        document.getElementById('gs-add-col-btn').style.display = _goatscoutEditMode ? '' : 'none';
         renderGoatScoutTable();
     });
     document.getElementById('gs-add-team-btn').addEventListener('click', handleAddTeamColumn);
@@ -185,23 +188,27 @@ function renderGoatScoutTable() {
     html += '<thead>';
     html += '<tr>';
     html += '<th class="gs-sticky-col gs-team-head" rowspan="2">Team</th>';
-    GOATSCOUT_METRIC_GROUPS.forEach(group => {
+    _effectiveMetricGroups().forEach(group => {
         const metaCls = group.label === 'Meta' ? 'gs-meta-sticky' : '';
         html += `<th class="gs-group-head ${metaCls}" colspan="${group.metrics.length}">${group.label}</th>`;
     });
     if (_goatscoutEditMode) {
-        html += '<th class="gs-add-col" rowspan="2">+</th>';
+        html += '<th class="gs-add-col" rowspan="2" id="gs-add-col-trigger" title="Add column">+</th>';
     }
     html += '</tr>';
     html += '<tr>';
-    GOATSCOUT_METRIC_GROUPS.forEach(group => {
+    _effectiveMetricGroups().forEach(group => {
         const metaCls = group.label === 'Meta' ? 'gs-meta-sticky' : '';
+        const isCustom = group.label === 'Custom';
         group.metrics.forEach(m => {
             const isActive = _gsSortMetric === m;
             const arrow = isActive ? (_gsSortDir === 'asc' ? ' \u2191' : ' \u2193') : '';
             const sortCls = !_goatscoutEditMode ? 'gs-sortable' : '';
             const activeCls = isActive ? 'gs-sort-active' : '';
-            html += `<th class="gs-metric-col ${sortCls} ${activeCls} ${metaCls}" ${!_goatscoutEditMode ? `data-sort="${m}"` : ''} title="${m}">${m}${arrow}</th>`;
+            const rmBtn = (_goatscoutEditMode && isCustom)
+                ? `<span class="gs-remove-col" data-remove-metric="${_esc(m)}" title="Remove column">\u00d7</span>`
+                : '';
+            html += `<th class="gs-metric-col ${sortCls} ${activeCls} ${metaCls}" ${!_goatscoutEditMode ? `data-sort="${m}"` : ''} title="${m}">${_esc(m)}${arrow}${rmBtn}</th>`;
         });
     });
     html += '</tr>';
@@ -217,7 +224,7 @@ function renderGoatScoutTable() {
         } else {
             html += `<td class="gs-sticky-col gs-team-name">${num}</td>`;
         }
-        GOATSCOUT_METRIC_GROUPS.forEach(group => {
+        _effectiveMetricGroups().forEach(group => {
             const metaCls = group.label === 'Meta' ? 'gs-meta-sticky' : '';
             group.metrics.forEach(m => {
                 const val = (entry.metrics || {})[m] ?? '';
@@ -270,6 +277,14 @@ function renderGoatScoutTable() {
                 const tk = el.dataset.remove;
                 _goatscoutData = _goatscoutData.filter(d => d.team_key !== tk);
                 renderGoatScoutTable();
+            });
+        });
+        const addColTrigger = document.getElementById('gs-add-col-trigger');
+        if (addColTrigger) addColTrigger.addEventListener('click', handleAddMetricColumn);
+        content.querySelectorAll('[data-remove-metric]').forEach(el => {
+            el.addEventListener('click', (e) => {
+                e.stopPropagation();
+                handleRemoveMetricColumn(el.dataset.removeMetric);
             });
         });
     } else {
@@ -342,6 +357,70 @@ function handleAddTeamColumn() {
         return;
     }
     _goatscoutData.push({ team_key: teamKey, event_key: currentEvent, metrics: {} });
+    renderGoatScoutTable();
+}
+
+// ── Dynamic column management ─────────────────────────────
+// Custom metrics are stored per-event in localStorage and appended to the
+// "Custom" group. They behave like any built-in metric: editable in edit
+// mode, saved via saveAllGoatScout, and sortable in view mode.
+function _customMetricsKey() {
+    return `gs_custom_metrics:${currentEvent || 'global'}`;
+}
+
+function _loadCustomMetrics() {
+    try {
+        const raw = localStorage.getItem(_customMetricsKey());
+        return raw ? JSON.parse(raw) : [];
+    } catch { return []; }
+}
+
+function _saveCustomMetrics(list) {
+    try { localStorage.setItem(_customMetricsKey(), JSON.stringify(list)); } catch {}
+}
+
+function _ensureCustomGroup() {
+    let g = GOATSCOUT_METRIC_GROUPS.find(x => x.label === 'Custom');
+    if (!g) {
+        g = { label: 'Custom', metrics: [] };
+        GOATSCOUT_METRIC_GROUPS.push(g);
+    }
+    return g;
+}
+
+// Returns the effective metric groups (built-in + custom for this event).
+function _effectiveMetricGroups() {
+    const custom = _loadCustomMetrics();
+    if (custom.length === 0) return GOATSCOUT_METRIC_GROUPS;
+    // Build a fresh copy so we don't mutate the constant on every render.
+    const groups = GOATSCOUT_METRIC_GROUPS
+        .filter(g => g.label !== 'Custom')
+        .map(g => ({ label: g.label, metrics: [...g.metrics] }));
+    groups.push({ label: 'Custom', metrics: [...custom] });
+    return groups;
+}
+
+function handleAddMetricColumn() {
+    const name = prompt('Enter new column (metric) name:');
+    if (!name || !name.trim()) return;
+    const metric = name.trim();
+    // Reject duplicates (across all groups).
+    const allMetrics = _effectiveMetricGroups().flatMap(g => g.metrics);
+    if (allMetrics.includes(metric)) {
+        alert(`Column "${metric}" already exists.`);
+        return;
+    }
+    const custom = _loadCustomMetrics();
+    custom.push(metric);
+    _saveCustomMetrics(custom);
+    _ensureCustomGroup();
+    renderGoatScoutTable();
+}
+
+function handleRemoveMetricColumn(metric) {
+    if (!confirm(`Remove column "${metric}"? Values saved on existing teams are kept in the database but will no longer be shown.`)) return;
+    const custom = _loadCustomMetrics().filter(m => m !== metric);
+    _saveCustomMetrics(custom);
     renderGoatScoutTable();
 }
 

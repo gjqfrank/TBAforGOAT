@@ -21410,6 +21410,19 @@ td .pick-flip-back {
   opacity: 1;
 }
 
+/* Remove-column button (edit mode, Custom group headers) */
+.gs-remove-col {
+  margin-left: .35rem;
+  color: var(--red, #ef4444);
+  cursor: pointer;
+  font-weight: 700;
+  font-size: .8rem;
+  opacity: .6;
+}
+.gs-remove-col:hover {
+  opacity: 1;
+}
+
 /* Data cells */
 .gs-cell {
   color: var(--text, #e5e7eb);
