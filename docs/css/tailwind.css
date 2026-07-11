@@ -28206,3 +28206,213 @@ body.epa-breakdown-active .stat-opr {
         flex: 1;
     }
 }
+
+/* ═══════════════════════════════════════════════════════════
+   GoatStrat — additional styles v2
+   ═══════════════════════════════════════════════════════════ */
+
+/* Strategy grid — 4 columns (auto, transition, teleop, endgame) */
+.gs-strat-grid {
+    grid-template-columns: repeat(4, 1fr);
+}
+@media (max-width: 1200px) {
+    .gs-strat-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+/* Single-column comparison (no more plan vs actual split) */
+.gs-comp-single {
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+}
+
+/* Team stats table in breakdown */
+.gs-team-stats-wrap {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-subtle, rgba(255,255,255,.08));
+}
+.gs-stats-title {
+    margin: 0 0 .5rem;
+    font-size: .85rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: var(--text-secondary, #b0b8cc);
+}
+.gs-team-stats-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: .82rem;
+}
+.gs-team-stats-table th {
+    padding: .4rem .5rem;
+    text-align: left;
+    font-weight: 600;
+    color: var(--text-muted);
+    border-bottom: 2px solid var(--border);
+    font-size: .75rem;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+}
+.gs-team-stats-table td {
+    padding: .35rem .5rem;
+    border-bottom: 1px solid var(--border-subtle, rgba(255,255,255,.06));
+}
+.gs-stats-row.gs-stats-6907 {
+    background: var(--primary-glow, rgba(99,102,241,.12));
+}
+.gs-stats-row.gs-stats-6907 td {
+    font-weight: 700;
+}
+.gs-stats-team {
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
+    white-space: nowrap;
+}
+.gs-stats-nick {
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.gs-stats-group-row td {
+    font-size: .72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    padding-top: .5rem;
+    color: var(--text-secondary, #b0b8cc);
+}
+.gs-stats-group-row:first-child td {
+    padding-top: .35rem;
+}
+
+/* Breakdown metrics table (red vs blue) */
+.gs-bd-metrics-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: .82rem;
+    margin-top: .25rem;
+}
+.gs-bd-metrics-table th {
+    padding: .35rem .5rem;
+    text-align: center;
+    font-weight: 600;
+    font-size: .72rem;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    border-bottom: 2px solid var(--border);
+}
+.gs-bd-metrics-table th:first-child {
+    text-align: left;
+}
+.gs-bd-metrics-table td {
+    padding: .3rem .5rem;
+    text-align: center;
+    border-bottom: 1px solid var(--border-subtle, rgba(255,255,255,.06));
+}
+.gs-bd-metrics-table td:first-child {
+    text-align: left;
+}
+.gs-bd-metrics-table .gs-red-col {
+    color: #f87171;
+    font-weight: 600;
+}
+.gs-bd-metrics-table .gs-blue-col {
+    color: #60a5fa;
+    font-weight: 600;
+}
+.gs-bd-metrics-table th.gs-red-col {
+    background: rgba(239, 68, 68, .15);
+}
+.gs-bd-metrics-table th.gs-blue-col {
+    background: rgba(59, 130, 246, .15);
+}
+.gs-metric-phase {
+    font-weight: 600;
+    color: var(--text);
+}
+
+/* Battle notes edit */
+.gs-actual-note {
+    position: relative;
+}
+.gs-note-edit-btn {
+    flex-shrink: 0;
+    margin-left: auto;
+    padding: .15rem .35rem;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: .9rem;
+    line-height: 1;
+    border-radius: 3px;
+    opacity: .6;
+    transition: opacity .15s, background .15s;
+}
+.gs-actual-note:hover .gs-note-edit-btn {
+    opacity: 1;
+}
+.gs-note-edit-btn:hover {
+    background: var(--surface-hover, rgba(255,255,255,.1));
+}
+.gs-note-editing {
+    flex-direction: column;
+    align-items: stretch !important;
+    gap: .4rem !important;
+}
+.gs-note-edit-area {
+    width: 100%;
+    padding: .4rem;
+    border: 1px solid var(--primary);
+    border-radius: 4px;
+    background: var(--bg);
+    color: var(--text);
+    font-size: .82rem;
+    font-family: inherit;
+    resize: vertical;
+    min-height: 40px;
+}
+.gs-note-edit-actions {
+    display: flex;
+    gap: .4rem;
+}
+.gs-btn-sm {
+    padding: .2rem .6rem;
+    font-size: .78rem;
+}
+.gs-btn-cancel {
+    background: transparent;
+    border-color: var(--border);
+}
+
+/* GoatScout alliance row colors */
+.gs-scout-row-red {
+    background: rgba(239, 68, 68, .08) !important;
+}
+.gs-scout-row-red td:first-child {
+    border-left: 3px solid #ef4444;
+}
+.gs-scout-row-blue {
+    background: rgba(59, 130, 246, .08) !important;
+}
+.gs-scout-row-blue td:first-child {
+    border-left: 3px solid #3b82f6;
+}
+
+/* Responsive for 4-column strategy grid */
+@media (max-width: 900px) {
+    .gs-strat-grid {
+        grid-template-columns: 1fr;
+    }
+    .gs-team-stats-table {
+        font-size: .75rem;
+    }
+    .gs-bd-metrics-table {
+        font-size: .75rem;
+    }
+}

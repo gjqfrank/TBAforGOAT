@@ -35,6 +35,9 @@ const GoatStrat = (() => {
     let _bsNotes = [];
     let _bsMatchStartTime = null;
 
+    // Note editing state
+    let _editingNoteId = null;
+
     // ── Helpers ────────────────────────────────────────────
     function _esc(s) {
         if (s == null) return '';
@@ -159,6 +162,10 @@ const GoatStrat = (() => {
                   <div class="gs-strat-field">
                     <label>Auto</label>
                     <textarea id="gs-strat-auto" rows="4" placeholder="Auto phase strategy…"></textarea>
+                  </div>
+                  <div class="gs-strat-field">
+                    <label>Transition</label>
+                    <textarea id="gs-strat-transition" rows="4" placeholder="Auto→Teleop transition strategy…"></textarea>
                   </div>
                   <div class="gs-strat-field">
                     <label>Teleop</label>
@@ -333,15 +340,6 @@ const GoatStrat = (() => {
         if (!t) return '';
         const is6907 = t.team_number === TEAM_NUM;
         const highlightCls = is6907 ? ' gs-team-highlight' : '';
-        const loc = [t.city, t.state_prov, t.country].filter(Boolean).join(', ');
-        const shortLoc = [t.state_prov, t.country].filter(Boolean).join(', ');
-
-        const opr = t.opr != null ? (typeof t.opr === 'number' ? t.opr.toFixed(1) : t.opr) : '–';
-        const epa = t.epa != null ? (typeof t.epa === 'number' ? t.epa.toFixed(1) : t.epa) : '–';
-        const rank = t.rank ?? '–';
-        const wlt = `${t.wins ?? 0}-${t.losses ?? 0}-${t.ties ?? 0}`;
-        const avgRp = t.avg_rp != null ? (typeof t.avg_rp === 'number' ? t.avg_rp.toFixed(2) : t.avg_rp) : '–';
-        const rankCls = Number(t.rank) >= 1 && Number(t.rank) <= 8 ? ' rank-top8' : '';
 
         return `
         <div class="pbp-team ${sideCls}${highlightCls}" data-team="${t.team_number}">
@@ -352,30 +350,6 @@ const GoatStrat = (() => {
                         <div class="pbp-team-nickname">${_esc(t.nickname || 'Team ' + t.team_number)}</div>
                     </div>
                     ${t.school_name ? `<div class="pbp-team-school">${_esc(t.school_name)}</div>` : ''}
-                    ${loc ? `<div class="pbp-team-location pbp-loc-full">${_esc(loc)}</div>` : ''}
-                    ${shortLoc ? `<div class="pbp-team-location pbp-loc-short">${_esc(shortLoc)}</div>` : ''}
-                </div>
-            </div>
-            <div class="pbp-team-stats">
-                <div class="pbp-stat">
-                    <div class="pbp-stat-label">Rank</div>
-                    <div class="pbp-stat-value${rankCls}">${rank}</div>
-                </div>
-                <div class="pbp-stat">
-                    <div class="pbp-stat-label">W-L-T</div>
-                    <div class="pbp-stat-value">${wlt}</div>
-                </div>
-                <div class="pbp-stat">
-                    <div class="pbp-stat-label">OPR</div>
-                    <div class="pbp-stat-value opr-val">${opr}</div>
-                </div>
-                <div class="pbp-stat">
-                    <div class="pbp-stat-label">EPA</div>
-                    <div class="pbp-stat-value epa-val">${epa}</div>
-                </div>
-                <div class="pbp-stat">
-                    <div class="pbp-stat-label">Avg RP</div>
-                    <div class="pbp-stat-value">${avgRp}</div>
                 </div>
             </div>
         </div>`;
@@ -756,7 +730,47 @@ const GoatStrat = (() => {
 
         el.innerHTML = `
             ${renderFn(data.red, 'red', redWon, nickMap, statsMap, redAllianceNum, isPlayoff)}
-            ${renderFn(data.blue, 'blue', blueWon, nickMap, statsMap, blueAllianceNum, isPlayoff)}`;
+            ${renderFn(data.blue, 'blue', blueWon, nickMap, statsMap, blueAllianceNum, isPlayoff)}
+            ${_renderTeamStatsTable(m)}`;
+    }
+
+    function _renderTeamStatsTable(m) {
+        const rows = (side) => {
+            if (!m[side]?.teams) return '';
+            return m[side].teams.map(t => {
+                const is6907 = t.team_number === TEAM_NUM;
+                const rank = t.rank ?? '–';
+                const wlt = `${t.wins ?? 0}-${t.losses ?? 0}-${t.ties ?? 0}`;
+                const opr = t.opr != null ? (typeof t.opr === 'number' ? t.opr.toFixed(1) : t.opr) : '–';
+                const epa = t.epa != null ? (typeof t.epa === 'number' ? t.epa.toFixed(1) : t.epa) : '–';
+                const avgRp = t.avg_rp != null ? (typeof t.avg_rp === 'number' ? t.avg_rp.toFixed(2) : t.avg_rp) : '–';
+                return `<tr class="gs-stats-row${is6907 ? ' gs-stats-6907' : ''}">
+                    <td class="gs-stats-team">${t.team_number}</td>
+                    <td class="gs-stats-nick">${_esc(t.nickname || '')}</td>
+                    <td>${rank}</td>
+                    <td>${wlt}</td>
+                    <td>${opr}</td>
+                    <td>${epa}</td>
+                    <td>${avgRp}</td>
+                </tr>`;
+            }).join('');
+        };
+
+        return `
+          <div class="gs-team-stats-wrap">
+            <h4 class="gs-stats-title">Team Stats</h4>
+            <table class="gs-team-stats-table">
+              <thead>
+                <tr><th>Team</th><th>Name</th><th>Rank</th><th>W-L-T</th><th>OPR</th><th>EPA</th><th>Avg RP</th></tr>
+              </thead>
+              <tbody>
+                <tr class="gs-stats-group-row"><td colspan="7">Red Alliance</td></tr>
+                ${rows('red')}
+                <tr class="gs-stats-group-row"><td colspan="7">Blue Alliance</td></tr>
+                ${rows('blue')}
+              </tbody>
+            </table>
+          </div>`;
     }
 
     // ── Strategy notes CRUD ────────────────────────────────
@@ -769,16 +783,16 @@ const GoatStrat = (() => {
             );
             if (notes && notes.length > 0) {
                 const latest = notes[0];
-                let parsed = { auto: '', teleop: '', endgame: '' };
+                let parsed = { auto: '', transition: '', teleop: '', endgame: '' };
                 try { parsed = { ...parsed, ...JSON.parse(latest.content) }; } catch (_) {
                     parsed.auto = latest.content;
                 }
                 _strategyNotes[matchKey] = { ...parsed, noteId: latest.id };
             } else {
-                _strategyNotes[matchKey] = { auto: '', teleop: '', endgame: '', noteId: null };
+                _strategyNotes[matchKey] = { auto: '', transition: '', teleop: '', endgame: '', noteId: null };
             }
         } catch (_) {
-            _strategyNotes[matchKey] = { auto: '', teleop: '', endgame: '', noteId: null };
+            _strategyNotes[matchKey] = { auto: '', transition: '', teleop: '', endgame: '', noteId: null };
         }
         _renderStrategyForm(matchKey);
     }
@@ -787,9 +801,11 @@ const GoatStrat = (() => {
         const s = _strategyNotes[matchKey];
         if (!s) return;
         const auto = _$('gs-strat-auto');
+        const trans = _$('gs-strat-transition');
         const teleop = _$('gs-strat-teleop');
         const end = _$('gs-strat-endgame');
         if (auto) auto.value = s.auto || '';
+        if (trans) trans.value = s.transition || '';
         if (teleop) teleop.value = s.teleop || '';
         if (end) end.value = s.endgame || '';
     }
@@ -801,6 +817,7 @@ const GoatStrat = (() => {
 
         const content = JSON.stringify({
             auto: (_$('gs-strat-auto')?.value || '').trim(),
+            transition: (_$('gs-strat-transition')?.value || '').trim(),
             teleop: (_$('gs-strat-teleop')?.value || '').trim(),
             endgame: (_$('gs-strat-endgame')?.value || '').trim(),
         });
@@ -853,80 +870,112 @@ const GoatStrat = (() => {
         const el = _$('gs-comparison');
         if (!el) return;
         const matchKey = m.key || m.match_key;
-        const strat = _strategyNotes[matchKey] || { auto: '', teleop: '', endgame: '' };
         const notes = _casterNotes[matchKey] || [];
         const bd = _breakdownCache[matchKey];
 
-        const planHtml = _renderPlanColumn(strat);
         const actualHtml = _renderActualColumn(m, notes, bd);
 
         el.innerHTML = `
-          <div class="gs-comp-grid">
-            <div class="gs-comp-col gs-comp-plan">
-              <h4 class="gs-comp-header">📋 Planned Strategy</h4>
-              ${planHtml}
-            </div>
-            <div class="gs-comp-col gs-comp-actual">
-              <h4 class="gs-comp-header">⚡ Actual Performance</h4>
-              ${actualHtml}
-            </div>
+          <div class="gs-comp-single">
+            <h4 class="gs-comp-header">⚡ Actual Performance</h4>
+            ${actualHtml}
           </div>`;
-    }
-
-    function _renderPlanColumn(strat) {
-        const phases = [
-            { label: 'Auto', value: strat.auto },
-            { label: 'Teleop', value: strat.teleop },
-            { label: 'Endgame', value: strat.endgame },
-        ];
-        return phases.map(p => `
-          <div class="gs-comp-phase">
-            <span class="gs-phase-label">${p.label}</span>
-            <span class="gs-phase-value">${p.value ? _esc(p.value) : '<em class="gs-empty-inline">—</em>'}</span>
-          </div>`).join('');
     }
 
     function _renderActualColumn(m, notes, bd) {
         let html = '';
 
+        // Battle Notes with edit
+        html += '<div class="gs-actual-section"><h5 class="gs-actual-sub">Battle Notes</h5>';
         if (notes.length) {
-            html += '<div class="gs-actual-section"><h5 class="gs-actual-sub">Battle Notes</h5>';
             html += notes.map(n => {
                 const time = n.created_at ? new Date(n.created_at).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}) : '';
-                return `<div class="gs-actual-note"><span class="gs-note-time">${time}</span><span class="gs-note-text">${_esc(n.content)}</span></div>`;
-            }).join('');
-            html += '</div>';
-        } else {
-            html += '<div class="gs-actual-section"><h5 class="gs-actual-sub">Battle Notes</h5><span class="gs-empty-inline">No caster notes for 6907</span></div>';
-        }
-
-        if (bd?.available) {
-            const side = _6907Side(m);
-            const alliance = side ? bd[side] : null;
-            const b = alliance?.breakdown;
-            if (b) {
-                html += '<div class="gs-actual-section"><h5 class="gs-actual-sub">Breakdown Metrics</h5>';
-                const metrics = [];
-                if (b.totalPoints != null) metrics.push(['Total Points', b.totalPoints]);
-                if (b.totalAutoPoints != null) metrics.push(['Auto Points', b.totalAutoPoints]);
-                if (b.totalTeleopPoints != null) metrics.push(['Teleop Points', b.totalTeleopPoints]);
-                if (b.endGameTowerPoints != null) metrics.push(['Endgame Tower', b.endGameTowerPoints]);
-                if (b.totalTowerPoints != null) metrics.push(['Tower Points', b.totalTowerPoints]);
-                if (b.totalFuelCount != null) metrics.push(['Total Fuel', b.totalFuelCount]);
-                if (b.autoFuelCount != null) metrics.push(['Auto Fuel', b.autoFuelCount]);
-                if (b.teleopFuelCount != null) metrics.push(['Teleop Fuel', b.teleopFuelCount]);
-                if (b.endgameFuelCount != null) metrics.push(['Endgame Fuel', b.endgameFuelCount]);
-                if (b.foulPoints != null) metrics.push(['Foul Points', b.foulPoints]);
-                if (metrics.length) {
-                    html += '<div class="gs-metrics-grid">';
-                    html += metrics.map(([k, v]) => `<div class="gs-metric"><span class="gs-metric-label">${_esc(k)}</span><span class="gs-metric-value">${_esc(v)}</span></div>`).join('');
-                    html += '</div>';
+                if (_editingNoteId === n.id) {
+                    return `<div class="gs-actual-note gs-note-editing" data-note-id="${n.id}">
+                        <span class="gs-note-time">${time}</span>
+                        <textarea class="gs-note-edit-area" id="gs-note-edit-${n.id}" rows="2">${_esc(n.content)}</textarea>
+                        <div class="gs-note-edit-actions">
+                            <button class="gs-btn gs-btn-sm" onclick="GoatStrat._onSaveNoteEdit('${n.id}')">Save</button>
+                            <button class="gs-btn gs-btn-sm gs-btn-cancel" onclick="GoatStrat._onCancelNoteEdit()">Cancel</button>
+                        </div>
+                    </div>`;
                 }
-                html += '</div>';
-            }
+                return `<div class="gs-actual-note" data-note-id="${n.id}">
+                    <span class="gs-note-time">${time}</span>
+                    <span class="gs-note-text">${_esc(n.content)}</span>
+                    <button class="gs-note-edit-btn" onclick="GoatStrat._onEditNote('${n.id}')">✎</button>
+                </div>`;
+            }).join('');
+        } else {
+            html += '<span class="gs-empty-inline">No caster notes</span>';
+        }
+        html += '</div>';
+
+        // Breakdown metrics — red vs blue fuel points per phase + tower + foul
+        if (bd?.available) {
+            const rb = bd.red?.breakdown || {};
+            const bb = bd.blue?.breakdown || {};
+            const phases = [
+                ['Auto Fuel', rb.autoFuelPoints, bb.autoFuelPoints],
+                ['Transition Fuel', rb.transitionFuelPoints, bb.transitionFuelPoints],
+                ['Shift 1 Fuel', rb.shift1FuelPoints, bb.shift1FuelPoints],
+                ['Shift 2 Fuel', rb.shift2FuelPoints, bb.shift2FuelPoints],
+                ['Shift 3 Fuel', rb.shift3FuelPoints, bb.shift3FuelPoints],
+                ['Shift 4 Fuel', rb.shift4FuelPoints, bb.shift4FuelPoints],
+                ['Endgame Fuel', rb.endgameFuelPoints, bb.endgameFuelPoints],
+                ['Tower', rb.totalTowerPoints, bb.totalTowerPoints],
+                ['Foul', rb.foulPoints, bb.foulPoints],
+            ];
+            html += '<div class="gs-actual-section"><h5 class="gs-actual-sub">Breakdown metrics</h5>';
+            html += `<table class="gs-bd-metrics-table">
+                <thead><tr><th>Phase</th><th class="gs-red-col">Red</th><th class="gs-blue-col">Blue</th></tr></thead>
+                <tbody>`;
+            html += phases.map(([label, red, blue]) => {
+                const rv = red != null ? red : '–';
+                const bv = blue != null ? blue : '–';
+                return `<tr><td class="gs-metric-phase">${_esc(label)}</td><td class="gs-red-col">${rv}</td><td class="gs-blue-col">${bv}</td></tr>`;
+            }).join('');
+            html += '</tbody></table></div>';
         }
 
         return html || '<span class="gs-empty-inline">No actual data available</span>';
+    }
+
+    function _onEditNote(noteId) {
+        _editingNoteId = noteId;
+        const m = _matches6907[_matchIndex];
+        if (m) _renderComparison(m);
+    }
+
+    function _onCancelNoteEdit() {
+        _editingNoteId = null;
+        const m = _matches6907[_matchIndex];
+        if (m) _renderComparison(m);
+    }
+
+    async function _onSaveNoteEdit(noteId) {
+        const ta = _$('gs-note-edit-' + noteId);
+        if (!ta) return;
+        const text = ta.value.trim();
+        if (!text) return;
+
+        const headers = _postgrestHeaders();
+        try {
+            const resp = await fetch(`${REST_BASE}/caster_notes?id=eq.${noteId}`, {
+                method: 'PATCH',
+                headers,
+                body: JSON.stringify({ content: text }),
+            });
+            if (!resp.ok) throw new Error(`PATCH failed: ${resp.status}`);
+            _editingNoteId = null;
+            const m = _matches6907[_matchIndex];
+            if (m) {
+                await _loadCasterNotes(m);
+                _renderComparison(m);
+            }
+        } catch (e) {
+            console.error('[GoatStrat] Note edit failed:', e);
+        }
     }
 
     // ── GoatScout (filtered to current match teams) ────────
@@ -985,6 +1034,17 @@ const GoatStrat = (() => {
         // Use the existing renderGoatScoutTable with our custom container
         if (typeof renderGoatScoutTable === 'function') {
             renderGoatScoutTable('gs-goatscout-content');
+            // Add alliance color classes to rows
+            const redNums = new Set(_teamNums(m.red));
+            const blueNums = new Set(_teamNums(m.blue));
+            el.querySelectorAll('tr').forEach(tr => {
+                const firstCell = tr.querySelector('.gs-team-name, td');
+                if (!firstCell) return;
+                const num = parseInt(firstCell.textContent.trim().replace(/\D/g, ''), 10);
+                if (isNaN(num)) return;
+                if (redNums.has(num)) tr.classList.add('gs-scout-row-red');
+                else if (blueNums.has(num)) tr.classList.add('gs-scout-row-blue');
+            });
         } else {
             el.innerHTML = '<p class="gs-empty">GoatScout renderer unavailable.</p>';
         }
@@ -1001,5 +1061,8 @@ const GoatStrat = (() => {
         _onBsPillClick,
         _onBsMacro,
         _onBsSubmit,
+        _onEditNote,
+        _onCancelNoteEdit,
+        _onSaveNoteEdit,
     };
 })();
