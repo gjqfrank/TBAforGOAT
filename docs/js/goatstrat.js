@@ -211,6 +211,9 @@ const GoatStrat = (() => {
     async function _onEventSelect(eventKey) {
         if (!eventKey) return;
         _currentEvent = eventKey;
+        // Sync global currentEvent so shared goatscout.js save/add-team
+        // functions (which use the global) target the correct event.
+        if (typeof currentEvent !== 'undefined') currentEvent = eventKey;
         _breakdownCache = {};
         _strategyNotes = {};
         _casterNotes = {};
