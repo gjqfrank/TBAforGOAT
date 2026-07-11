@@ -169,8 +169,8 @@ function _gsSortedTeams() {
     return teams;
 }
 
-function renderGoatScoutTable() {
-    const content = document.getElementById('gs-content');
+function renderGoatScoutTable(containerId = 'gs-content') {
+    const content = document.getElementById(containerId);
     if (!content) return;
 
     if (!_goatscoutData.length) {

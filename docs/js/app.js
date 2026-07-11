@@ -829,6 +829,11 @@ document.querySelectorAll('.tab').forEach(btn => {
             BattleStation.unmount();
         }
 
+        // Unmount GoatStrat when leaving its tab
+        if (btn.dataset.tab !== 'goatstrat' && typeof GoatStrat !== 'undefined') {
+            GoatStrat.unmount();
+        }
+
         // Stop playoff refresh when leaving the playoff tab
         if (btn.dataset.tab !== 'playoff') { stopPlayoffRefresh(); }
 
@@ -907,6 +912,9 @@ document.querySelectorAll('.tab').forEach(btn => {
         }
         if (btn.dataset.tab === 'goatscout' && currentEvent) {
             if (typeof renderGoatScoutTab === 'function') renderGoatScoutTab();
+        }
+        if (btn.dataset.tab === 'goatstrat') {
+            if (typeof GoatStrat !== 'undefined') GoatStrat.mount();
         }
         if (btn.dataset.tab === 'playbyplay' && currentEvent && !renderedTabs.playbyplay) {
             if (pbpData?.matches?.length) {
