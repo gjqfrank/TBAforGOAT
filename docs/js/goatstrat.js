@@ -171,9 +171,9 @@ const GoatStrat = (() => {
             }
             // Default to currentEvent if 6907 is in it
             const globalEv = (typeof currentEvent !== 'undefined') ? currentEvent : null;
-            const defaultKey = (globalEv && _events.some(e => e.key === globalEv)) ? globalEv : _events[0].key;
+            const defaultKey = (globalEv && _events.some(e => e.event_key === globalEv)) ? globalEv : _events[0].event_key;
             sel.innerHTML = _events.map(e =>
-                `<option value="${e.key}"${e.key === defaultKey ? ' selected' : ''}>${_esc(e.name || e.key)}</option>`
+                `<option value="${e.event_key}"${e.event_key === defaultKey ? ' selected' : ''}>${_esc(e.event_name || e.event_key)}</option>`
             ).join('');
             await _onEventSelect(defaultKey);
         } catch (e) {
@@ -511,13 +511,14 @@ const GoatStrat = (() => {
                 html += '<div class="gs-actual-section"><h5 class="gs-actual-sub">Breakdown Metrics</h5>';
                 const metrics = [];
                 if (b.totalPoints != null) metrics.push(['Total Points', b.totalPoints]);
-                if (b.autoPoints != null) metrics.push(['Auto Points', b.autoPoints]);
-                if (b.teleopPoints != null) metrics.push(['Teleop Points', b.teleopPoints]);
-                if (b.endGamePoints != null) metrics.push(['Endgame Points', b.endGamePoints]);
+                if (b.totalAutoPoints != null) metrics.push(['Auto Points', b.totalAutoPoints]);
+                if (b.totalTeleopPoints != null) metrics.push(['Teleop Points', b.totalTeleopPoints]);
+                if (b.endGameTowerPoints != null) metrics.push(['Endgame Tower', b.endGameTowerPoints]);
+                if (b.totalTowerPoints != null) metrics.push(['Tower Points', b.totalTowerPoints]);
                 if (b.totalFuelCount != null) metrics.push(['Total Fuel', b.totalFuelCount]);
                 if (b.autoFuelCount != null) metrics.push(['Auto Fuel', b.autoFuelCount]);
+                if (b.teleopFuelCount != null) metrics.push(['Teleop Fuel', b.teleopFuelCount]);
                 if (b.endgameFuelCount != null) metrics.push(['Endgame Fuel', b.endgameFuelCount]);
-                if (b.climbPoints != null) metrics.push(['Climb Points', b.climbPoints]);
                 if (b.foulPoints != null) metrics.push(['Foul Points', b.foulPoints]);
                 if (metrics.length) {
                     html += '<div class="gs-metrics-grid">';
