@@ -28416,3 +28416,39 @@ body.epa-breakdown-active .stat-opr {
         font-size: .75rem;
     }
 }
+
+/* Breakdown robot card injected stats (under team number) */
+.gs-bd-robot-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .2rem .5rem;
+    padding: .2rem 0 .35rem;
+    margin-bottom: .25rem;
+    border-bottom: 1px solid var(--border-subtle, rgba(255,255,255,.06));
+}
+.gs-bd-robot-6907 {
+    background: var(--primary-glow, rgba(99,102,241,.12));
+    margin: 0 -.25rem;
+    padding: .2rem .25rem .35rem;
+    border-radius: 4px;
+}
+.gs-bd-stat {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+    line-height: 1.2;
+}
+.gs-bd-stat-lbl {
+    font-size: .6rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    color: var(--text-muted);
+}
+.gs-bd-stat-val {
+    font-size: .78rem;
+    font-weight: 700;
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+}

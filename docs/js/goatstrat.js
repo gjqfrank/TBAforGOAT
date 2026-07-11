@@ -139,15 +139,9 @@ const GoatStrat = (() => {
               <button class="gs-btn gs-btn-refresh" onclick="GoatStrat.refresh()" title="Refresh">↻</button>
             </div>
 
-            <div class="gs-main-row">
-              <div class="gs-panel gs-pbp-panel">
-                <h3 class="gs-panel-title">Play by Play</h3>
-                <div id="gs-pbp-card" class="gs-pbp-card"></div>
-              </div>
-              <div class="gs-panel gs-bd-panel">
-                <h3 class="gs-panel-title">Score Breakdown</h3>
-                <div id="gs-bd-content" class="gs-bd-content"></div>
-              </div>
+            <div class="gs-panel gs-bd-panel">
+              <h3 class="gs-panel-title">Score Breakdown</h3>
+              <div id="gs-bd-content" class="gs-bd-content"></div>
             </div>
 
             <div class="gs-panel gs-bs-panel">
@@ -230,8 +224,6 @@ const GoatStrat = (() => {
         if (msel) msel.innerHTML = '<option value="">Loading matches…</option>';
         const bd = _$('gs-bd-content');
         if (bd) bd.innerHTML = '<p class="gs-loading">Loading…</p>';
-        const pbp = _$('gs-pbp-card');
-        if (pbp) pbp.innerHTML = '';
         const comp = _$('gs-comparison');
         if (comp) comp.innerHTML = '';
         const bsRoot = _$('gs-bs-root');
@@ -244,7 +236,7 @@ const GoatStrat = (() => {
 
             if (!_matches6907.length) {
                 if (msel) msel.innerHTML = '<option value="">No matches with 6907</option>';
-                if (pbp) pbp.innerHTML = '<p class="gs-empty">Team 6907 has no matches at this event yet.</p>';
+                if (bd) bd.innerHTML = '<p class="gs-empty">Team 6907 has no matches at this event yet.</p>';
                 return;
             }
 
@@ -275,7 +267,6 @@ const GoatStrat = (() => {
         const m = _matches6907[_matchIndex];
         if (!m) return;
 
-        _renderPbpPanel(m);
         _renderBattleStation(m);
         _renderGoatScoutForMatch(m);
 
@@ -286,73 +277,6 @@ const GoatStrat = (() => {
             _loadCasterNotes(m),
         ]);
         _renderComparison(m);
-    }
-
-    // ═══════════════════════════════════════════════════════
-    // PBP — Full team cards (reuses .pbp-* CSS classes)
-    // ═══════════════════════════════════════════════════════
-
-    function _renderPbpPanel(m) {
-        const el = _$('gs-pbp-card');
-        if (!el) return;
-
-        const redWon = m.winning_alliance === 'red';
-        const blueWon = m.winning_alliance === 'blue';
-        const upcoming = m.red?.score < 0 && m.blue?.score < 0;
-        const redScore = upcoming ? '–' : (m.red?.score != null ? m.red.score : '–');
-        const blueScore = upcoming ? '–' : (m.blue?.score != null ? m.blue.score : '–');
-        const redTitle = m.red?.alliance_number ? `Alliance #${m.red.alliance_number}` : 'Red Alliance';
-        const blueTitle = m.blue?.alliance_number ? `Alliance #${m.blue.alliance_number}` : 'Blue Alliance';
-
-        const redCards = (m.red?.teams?.length)
-            ? m.red.teams.map(t => _renderTeamCard(t, 'red-side')).join('')
-            : `<div class="pbp-alliance-placeholder red-side">${redTitle} — Teams TBD</div>`;
-        const blueCards = (m.blue?.teams?.length)
-            ? m.blue.teams.map(t => _renderTeamCard(t, 'blue-side')).join('')
-            : `<div class="pbp-alliance-placeholder blue-side">${blueTitle} — Teams TBD</div>`;
-
-        el.innerHTML = `
-          <div class="pbp-arena gs-pbp-arena">
-            <div class="pbp-alliance red-side${redWon ? ' pbp-alliance-won' : ''}">
-              <div class="pbp-alliance-header">
-                <span class="pbp-alliance-title">${_esc(redTitle)}</span>
-                <div class="pbp-score-group">
-                  ${redWon ? '<span class="pbp-winner-label">WINNER</span>' : ''}
-                  <span class="pbp-alliance-score">${redScore}</span>
-                </div>
-              </div>
-              <div class="pbp-team-cards">${redCards}</div>
-            </div>
-            <div class="pbp-alliance blue-side${blueWon ? ' pbp-alliance-won' : ''}">
-              <div class="pbp-alliance-header">
-                <div class="pbp-score-group">
-                  <span class="pbp-alliance-score">${blueScore}</span>
-                  ${blueWon ? '<span class="pbp-winner-label">WINNER</span>' : ''}
-                </div>
-                <span class="pbp-alliance-title">${_esc(blueTitle)}</span>
-              </div>
-              <div class="pbp-team-cards">${blueCards}</div>
-            </div>
-          </div>`;
-    }
-
-    function _renderTeamCard(t, sideCls) {
-        if (!t) return '';
-        const is6907 = t.team_number === TEAM_NUM;
-        const highlightCls = is6907 ? ' gs-team-highlight' : '';
-
-        return `
-        <div class="pbp-team ${sideCls}${highlightCls}" data-team="${t.team_number}">
-            <div class="pbp-team-top">
-                <div class="pbp-team-number" data-team-number="${t.team_number}">${t.team_number}${is6907 ? '<span class="gs-6907-badge">6907</span>' : ''}</div>
-                <div class="pbp-team-identity">
-                    <div class="pbp-team-name-row">
-                        <div class="pbp-team-nickname">${_esc(t.nickname || 'Team ' + t.team_number)}</div>
-                    </div>
-                    ${t.school_name ? `<div class="pbp-team-school">${_esc(t.school_name)}</div>` : ''}
-                </div>
-            </div>
-        </div>`;
     }
 
     // ═══════════════════════════════════════════════════════
@@ -709,11 +633,13 @@ const GoatStrat = (() => {
 
         const nickMap = {};
         const statsMap = {};
+        const teamLookup = {};
         for (const side of ['red', 'blue']) {
             if (m[side]?.teams) {
                 m[side].teams.forEach(t => {
                     if (t.nickname) nickMap[t.team_number] = t.nickname;
                     statsMap[t.team_number] = { opr: t.opr, epa: t.epa };
+                    teamLookup[t.team_number] = t;
                 });
             }
         }
@@ -728,49 +654,38 @@ const GoatStrat = (() => {
             ? (typeof renderBdAlliance2026 === 'function' ? renderBdAlliance2026 : renderBdAlliance)
             : renderBdAlliance;
 
-        el.innerHTML = `
+        const rawHtml = `
             ${renderFn(data.red, 'red', redWon, nickMap, statsMap, redAllianceNum, isPlayoff)}
-            ${renderFn(data.blue, 'blue', blueWon, nickMap, statsMap, blueAllianceNum, isPlayoff)}
-            ${_renderTeamStatsTable(m)}`;
-    }
+            ${renderFn(data.blue, 'blue', blueWon, nickMap, statsMap, blueAllianceNum, isPlayoff)}`;
 
-    function _renderTeamStatsTable(m) {
-        const rows = (side) => {
-            if (!m[side]?.teams) return '';
-            return m[side].teams.map(t => {
-                const is6907 = t.team_number === TEAM_NUM;
-                const rank = t.rank ?? '–';
-                const wlt = `${t.wins ?? 0}-${t.losses ?? 0}-${t.ties ?? 0}`;
-                const opr = t.opr != null ? (typeof t.opr === 'number' ? t.opr.toFixed(1) : t.opr) : '–';
-                const epa = t.epa != null ? (typeof t.epa === 'number' ? t.epa.toFixed(1) : t.epa) : '–';
-                const avgRp = t.avg_rp != null ? (typeof t.avg_rp === 'number' ? t.avg_rp.toFixed(2) : t.avg_rp) : '–';
-                return `<tr class="gs-stats-row${is6907 ? ' gs-stats-6907' : ''}">
-                    <td class="gs-stats-team">${t.team_number}</td>
-                    <td class="gs-stats-nick">${_esc(t.nickname || '')}</td>
-                    <td>${rank}</td>
-                    <td>${wlt}</td>
-                    <td>${opr}</td>
-                    <td>${epa}</td>
-                    <td>${avgRp}</td>
-                </tr>`;
-            }).join('');
-        };
+        // Post-process: inject team stats under each robot card's team number
+        const temp = document.createElement('div');
+        temp.innerHTML = rawHtml;
+        temp.querySelectorAll('.bd-robot-card[data-team]').forEach(card => {
+            const num = parseInt(card.dataset.team, 10);
+            const t = teamLookup[num];
+            if (!t) return;
+            const rank = t.rank ?? '–';
+            const wlt = `${t.wins ?? 0}-${t.losses ?? 0}-${t.ties ?? 0}`;
+            const opr = t.opr != null ? (typeof t.opr === 'number' ? t.opr.toFixed(1) : t.opr) : '–';
+            const avgRp = t.avg_rp != null ? (typeof t.avg_rp === 'number' ? t.avg_rp.toFixed(2) : t.avg_rp) : '–';
+            const is6907 = num === TEAM_NUM;
+            const statsDiv = document.createElement('div');
+            statsDiv.className = 'gs-bd-robot-stats' + (is6907 ? ' gs-bd-robot-6907' : '');
+            statsDiv.innerHTML = `
+                <span class="gs-bd-stat"><span class="gs-bd-stat-lbl">Rank</span><span class="gs-bd-stat-val">${rank}</span></span>
+                <span class="gs-bd-stat"><span class="gs-bd-stat-lbl">Avg RP</span><span class="gs-bd-stat-val">${avgRp}</span></span>
+                <span class="gs-bd-stat"><span class="gs-bd-stat-lbl">OPR</span><span class="gs-bd-stat-val">${opr}</span></span>
+                <span class="gs-bd-stat"><span class="gs-bd-stat-lbl">W-L-T</span><span class="gs-bd-stat-val">${wlt}</span></span>`;
+            const numEl = card.querySelector('.bd-robot-num');
+            if (numEl && numEl.nextSibling) {
+                card.insertBefore(statsDiv, numEl.nextSibling);
+            } else if (numEl) {
+                card.appendChild(statsDiv);
+            }
+        });
 
-        return `
-          <div class="gs-team-stats-wrap">
-            <h4 class="gs-stats-title">Team Stats</h4>
-            <table class="gs-team-stats-table">
-              <thead>
-                <tr><th>Team</th><th>Name</th><th>Rank</th><th>W-L-T</th><th>OPR</th><th>EPA</th><th>Avg RP</th></tr>
-              </thead>
-              <tbody>
-                <tr class="gs-stats-group-row"><td colspan="7">Red Alliance</td></tr>
-                ${rows('red')}
-                <tr class="gs-stats-group-row"><td colspan="7">Blue Alliance</td></tr>
-                ${rows('blue')}
-              </tbody>
-            </table>
-          </div>`;
+        el.innerHTML = temp.innerHTML;
     }
 
     // ── Strategy notes CRUD ────────────────────────────────
