@@ -655,8 +655,14 @@ const GoatStrat = (() => {
             : renderBdAlliance;
 
         const rawHtml = `
-            ${renderFn(data.red, 'red', redWon, nickMap, statsMap, redAllianceNum, isPlayoff)}
-            ${renderFn(data.blue, 'blue', blueWon, nickMap, statsMap, blueAllianceNum, isPlayoff)}`;
+            <div class="gs-bd-alliances-row">
+              <div class="gs-bd-alliance-col gs-bd-alliance-red">
+                ${renderFn(data.red, 'red', redWon, nickMap, statsMap, redAllianceNum, isPlayoff)}
+              </div>
+              <div class="gs-bd-alliance-col gs-bd-alliance-blue">
+                ${renderFn(data.blue, 'blue', blueWon, nickMap, statsMap, blueAllianceNum, isPlayoff)}
+              </div>
+            </div>`;
 
         // Post-process: inject team stats under each robot card's team number
         const temp = document.createElement('div');

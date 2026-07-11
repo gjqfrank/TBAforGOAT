@@ -492,23 +492,19 @@ document.addEventListener('click', e => {
     if (!wrapper && !menu) document.getElementById('settings-menu')?.classList.add('hidden');
 });
 
-// ── Theme Toggle ───────────────────────────────────────────
+// ── Theme (Light mode only — dark mode disabled) ──────────
 function toggleTheme(isLight) {
-    document.documentElement.setAttribute('data-theme', isLight ? 'light' : 'dark');
-    localStorage.setItem('theme', isLight ? 'light' : 'dark');
+    document.documentElement.setAttribute('data-theme', 'light');
+    localStorage.setItem('theme', 'light');
 }
 
-// Restore saved theme on load
 (function initTheme() {
-    const saved = localStorage.getItem('theme');
-    if (saved === 'light') {
-        document.documentElement.setAttribute('data-theme', 'light');
-        // Sync checkbox once DOM is ready
-        document.addEventListener('DOMContentLoaded', () => {
-            const cb = document.getElementById('toggle-theme');
-            if (cb) cb.checked = true;
-        });
-    }
+    document.documentElement.setAttribute('data-theme', 'light');
+    localStorage.setItem('theme', 'light');
+    document.addEventListener('DOMContentLoaded', () => {
+        const cb = document.getElementById('toggle-theme');
+        if (cb) cb.checked = true;
+    });
 })();
 
 // ── Competition Mode (FRC only) ────────────────────────────

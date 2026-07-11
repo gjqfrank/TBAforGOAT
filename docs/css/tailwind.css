@@ -615,6 +615,7 @@ video {
 /* ═══ LIGHT THEME OVERRIDES ════════════════════════════════ */
 
 [data-theme="light"] {
+  color-scheme: light;
   --bg:              #f4f5f9;
   --bg-gradient:     linear-gradient(145deg, #f4f5f9 0%, #e8eaf0 50%, #f0f1f6 100%);
   --surface:         #ffffff;
@@ -736,7 +737,7 @@ body > * {
 
 input[type="checkbox"] {
   accent-color: var(--primary);
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 /* ═══ EVENT SELECTION — SEASON PICKER ═════════════════════ */
@@ -28421,34 +28422,55 @@ body.epa-breakdown-active .stat-opr {
 .gs-bd-robot-stats {
     display: flex;
     flex-wrap: wrap;
-    gap: .2rem .5rem;
-    padding: .2rem 0 .35rem;
-    margin-bottom: .25rem;
-    border-bottom: 1px solid var(--border-subtle, rgba(255,255,255,.06));
+    gap: .35rem 1rem;
+    padding: .3rem 0 .45rem;
+    margin-bottom: .3rem;
+    border-bottom: 1px solid var(--border-subtle, rgba(0,0,0,.06));
 }
 .gs-bd-robot-6907 {
-    background: var(--primary-glow, rgba(99,102,241,.12));
-    margin: 0 -.25rem;
-    padding: .2rem .25rem .35rem;
-    border-radius: 4px;
+    background: var(--primary-glow, rgba(91,94,240,.12));
+    margin: 0 -.3rem;
+    padding: .3rem .3rem .45rem;
+    border-radius: 5px;
 }
 .gs-bd-stat {
     display: inline-flex;
     flex-direction: column;
     align-items: center;
-    gap: 0;
-    line-height: 1.2;
+    gap: .1rem;
+    line-height: 1.25;
 }
 .gs-bd-stat-lbl {
-    font-size: .6rem;
+    font-size: .68rem;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: .03em;
+    letter-spacing: .04em;
     color: var(--text-muted);
 }
 .gs-bd-stat-val {
-    font-size: .78rem;
+    font-size: .92rem;
     font-weight: 700;
     color: var(--text);
     font-family: 'JetBrains Mono', monospace;
+}
+
+/* Breakdown red/blue side-by-side */
+.gs-bd-alliances-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+.gs-bd-alliance-col {
+    min-width: 0;
+}
+.gs-bd-alliance-red .bd-alliance {
+    border-left: 3px solid var(--red-deep, #b91c1c);
+}
+.gs-bd-alliance-blue .bd-alliance {
+    border-left: 3px solid var(--blue-deep, #1d4ed8);
+}
+@media (max-width: 900px) {
+    .gs-bd-alliances-row {
+        grid-template-columns: 1fr;
+    }
 }
