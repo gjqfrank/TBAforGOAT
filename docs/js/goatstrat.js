@@ -29,6 +29,10 @@ const GoatStrat = (() => {
     let _strategyNotes = {};
     let _casterNotes = {};
     let _allGoatScoutData = [];
+    let _allMatches = [];           // all event matches (not just 6907's)
+    let _compareTeamA = '';
+    let _compareTeamB = '';
+    let _activeSubTab = 'strategy'; // 'strategy' | 'compare'
 
     // BattleStation state
     let _bsCtx = 'match';      // 'match' | 'frcXXXX'
@@ -139,49 +143,78 @@ const GoatStrat = (() => {
               <button class="gs-btn gs-btn-refresh" onclick="GoatStrat.refresh()" title="Refresh">↻</button>
             </div>
 
-            <div class="gs-panel gs-bd-panel">
-              <h3 class="gs-panel-title">Score Breakdown</h3>
-              <div id="gs-bd-content" class="gs-bd-content"></div>
+            <div class="gs-subtabs">
+              <button class="gs-subtab active" data-subtab="strategy" onclick="GoatStrat._onSubTabClick('strategy')">Strategy</button>
+              <button class="gs-subtab" data-subtab="compare" onclick="GoatStrat._onSubTabClick('compare')">1v1 Compare</button>
             </div>
 
-            <div class="gs-panel gs-bs-panel">
-              <h3 class="gs-panel-title">Battle Station</h3>
-              <div id="gs-bs-root" class="gs-bs-root"></div>
-            </div>
+            <div id="gs-strategy-view">
+              <div class="gs-panel gs-bd-panel">
+                <h3 class="gs-panel-title">Score Breakdown</h3>
+                <div id="gs-bd-content" class="gs-bd-content"></div>
+              </div>
 
-            <div class="gs-main-row">
-              <div class="gs-panel gs-strat-panel">
-                <h3 class="gs-panel-title">6907 Strategy Plan</h3>
-                <div class="gs-strat-grid">
-                  <div class="gs-strat-field">
-                    <label>Auto</label>
-                    <textarea id="gs-strat-auto" rows="4" placeholder="Auto phase strategy…"></textarea>
+              <div class="gs-panel gs-bs-panel">
+                <h3 class="gs-panel-title">Battle Station</h3>
+                <div id="gs-bs-root" class="gs-bs-root"></div>
+              </div>
+
+              <div class="gs-main-row">
+                <div class="gs-panel gs-strat-panel">
+                  <h3 class="gs-panel-title">6907 Strategy Plan</h3>
+                  <div class="gs-strat-grid">
+                    <div class="gs-strat-field">
+                      <label>Auto</label>
+                      <textarea id="gs-strat-auto" rows="4" placeholder="Auto phase strategy…"></textarea>
+                    </div>
+                    <div class="gs-strat-field">
+                      <label>Transition</label>
+                      <textarea id="gs-strat-transition" rows="4" placeholder="Auto→Teleop transition strategy…"></textarea>
+                    </div>
+                    <div class="gs-strat-field">
+                      <label>Teleop</label>
+                      <textarea id="gs-strat-teleop" rows="4" placeholder="Teleop phase strategy…"></textarea>
+                    </div>
+                    <div class="gs-strat-field">
+                      <label>Endgame</label>
+                      <textarea id="gs-strat-endgame" rows="4" placeholder="Endgame phase strategy…"></textarea>
+                    </div>
                   </div>
-                  <div class="gs-strat-field">
-                    <label>Transition</label>
-                    <textarea id="gs-strat-transition" rows="4" placeholder="Auto→Teleop transition strategy…"></textarea>
-                  </div>
-                  <div class="gs-strat-field">
-                    <label>Teleop</label>
-                    <textarea id="gs-strat-teleop" rows="4" placeholder="Teleop phase strategy…"></textarea>
-                  </div>
-                  <div class="gs-strat-field">
-                    <label>Endgame</label>
-                    <textarea id="gs-strat-endgame" rows="4" placeholder="Endgame phase strategy…"></textarea>
-                  </div>
+                  <button class="gs-btn gs-btn-save" onclick="GoatStrat._onSaveStrategy()">Save Strategy</button>
+                  <span id="gs-strat-status" class="gs-status"></span>
                 </div>
-                <button class="gs-btn gs-btn-save" onclick="GoatStrat._onSaveStrategy()">Save Strategy</button>
-                <span id="gs-strat-status" class="gs-status"></span>
+                <div class="gs-panel gs-comp-panel">
+                  <h3 class="gs-panel-title">Plan vs Actual</h3>
+                  <div id="gs-comparison"></div>
+                </div>
               </div>
-              <div class="gs-panel gs-comp-panel">
-                <h3 class="gs-panel-title">Plan vs Actual</h3>
-                <div id="gs-comparison"></div>
+
+              <div class="gs-panel">
+                <h3 class="gs-panel-title">Match Scout Data <span class="gs-panel-sub" id="gs-scout-sub"></span></h3>
+                <div id="gs-goatscout-content"></div>
               </div>
             </div>
 
-            <div class="gs-panel">
-              <h3 class="gs-panel-title">Match Scout Data <span class="gs-panel-sub" id="gs-scout-sub"></span></h3>
-              <div id="gs-goatscout-content"></div>
+            <div id="gs-compare-view" class="hidden">
+              <div class="gs-panel">
+                <div class="gs-compare-bar">
+                  <div class="gs-compare-team-sel">
+                    <label>Team A</label>
+                    <select id="gs-cmp-team-a" class="gs-select" onchange="GoatStrat._onCompareTeamAChange(this.value)">
+                      <option value="">Select team…</option>
+                    </select>
+                  </div>
+                  <span class="gs-compare-vs">VS</span>
+                  <div class="gs-compare-team-sel">
+                    <label>Team B</label>
+                    <select id="gs-cmp-team-b" class="gs-select" onchange="GoatStrat._onCompareTeamBChange(this.value)">
+                      <option value="">Select team…</option>
+                    </select>
+                  </div>
+                  <button class="gs-btn gs-btn-save" onclick="GoatStrat._onCompareBtn()">Compare</button>
+                </div>
+                <div id="gs-compare-results"></div>
+              </div>
             </div>
           </div>`;
     }
@@ -218,6 +251,7 @@ const GoatStrat = (() => {
         _strategyNotes = {};
         _casterNotes = {};
         _allGoatScoutData = [];
+        _allMatches = [];
         _matches6907 = [];
         _matchIndex = 0;
         _bsNotes = [];
@@ -235,6 +269,7 @@ const GoatStrat = (() => {
         try {
             const data = await API.allMatches(eventKey);
             const all = data?.matches || [];
+            _allMatches = all;
             _matches6907 = all.filter(_has6907);
 
             if (!_matches6907.length) {
@@ -251,6 +286,7 @@ const GoatStrat = (() => {
                 }).join('');
             }
             await _loadMatchData();
+            _populateCompareSelectors();
         } catch (e) {
             if (msel) msel.innerHTML = `<option value="">Error: ${_esc(e.message)}</option>`;
         }
@@ -974,6 +1010,263 @@ const GoatStrat = (() => {
         }
     }
 
+    // ── 1v1 Team Compare ──────────────────────────────────
+
+    function _onSubTabClick(tabName) {
+        _activeSubTab = tabName;
+        const stratView = _$('gs-strategy-view');
+        const cmpView = _$('gs-compare-view');
+        if (!stratView || !cmpView) return;
+        document.querySelectorAll('.gs-subtab').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.subtab === tabName);
+        });
+        if (tabName === 'compare') {
+            stratView.classList.add('hidden');
+            cmpView.classList.remove('hidden');
+            if (!_allMatches.length) _populateCompareSelectors();
+        } else {
+            stratView.classList.remove('hidden');
+            cmpView.classList.add('hidden');
+        }
+    }
+
+    function _populateCompareSelectors() {
+        const selA = _$('gs-cmp-team-a');
+        const selB = _$('gs-cmp-team-b');
+        if (!selA || !selB) return;
+
+        // Extract unique team keys from all matches
+        const teamSet = new Map(); // teamKey -> team_number
+        for (const m of _allMatches) {
+            for (const side of ['red', 'blue']) {
+                if (m[side]?.teams) {
+                    m[side].teams.forEach(t => {
+                        const tk = `frc${t.team_number}`;
+                        if (!teamSet.has(tk)) teamSet.set(tk, t.team_number);
+                    });
+                }
+            }
+        }
+
+        const sorted = [...teamSet.entries()].sort((a, b) => a[1] - b[1]);
+        const options = ['<option value="">Select team…</option>']
+            .concat(sorted.map(([tk, num]) => `<option value="${tk}">${num}</option>`));
+
+        const html = options.join('');
+        selA.innerHTML = html;
+        selB.innerHTML = html;
+
+        // Pre-select 6907 as Team A if available
+        const key6907 = `frc${TEAM_NUM}`;
+        if (teamSet.has(key6907)) {
+            selA.value = key6907;
+            _compareTeamA = key6907;
+        }
+    }
+
+    function _onCompareTeamAChange(val) {
+        _compareTeamA = val;
+    }
+
+    function _onCompareTeamBChange(val) {
+        _compareTeamB = val;
+    }
+
+    async function _onCompareBtn() {
+        if (!_compareTeamA || !_compareTeamB) {
+            const el = _$('gs-compare-results');
+            if (el) el.innerHTML = '<p class="gs-empty">Please select both teams.</p>';
+            return;
+        }
+        if (_compareTeamA === _compareTeamB) {
+            const el = _$('gs-compare-results');
+            if (el) el.innerHTML = '<p class="gs-empty">Please select two different teams.</p>';
+            return;
+        }
+        await _renderCompare();
+    }
+
+    async function _renderCompare() {
+        const el = _$('gs-compare-results');
+        if (!el) return;
+        el.innerHTML = '<p class="gs-loading">Loading comparison…</p>';
+
+        try {
+            // Fetch team stats from compare API
+            const cmpData = await API.compareTeams(_currentEvent, [_compareTeamA, _compareTeamB]);
+            const teams = cmpData?.teams || [];
+            const teamAStats = teams.find(t => t.team_key === _compareTeamA) || {};
+            const teamBStats = teams.find(t => t.team_key === _compareTeamB) || {};
+
+            // Get scouting data for both teams
+            const scoutA = _allGoatScoutData.find(d => d.team_key === _compareTeamA);
+            const scoutB = _allGoatScoutData.find(d => d.team_key === _compareTeamB);
+            const metricsA = scoutA?.metrics || {};
+            const metricsB = scoutB?.metrics || {};
+
+            // Get match history for both teams
+            const matchesA = _getTeamMatches(_compareTeamA);
+            const matchesB = _getTeamMatches(_compareTeamB);
+
+            el.innerHTML = _buildCompareHtml(teamAStats, teamBStats, metricsA, metricsB, matchesA, matchesB);
+        } catch (e) {
+            el.innerHTML = `<p class="gs-empty">Error: ${_esc(e.message)}</p>`;
+        }
+    }
+
+    function _getTeamMatches(teamKey) {
+        const results = [];
+        for (const m of _allMatches) {
+            if (m.comp_level && m.comp_level !== 'qm') continue;
+            for (const side of ['red', 'blue']) {
+                if (m[side]?.teams) {
+                    const found = m[side].teams.some(t => `frc${t.team_number}` === teamKey);
+                    if (found) {
+                        const otherSide = side === 'red' ? 'blue' : 'red';
+                        const myScore = m[side]?.score ?? -1;
+                        const oppScore = m[otherSide]?.score ?? -1;
+                        const won = myScore > oppScore;
+                        const tied = myScore === oppScore;
+                        results.push({
+                            label: (m.label || m.key || '').replace(/^Qualification\s*/i, 'Qual '),
+                            side,
+                            myScore,
+                            oppScore,
+                            won,
+                            tied,
+                        });
+                        break;
+                    }
+                }
+            }
+        }
+        return results;
+    }
+
+    function _fmtVal(v) {
+        if (v == null || v === '') return '—';
+        return _esc(String(v));
+    }
+
+    function _statRow(label, valA, valB, higherIsBetter) {
+        const aNum = typeof valA === 'number' ? valA : parseFloat(valA);
+        const bNum = typeof valB === 'number' ? valB : parseFloat(valB);
+        let aClass = '', bClass = '';
+        if (!isNaN(aNum) && !isNaN(bNum) && aNum !== bNum) {
+            if (higherIsBetter) {
+                if (aNum > bNum) aClass = ' gs-cmp-better';
+                else bClass = ' gs-cmp-better';
+            } else {
+                if (aNum < bNum) aClass = ' gs-cmp-better';
+                else bClass = ' gs-cmp-better';
+            }
+        }
+        return `<tr>
+            <td class="gs-cmp-lbl">${_esc(label)}</td>
+            <td class="gs-cmp-val${aClass}">${_fmtVal(valA)}</td>
+            <td class="gs-cmp-val${bClass}">${_fmtVal(valB)}</td>
+        </tr>`;
+    }
+
+    function _buildCompareHtml(a, b, mA, mB, matchesA, matchesB) {
+        const numA = a.team_number || _compareTeamA.replace('frc', '');
+        const numB = b.team_number || _compareTeamB.replace('frc', '');
+        const nickA = _esc(a.nickname || '');
+        const nickB = _esc(b.nickname || '');
+
+        // Section 1: Team Info Cards
+        let html = `
+        <div class="gs-cmp-section">
+            <h4 class="gs-cmp-section-title">Team Stats</h4>
+            <div class="gs-cmp-team-grid">
+                <div class="gs-cmp-team-card gs-cmp-team-a">
+                    <div class="gs-cmp-team-num">${numA}</div>
+                    <div class="gs-cmp-team-nick">${nickA}</div>
+                </div>
+                <div class="gs-cmp-team-card gs-cmp-team-b">
+                    <div class="gs-cmp-team-num">${numB}</div>
+                    <div class="gs-cmp-team-nick">${nickB}</div>
+                </div>
+            </div>
+            <table class="gs-cmp-table">
+                <thead><tr><th>Metric</th><th>Team ${numA}</th><th>Team ${numB}</th></tr></thead>
+                <tbody>
+                    ${_statRow('Rank', a.rank, b.rank, false)}
+                    ${_statRow('W-L-T', `${a.wins || 0}-${a.losses || 0}-${a.ties || 0}`, `${b.wins || 0}-${b.losses || 0}-${b.ties || 0}`, null)}
+                    ${_statRow('OPR', a.opr, b.opr, true)}
+                    ${_statRow('EPA', a.epa, b.epa, true)}
+                    ${_statRow('EPA Auto', a.epa_auto, b.epa_auto, true)}
+                    ${_statRow('EPA Teleop', a.epa_teleop, b.epa_teleop, true)}
+                    ${_statRow('EPA Endgame', a.epa_endgame, b.epa_endgame, true)}
+                    ${_statRow('Avg RP', a.avg_rp, b.avg_rp, true)}
+                    ${_statRow('Qual Avg', a.qual_average, b.qual_average, true)}
+                    ${_statRow('High Score', a.high_score, b.high_score, true)}
+                    ${_statRow('Matches Played', a.matches_played, b.matches_played, null)}
+                </tbody>
+            </table>
+        </div>`;
+
+        // Section 2: Scouting Metrics
+        const groups = (typeof GOATSCOUT_METRIC_GROUPS !== 'undefined') ? GOATSCOUT_METRIC_GROUPS : [];
+        if (groups.length) {
+            html += `
+        <div class="gs-cmp-section">
+            <h4 class="gs-cmp-section-title">Scouting Data</h4>
+            <table class="gs-cmp-table">
+                <thead><tr><th>Metric</th><th>Team ${numA}</th><th>Team ${numB}</th></tr></thead>
+                <tbody>`;
+            for (const grp of groups) {
+                html += `<tr class="gs-cmp-group-row"><td colspan="3">${_esc(grp.label)}</td></tr>`;
+                for (const key of grp.metrics) {
+                    const valA = mA[key];
+                    const valB = mB[key];
+                    const aNonEmpty = valA != null && valA !== '' && valA !== '未填';
+                    const bNonEmpty = valB != null && valB !== '' && valB !== '未填';
+                    html += `<tr>
+                        <td class="gs-cmp-lbl">${_esc(key)}</td>
+                        <td class="gs-cmp-val${aNonEmpty ? ' gs-cmp-filled' : ''}">${aNonEmpty ? _fmtVal(valA) : '<span class="gs-cmp-empty">—</span>'}</td>
+                        <td class="gs-cmp-val${bNonEmpty ? ' gs-cmp-filled' : ''}">${bNonEmpty ? _fmtVal(valB) : '<span class="gs-cmp-empty">—</span>'}</td>
+                    </tr>`;
+                }
+            }
+            html += `</tbody></table>
+        </div>`;
+        }
+
+        // Section 3: Match History
+        html += `
+        <div class="gs-cmp-section">
+            <h4 class="gs-cmp-section-title">Match History</h4>
+            <div class="gs-cmp-team-grid">
+                <div class="gs-cmp-match-col">
+                    <div class="gs-cmp-match-hdr">Team ${numA}</div>
+                    ${_buildMatchListHtml(matchesA)}
+                </div>
+                <div class="gs-cmp-match-col">
+                    <div class="gs-cmp-match-hdr">Team ${numB}</div>
+                    ${_buildMatchListHtml(matchesB)}
+                </div>
+            </div>
+        </div>`;
+
+        return html;
+    }
+
+    function _buildMatchListHtml(matches) {
+        if (!matches.length) return '<p class="gs-cmp-empty">No qual matches</p>';
+        return '<div class="gs-cmp-match-list">' + matches.map(m => {
+            const cls = m.won ? 'gs-cmp-win' : (m.tied ? 'gs-cmp-tie' : 'gs-cmp-loss');
+            const sideCls = m.side === 'red' ? 'gs-cmp-red' : 'gs-cmp-blue';
+            const result = m.won ? 'W' : (m.tied ? 'T' : 'L');
+            return `<div class="gs-cmp-match-row ${cls}">
+                <span class="gs-cmp-match-label">${_esc(m.label)}</span>
+                <span class="gs-cmp-match-side ${sideCls}">${m.side[0].toUpperCase()}</span>
+                <span class="gs-cmp-match-score">${m.myScore}–${m.oppScore}</span>
+                <span class="gs-cmp-match-result">${result}</span>
+            </div>`;
+        }).join('') + '</div>';
+    }
+
     // ── Public API ─────────────────────────────────────────
     return {
         mount,
@@ -988,5 +1281,9 @@ const GoatStrat = (() => {
         _onEditNote,
         _onCancelNoteEdit,
         _onSaveNoteEdit,
+        _onSubTabClick,
+        _onCompareTeamAChange,
+        _onCompareTeamBChange,
+        _onCompareBtn,
     };
 })();
