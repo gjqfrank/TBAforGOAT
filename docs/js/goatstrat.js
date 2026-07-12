@@ -1092,11 +1092,44 @@ const GoatStrat = (() => {
         el.innerHTML = '<p class="gs-loading">Loading comparison…</p>';
 
         try {
-            // Fetch team stats from compare API
-            const cmpData = await API.compareTeams(_currentEvent, [_compareTeamA, _compareTeamB]);
-            const teams = cmpData?.teams || [];
-            const teamAStats = teams.find(t => t.team_key === _compareTeamA) || {};
-            const teamBStats = teams.find(t => t.team_key === _compareTeamB) || {};
+            // Build team stats lookup from _allMatches (has rank, avg_rp, w-l-t, opr)
+            const statsMap = {};
+            for (const m of _allMatches) {
+                for (const side of ['red', 'blue']) {
+                    if (m[side]?.teams) {
+                        for (const t of m[side].teams) {
+                            const tk = `frc${t.team_number}`;
+                            if (!statsMap[tk]) {
+                                statsMap[tk] = {
+                                    team_key: tk,
+                                    team_number: t.team_number,
+                                    nickname: t.nickname || '',
+                                    rank: t.rank ?? null,
+                                    avg_rp: t.avg_rp ?? null,
+                                    opr: t.opr ?? null,
+                                    wins: t.wins ?? 0,
+                                    losses: t.losses ?? 0,
+                                    ties: t.ties ?? 0,
+                                };
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Merge with compareTeams API for EPA, qual_average, high_score
+            let teamAStats = statsMap[_compareTeamA] || { team_key: _compareTeamA, team_number: parseInt(_compareTeamA.replace('frc',''), 10) };
+            let teamBStats = statsMap[_compareTeamB] || { team_key: _compareTeamB, team_number: parseInt(_compareTeamB.replace('frc',''), 10) };
+
+            try {
+                const cmpData = await API.compareTeams(_currentEvent, [_compareTeamA, _compareTeamB]);
+                const teams = cmpData?.teams || [];
+                const cmpA = teams.find(t => t.team_key === _compareTeamA) || {};
+                const cmpB = teams.find(t => t.team_key === _compareTeamB) || {};
+                // Fill in fields only from compareTeams (EPA, qual_average, high_score, matches_played)
+                teamAStats = { ...cmpA, ...teamAStats };
+                teamBStats = { ...cmpB, ...teamBStats };
+            } catch (_) { /* _allMatches data is sufficient fallback */ }
 
             // Get scouting data for both teams
             const scoutA = _allGoatScoutData.find(d => d.team_key === _compareTeamA);
