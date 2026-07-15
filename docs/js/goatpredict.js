@@ -267,13 +267,25 @@ const GoatPredict = (() => {
             const redError  = redScore  - redEPA;
             const blueError = blueScore - blueEPA;
 
+            // NOTE: Statbotics applies the FULL alliance error to each team
+            // (non-zero-sum design). This works when starting from a good
+            // pre-season prior where errors are small. But for from-scratch
+            // computation (no statbotics data), the initial error is huge and
+            // applying it fully to all 3 teams causes the alliance EPA to
+            // overshoot by 3×K ≈ 1.5× the error every match — wild
+            // oscillation. Dividing by 3 (alliance size) makes each team's
+            // update proportional to its share, so the alliance EPA changes
+            // by K×error per match and converges properly.
+            const redErrPerTeam  = redError  / redTeams.length;
+            const blueErrPerTeam = blueError / blueTeams.length;
+
             // Red alliance: update each team with own K, M (per-team match count)
             for (const n of redTeams) {
                 const N = (matchCount.get(n) || 0) + 1;
                 matchCount.set(n, N);
                 const K = _kParam(N);
                 const M = _marginParam(N);
-                const delta = (K / (1 + M)) * (redError - M * blueError);
+                const delta = (K / (1 + M)) * (redErrPerTeam - M * blueErrPerTeam);
                 epa.set(n, (epa.get(n) || 0) + delta);
             }
             // Blue alliance: swap red/blue roles in the formula
@@ -282,7 +294,7 @@ const GoatPredict = (() => {
                 matchCount.set(n, N);
                 const K = _kParam(N);
                 const M = _marginParam(N);
-                const delta = (K / (1 + M)) * (blueError - M * redError);
+                const delta = (K / (1 + M)) * (blueErrPerTeam - M * redErrPerTeam);
                 epa.set(n, (epa.get(n) || 0) + delta);
             }
         }
