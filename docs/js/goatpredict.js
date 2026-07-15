@@ -183,20 +183,41 @@ const GoatPredict = (() => {
     }
 
     // ── EPA (Expected Points Added) — statbotics V2 ───────
-    // Initialises from the API EPA field (pre-event season EPA), then
-    // updates each team with the statbotics update formula:
+    // IMPORTANT: The API `epa` field from statbotics already reflects ALL
+    // matches played at this event (it's the current EPA, not pre-event).
+    // So we must NOT replay played matches on top of apiEPA — that would
+    // double-count every match's effect.
     //
-    //   ΔEPA = K × (1/(1+M)) × ((Score - AllianceEPA)
-    //                             - M × (OppScore - OppAllianceEPA))
-    //
-    // The FULL alliance error is applied to each team (NOT divided by 3).
-    // This is statbotics' non-zero-sum design — the average EPA increases
-    // as the season progresses, unlike Elo which is zero-sum.
+    // Strategy:
+    //   • If apiEPA is available (real TBA events with statbotics coverage),
+    //     use it directly — it IS the statbotics V2 EPA.
+    //   • If apiEPA is missing (custom events like "Sanya"), compute from
+    //     scratch using the statbotics update formula:
+    //       ΔEPA = K × (1/(1+M)) × ((Score - AllianceEPA)
+    //                                 - M × (OppScore - OppAllianceEPA))
+    //     starting from 0, replaying all played matches.
     function _computeEPA(qualMatches, teamData) {
         const epa = new Map();
+
+        // Check how many teams have a valid apiEPA from statbotics
+        let withApiEpa = 0, totalTeams = 0;
+        teamData.forEach((d, num) => {
+            totalTeams++;
+            if (typeof d.apiEPA === 'number' && d.apiEPA > 0) withApiEpa++;
+        });
+
+        // If most teams have apiEPA, use statbotics values directly (no replay)
+        if (withApiEpa > totalTeams * 0.5) {
+            teamData.forEach((d, num) => {
+                epa.set(num, typeof d.apiEPA === 'number' ? d.apiEPA : 0);
+            });
+            return epa;
+        }
+
+        // ── From-scratch computation (custom events without statbotics) ──
         const matchCount = new Map();
         teamData.forEach((d, num) => {
-            epa.set(num, typeof d.apiEPA === 'number' ? d.apiEPA : 0);
+            epa.set(num, 0);
             matchCount.set(num, 0);
         });
 
@@ -773,7 +794,7 @@ const GoatPredict = (() => {
 
         el.innerHTML = `
           <div class="gp-panel">
-            <h3 class="gp-panel-title">Team Ratings <span class="gp-panel-sub">${rows.length} teams · EPA via statbotics V2 · OPR via least-squares</span></h3>
+            <h3 class="gp-panel-title">Team Ratings <span class="gp-panel-sub">${rows.length} teams · EPA from statbotics (or local V2 for custom events) · OPR via least-squares</span></h3>
             <div class="gp-table-wrap">
               <table class="gp-table">
                 <thead>
