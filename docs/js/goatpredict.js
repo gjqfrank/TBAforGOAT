@@ -165,64 +165,78 @@ const GoatPredict = (() => {
         return opr;
     }
 
-    // ── K parameter (statbotics piecewise function of N) ────
-    // Controls update magnitude. Decays from 0.5 → 0.3 as N grows.
-    function _kParam(N) {
-        if (N <= 6)  return 0.5;
-        if (N <= 12) return 0.5 - (1 / 30) * (N - 6);
-        return 0.3;
-    }
-
-    // ── Margin parameter M (statbotics piecewise function of N) ─
-    // Weighs opponent's error. Early season M≈0 (focus on own offence),
-    // late season M→1 (focus on score margin, like Elo).
-    function _marginParam(N) {
-        if (N <= 12) return 0;
-        if (N <= 36) return (1 / 24) * (N - 12);
-        return 1;
+    // ── statbotics percent_func(year, N) ──────────────────────
+    // Exact replica of backend/src/models/epa/main.py:percent_func.
+    // For year > 2015 (so for 2026): (2/3) * clip(0.3, 0.5, 0.5 - 0.2/6*(N-6)).
+    //   N<=6 → 0.5, 6<N<12 ramps 0.5→0.3, N>=12 → 0.3, then ×2/3.
+    // This is the EWMA "learning rate" per team, based on that team's own
+    // match count (each team tracks its own N — see update_team in main.py).
+    function _epaPercent(N) {
+        const raw = Math.min(0.5, Math.max(0.3, 0.5 - (0.2 / 6) * (N - 6)));
+        return (2 / 3) * raw;
     }
 
     // ── EPA (Expected Points Added) — statbotics V2 ───────
-    // IMPORTANT: The API `epa` field from statbotics already reflects ALL
-    // matches played at this event (it's the current EPA, not pre-event).
-    // So we must NOT replay played matches on top of apiEPA — that would
-    // double-count every match's effect.
     //
-    // Strategy:
-    //   • If apiEPA is available (real TBA events with statbotics coverage),
-    //     use it directly — it IS the statbotics V2 EPA.
-    //   • If apiEPA is missing (custom events like "Sanya"), compute from
-    //     scratch using the statbotics update formula:
-    //       ΔEPA = K × (1/(1+M)) × ((Score - AllianceEPA)
-    //                                 - M × (OppScore - OppAllianceEPA))
-    //     starting from 0, replaying all played matches.
+    // Two paths (mirrors the statbotics repo's two EPA modes):
+    //
+    //   1. Teams WITH statbotics-published EPA (apiEPA from /team_events):
+    //      Use it verbatim. The API returns `epa.total_points.mean`, which is
+    //      exactly the output of statbotics' full pipeline (init from
+    //      historical priors + EWMA over every match played this season). It
+    //      already accounts for all matches at this event, so replaying them
+    //      would double-count. This is "完全复刻 statbotics repo 算法" for
+    //      teams that statbotics itself has indexed.
+    //
+    //   2. Teams WITHOUT statbotics data (custom / off-season events like
+    //      "Sanya" that statbotics has not indexed): compute from scratch
+    //      using the exact same per-match update rule as the repo:
+    //
+    //        percent      = percent_func(year, N_team)         [main.py]
+    //        attrib       = old_epa + alliance_err / 3         [breakdown.py:
+    //                       post_process_attrib → attrib = epa + err,
+    //                       err = my_err / num_teams]
+    //        new_epa      = (1-percent)*old + percent*attrib    [math.py:
+    //                       EPARating.add_obs EWMA, weight=1 for quals]
+    //        ⟹ new_epa   = old_epa + percent * (alliance_err / 3)
+    //
+    //      where alliance_err = score - sum(team EPAs), N_team is this
+    //      team's match count, and margin_func returns 0 for 2026 (no
+    //      opponent-error weighting). ELIM_WEIGHT (1/3) only applies to
+    //      playoff matches — we process quals only, so weight = 1.
+    //
+    //      Initial prior: statbotics seeds each team from historical EPA via
+    //      year_mean/num_teams + year_sd*z_score (init.py). For events
+    //      statbotics has no data on, there is no usable prior; we fall back
+    //      to this event's own average alliance score / 3, which mimics the
+    //      repo's Week-1 mean initialization (constants.py: NORM_MEAN=1500,
+    //      but here the year_mean baseline is unknown).
     function _computeEPA(qualMatches, teamData) {
         const epa = new Map();
 
-        // Check how many teams have a valid apiEPA from statbotics
+        // ── Path 1: teams with statbotics-published EPA ──
         let withApiEpa = 0, totalTeams = 0;
         teamData.forEach((d, num) => {
             totalTeams++;
             if (typeof d.apiEPA === 'number' && d.apiEPA > 0) withApiEpa++;
         });
 
-        // If most teams have apiEPA, use statbotics values directly (no replay)
         if (withApiEpa > totalTeams * 0.5) {
+            // Statbotics has indexed this event — use its EPA verbatim
+            // (it IS the output of the full repo pipeline).
             teamData.forEach((d, num) => {
                 epa.set(num, typeof d.apiEPA === 'number' ? d.apiEPA : 0);
             });
             return epa;
         }
 
-        // ── From-scratch computation (custom events without statbotics) ──
-        // Statbotics initialises from Week-1 average alliance score / 3.
-        // We approximate with this event's own average alliance score / 3,
-        // which prevents the first-match error from being huge (score~200
-        // vs predicted 0) and keeps EPA values in a reasonable range.
+        // ── Path 2: from-scratch using the repo's per-match update rule ──
         const played0 = qualMatches.filter(m => {
             const rs = m.red?.score, bs = m.blue?.score;
             return rs != null && bs != null && rs >= 0 && bs >= 0;
         });
+
+        // Initial prior ≈ event's mean alliance score / 3 (Week-1 baseline).
         let initEPA = 0;
         if (played0.length) {
             let sum = 0, n = 0;
@@ -241,7 +255,7 @@ const GoatPredict = (() => {
             matchCount.set(num, 0);
         });
 
-        // Chronological order — quals sort by match_number (fallback label)
+        // Chronological order — quals sort by match_number (fallback time)
         const played = played0.slice().sort((a, b) => _matchOrder(a) - _matchOrder(b));
 
         for (const m of played) {
@@ -263,39 +277,32 @@ const GoatPredict = (() => {
             const redEPA  = redTeams.reduce((s, n) => s + (epa.get(n) || 0), 0);
             const blueEPA = blueTeams.reduce((s, n) => s + (epa.get(n) || 0), 0);
 
-            // Alliance-level errors (statbotics calls these "surprise factors")
+            // Alliance-level surprise factor (my_err in main.py)
             const redError  = redScore  - redEPA;
             const blueError = blueScore - blueEPA;
 
-            // NOTE: Statbotics applies the FULL alliance error to each team
-            // (non-zero-sum design). This works when starting from a good
-            // pre-season prior where errors are small. But for from-scratch
-            // computation (no statbotics data), the initial error is huge and
-            // applying it fully to all 3 teams causes the alliance EPA to
-            // overshoot by 3×K ≈ 1.5× the error every match — wild
-            // oscillation. Dividing by 3 (alliance size) makes each team's
-            // update proportional to its share, so the alliance EPA changes
-            // by K×error per match and converges properly.
+            // num_teams = 3 for a standard FRC alliance. post_process_attrib
+            // divides the alliance error by num_teams before adding to epa.
+            // margin_func(2026, *) = 0 → no opponent-error term.
             const redErrPerTeam  = redError  / redTeams.length;
             const blueErrPerTeam = blueError / blueTeams.length;
 
-            // Red alliance: update each team with own K, M (per-team match count)
+            // EWMA update — each team uses its OWN match count for percent.
+            // new = (1-percent)*old + percent*(old + err/num_teams)
+            //     = old + percent * (err/num_teams)
             for (const n of redTeams) {
                 const N = (matchCount.get(n) || 0) + 1;
                 matchCount.set(n, N);
-                const K = _kParam(N);
-                const M = _marginParam(N);
-                const delta = (K / (1 + M)) * (redErrPerTeam - M * blueErrPerTeam);
-                epa.set(n, (epa.get(n) || 0) + delta);
+                const percent = _epaPercent(N);
+                const cur = epa.get(n) || 0;
+                epa.set(n, (1 - percent) * cur + percent * (cur + redErrPerTeam));
             }
-            // Blue alliance: swap red/blue roles in the formula
             for (const n of blueTeams) {
                 const N = (matchCount.get(n) || 0) + 1;
                 matchCount.set(n, N);
-                const K = _kParam(N);
-                const M = _marginParam(N);
-                const delta = (K / (1 + M)) * (blueErrPerTeam - M * redErrPerTeam);
-                epa.set(n, (epa.get(n) || 0) + delta);
+                const percent = _epaPercent(N);
+                const cur = epa.get(n) || 0;
+                epa.set(n, (1 - percent) * cur + percent * (cur + blueErrPerTeam));
             }
         }
         return epa;
