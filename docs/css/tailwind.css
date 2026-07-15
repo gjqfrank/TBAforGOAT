@@ -28972,6 +28972,10 @@ body.epa-breakdown-active .stat-opr {
     font-size: .8rem;
 }
 .gp-nick { font-size: .82rem; }
+.gp-epa { color: var(--primary, #6366f1); font-weight: 700; }
+.gp-epa-api { color: var(--text-muted, #94a3b8); font-size: .75rem; }
+.gp-opr { color: var(--primary, #6366f1); font-weight: 600; }
+.gp-opr-api { color: var(--text-muted, #94a3b8); font-size: .75rem; }
 .gp-match-list { display: flex; flex-direction: column; gap: .4rem; }
 .gp-match-head {
     display: flex;

@@ -13,13 +13,16 @@
 const GoatPredict = (() => {
     'use strict';
 
-    // ── Constants (statbotics-style) ───────────────────────
+    // ── Constants (statbotics V2 algorithm) ──────────────
+    // Reference: https://www.statbotics.io/blog/epa
     const TEAM_NUM = 6907;                  // default team for event loading
     const YEAR     = 2026;                  // event year
     const K        = -5 / 8;                // win-probability logistic constant
+                                             //   (= -1/1.6, derived from Elo's 400
+                                             //    scale × 250/σ normalisation)
     const SCORE_SD_FALLBACK = 50;           // fallback std-dev if not enough data
     const SIM_ITERATIONS    = 500;          // Monte-Carlo iterations (browser perf)
-    const RP_BASE_RATE      = 0.3;          // simplified RP-bonus probability
+    const RP_BASE_RATE      = 0.3;          // default RP-bonus probability fallback
     const OPR_LAMBDA        = 0.01;         // ridge regularisation for OPR
     const BASE_TIE_RATE     = 0.02;         // base tie probability in simulation
     const CLOSE_TIE_RATE    = 0.08;         // tie probability when alliances are close
@@ -162,9 +165,33 @@ const GoatPredict = (() => {
         return opr;
     }
 
-    // ── EPA — simplified EWMA (statbotics-style) ───────────
-    // Initialises from the API EPA field, then updates each team
-    // using prediction error on played matches in chronological order.
+    // ── K parameter (statbotics piecewise function of N) ────
+    // Controls update magnitude. Decays from 0.5 → 0.3 as N grows.
+    function _kParam(N) {
+        if (N <= 6)  return 0.5;
+        if (N <= 12) return 0.5 - (1 / 30) * (N - 6);
+        return 0.3;
+    }
+
+    // ── Margin parameter M (statbotics piecewise function of N) ─
+    // Weighs opponent's error. Early season M≈0 (focus on own offence),
+    // late season M→1 (focus on score margin, like Elo).
+    function _marginParam(N) {
+        if (N <= 12) return 0;
+        if (N <= 36) return (1 / 24) * (N - 12);
+        return 1;
+    }
+
+    // ── EPA (Expected Points Added) — statbotics V2 ───────
+    // Initialises from the API EPA field (pre-event season EPA), then
+    // updates each team with the statbotics update formula:
+    //
+    //   ΔEPA = K × (1/(1+M)) × ((Score - AllianceEPA)
+    //                             - M × (OppScore - OppAllianceEPA))
+    //
+    // The FULL alliance error is applied to each team (NOT divided by 3).
+    // This is statbotics' non-zero-sum design — the average EPA increases
+    // as the season progresses, unlike Elo which is zero-sum.
     function _computeEPA(qualMatches, teamData) {
         const epa = new Map();
         const matchCount = new Map();
@@ -183,28 +210,45 @@ const GoatPredict = (() => {
             .sort((a, b) => _matchOrder(a) - _matchOrder(b));
 
         for (const m of played) {
-            for (const side of ['red', 'blue']) {
-                const alliance = m[side];
-                if (!alliance) continue;
-                const score = alliance.score;
-                const teams = (alliance.teams || [])
-                    .map(t => t.team_number)
-                    .filter(num => epa.has(num));
-                if (!teams.length) continue;
+            const redAlliance = m.red;
+            const blueAlliance = m.blue;
+            if (!redAlliance || !blueAlliance) continue;
 
-                const predicted = teams.reduce((s, n) => s + (epa.get(n) || 0), 0);
-                const error = score - predicted;
+            const redScore  = redAlliance.score;
+            const blueScore = blueAlliance.score;
 
-                for (const n of teams) {
-                    const mc = (matchCount.get(n) || 0) + 1;
-                    matchCount.set(n, mc);
-                    // Learning rate decays with matches played.
-                    // ~0.333 for matches 1–6, ~0.200 for match 12+.
-                    const alpha = (2 / 3) *
-                        Math.min(0.5, Math.max(0.3, 0.5 - 0.2 / 6 * (mc - 6)));
-                    const cur = epa.get(n) || 0;
-                    epa.set(n, (1 - alpha) * cur + alpha * (cur + error / 3));
-                }
+            const redTeams = (redAlliance.teams || [])
+                .map(t => t.team_number)
+                .filter(num => epa.has(num));
+            const blueTeams = (blueAlliance.teams || [])
+                .map(t => t.team_number)
+                .filter(num => epa.has(num));
+            if (!redTeams.length || !blueTeams.length) continue;
+
+            const redEPA  = redTeams.reduce((s, n) => s + (epa.get(n) || 0), 0);
+            const blueEPA = blueTeams.reduce((s, n) => s + (epa.get(n) || 0), 0);
+
+            // Alliance-level errors (statbotics calls these "surprise factors")
+            const redError  = redScore  - redEPA;
+            const blueError = blueScore - blueEPA;
+
+            // Red alliance: update each team with own K, M (per-team match count)
+            for (const n of redTeams) {
+                const N = (matchCount.get(n) || 0) + 1;
+                matchCount.set(n, N);
+                const K = _kParam(N);
+                const M = _marginParam(N);
+                const delta = (K / (1 + M)) * (redError - M * blueError);
+                epa.set(n, (epa.get(n) || 0) + delta);
+            }
+            // Blue alliance: swap red/blue roles in the formula
+            for (const n of blueTeams) {
+                const N = (matchCount.get(n) || 0) + 1;
+                matchCount.set(n, N);
+                const K = _kParam(N);
+                const M = _marginParam(N);
+                const delta = (K / (1 + M)) * (blueError - M * redError);
+                epa.set(n, (epa.get(n) || 0) + delta);
             }
         }
         return epa;
@@ -335,6 +379,14 @@ const GoatPredict = (() => {
             }
         }
 
+        // Event-specific bonus RP rate, estimated from teams' avg_rp.
+        const bonusBase = _estimateBonusRate(teamData);
+        // Average alliance EPA — used to scale bonus probability by strength.
+        const allAllianceEpas = unplayedInfo.map(i => (i.redEPA + i.blueEPA) / 2).filter(v => v > 0);
+        const meanAllianceEPA = allAllianceEpas.length
+            ? allAllianceEpas.reduce((a, b) => a + b, 0) / allAllianceEpas.length
+            : 1;
+
         const rankSamples = {};
         const rpSamples = {};
         for (const num of teams) { rankSamples[num] = []; rpSamples[num] = []; }
@@ -357,9 +409,28 @@ const GoatPredict = (() => {
 
                 const redBase = outcome === 'red' ? 2 : (outcome === 'tie' ? 1 : 0);
                 const blueBase = outcome === 'blue' ? 2 : (outcome === 'tie' ? 1 : 0);
-                // 2 RP bonuses per alliance, each at the base rate.
-                const redBonus = _drawBonus() + _drawBonus();
-                const blueBonus = _drawBonus() + _drawBonus();
+
+                // Strength-scaled bonus RP: winners scale up (cap 0.85),
+                // losers scale down (floor 0.05). This models that stronger
+                // alliances more often achieve the bonus RP objectives.
+                const winEPA  = outcome === 'red' ? info.redEPA  : info.blueEPA;
+                const loseEPA = outcome === 'red' ? info.blueEPA : info.redEPA;
+                const winStrength  = winEPA  / Math.max(1, meanAllianceEPA);
+                const loseStrength = loseEPA / Math.max(1, meanAllianceEPA);
+                const winBonusProb  = Math.min(0.85, Math.max(0.05, bonusBase * winStrength));
+                const loseBonusProb = Math.min(0.85, Math.max(0.05, bonusBase * loseStrength * 0.6));
+
+                let redBonus, blueBonus;
+                if (outcome === 'red') {
+                    redBonus  = _drawBonus(winBonusProb)  + _drawBonus(winBonusProb);
+                    blueBonus = _drawBonus(loseBonusProb) + _drawBonus(loseBonusProb);
+                } else if (outcome === 'blue') {
+                    redBonus  = _drawBonus(loseBonusProb) + _drawBonus(loseBonusProb);
+                    blueBonus = _drawBonus(winBonusProb)  + _drawBonus(winBonusProb);
+                } else { // tie — both at base rate
+                    redBonus  = _drawBonus(bonusBase) + _drawBonus(bonusBase);
+                    blueBonus = _drawBonus(bonusBase) + _drawBonus(bonusBase);
+                }
 
                 for (const n of info.redTeams) rp[n] = (rp[n] || 0) + redBase + redBonus;
                 for (const n of info.blueTeams) rp[n] = (rp[n] || 0) + blueBase + blueBonus;
@@ -391,9 +462,29 @@ const GoatPredict = (() => {
         return results;
     }
 
-    // Draw a single RP bonus (Bernoulli at RP_BASE_RATE).
-    function _drawBonus() {
-        return Math.random() < RP_BASE_RATE ? 1 : 0;
+    // Draw a single RP bonus (Bernoulli at given probability, default RP_BASE_RATE).
+    function _drawBonus(prob) {
+        const p = (typeof prob === 'number') ? prob : RP_BASE_RATE;
+        return Math.random() < p ? 1 : 0;
+    }
+
+    // ── Event-specific bonus RP rate estimation ────────────
+    // From each team's avg_rp and W-L-T, back out the per-match bonus
+    // RP achievement rate:  avg_rp ≈ 2×winRate + 2×bonusRate
+    // (win = 2 RP, each of 2 bonus RPs worth 1 when achieved).
+    // Returns a value in [0, 1]; falls back to RP_BASE_RATE with no data.
+    function _estimateBonusRate(teamData) {
+        let total = 0, count = 0;
+        teamData.forEach((d) => {
+            const wlt = (d.wins || 0) + (d.losses || 0) + (d.ties || 0);
+            if (wlt < 1 || d.avgRp == null) return;
+            const winRate = ((d.wins || 0) + 0.5 * (d.ties || 0)) / wlt;
+            // bonusRate per match (0..2 bonus RPs), halved to per-bonus
+            const perBonus = Math.max(0, Math.min(1, (d.avgRp - 2 * winRate) / 2));
+            total += perBonus;
+            count++;
+        });
+        return count > 0 ? total / count : RP_BASE_RATE;
     }
 
     // ═══════════════════════════════════════════════════════
@@ -633,6 +724,7 @@ const GoatPredict = (() => {
         team_number: d => d.team_number,
         nickname:    d => (d.nickname || '').toLowerCase(),
         epa:         d => (d.computedEPA ?? -Infinity),
+        apiEPA:      d => (d.apiEPA ?? -Infinity),
         opr:         d => (d.computedOPR ?? -Infinity),
         apiOPR:      d => (d.apiOPR ?? -Infinity),
         rank:        d => (d.rank ?? Infinity),
@@ -681,7 +773,7 @@ const GoatPredict = (() => {
 
         el.innerHTML = `
           <div class="gp-panel">
-            <h3 class="gp-panel-title">Team Ratings <span class="gp-panel-sub">${rows.length} teams · OPR/EPA computed locally</span></h3>
+            <h3 class="gp-panel-title">Team Ratings <span class="gp-panel-sub">${rows.length} teams · EPA via statbotics V2 · OPR via least-squares</span></h3>
             <div class="gp-table-wrap">
               <table class="gp-table">
                 <thead>
@@ -689,6 +781,7 @@ const GoatPredict = (() => {
                     ${headerCell('team_number', 'Team #')}
                     ${headerCell('nickname',    'Nickname')}
                     ${headerCell('epa',         'EPA')}
+                    ${headerCell('apiEPA',      'API EPA')}
                     ${headerCell('opr',         'OPR')}
                     ${headerCell('apiOPR',      'API OPR')}
                     ${headerCell('rank',        'Rank')}
@@ -704,6 +797,7 @@ const GoatPredict = (() => {
                           <td class="gp-team-num">${r.team_number}</td>
                           <td class="gp-nick">${_esc(r.nickname || '—')}</td>
                           <td class="gp-num gp-epa">${_f1(r.computedEPA)}</td>
+                          <td class="gp-num gp-epa-api">${_f1(r.apiEPA)}</td>
                           <td class="gp-num gp-opr">${_f1(r.computedOPR)}</td>
                           <td class="gp-num gp-opr-api">${_f1(r.apiOPR)}</td>
                           <td class="gp-num">${r.rank ?? '–'}</td>
