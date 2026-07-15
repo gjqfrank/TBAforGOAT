@@ -503,6 +503,19 @@ function updateAuthUI() {
         );
         gStratTab.style.display = canSee ? '' : 'none';
     }
+
+    // Toggle GoatPredict tab visibility (same admin/scouter gating).
+    const gPredTab = document.getElementById('goatpredict-tab-btn');
+    if (gPredTab) {
+        const user = Auth.getUser();
+        const role = user?.user_metadata?.role;
+        const canSee = authed && (
+            user?.email === 'gjqfrank@163.com'
+            || role === 'admin'
+            || role === 'scouter'
+        );
+        gPredTab.style.display = canSee ? '' : 'none';
+    }
 }
 
 // ── Modal state management ─────────────────────────────────

@@ -830,6 +830,11 @@ document.querySelectorAll('.tab').forEach(btn => {
             GoatStrat.unmount();
         }
 
+        // Unmount GoatPredict when leaving its tab
+        if (btn.dataset.tab !== 'goatpredict' && typeof GoatPredict !== 'undefined') {
+            GoatPredict.unmount();
+        }
+
         // Stop playoff refresh when leaving the playoff tab
         if (btn.dataset.tab !== 'playoff') { stopPlayoffRefresh(); }
 
@@ -911,6 +916,9 @@ document.querySelectorAll('.tab').forEach(btn => {
         }
         if (btn.dataset.tab === 'goatstrat') {
             if (typeof GoatStrat !== 'undefined') GoatStrat.mount();
+        }
+        if (btn.dataset.tab === 'goatpredict') {
+            if (typeof GoatPredict !== 'undefined') GoatPredict.mount();
         }
         if (btn.dataset.tab === 'playbyplay' && currentEvent && !renderedTabs.playbyplay) {
             if (pbpData?.matches?.length) {
