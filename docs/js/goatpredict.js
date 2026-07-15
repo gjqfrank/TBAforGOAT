@@ -215,20 +215,34 @@ const GoatPredict = (() => {
         }
 
         // ── From-scratch computation (custom events without statbotics) ──
+        // Statbotics initialises from Week-1 average alliance score / 3.
+        // We approximate with this event's own average alliance score / 3,
+        // which prevents the first-match error from being huge (score~200
+        // vs predicted 0) and keeps EPA values in a reasonable range.
+        const played0 = qualMatches.filter(m => {
+            const rs = m.red?.score, bs = m.blue?.score;
+            return rs != null && bs != null && rs >= 0 && bs >= 0;
+        });
+        let initEPA = 0;
+        if (played0.length) {
+            let sum = 0, n = 0;
+            for (const m of played0) {
+                for (const side of ['red', 'blue']) {
+                    const s = m[side]?.score;
+                    if (s != null && s >= 0) { sum += s; n++; }
+                }
+            }
+            initEPA = n > 0 ? (sum / n) / 3 : 0;
+        }
+
         const matchCount = new Map();
         teamData.forEach((d, num) => {
-            epa.set(num, 0);
+            epa.set(num, initEPA);
             matchCount.set(num, 0);
         });
 
         // Chronological order — quals sort by match_number (fallback label)
-        const played = qualMatches
-            .filter(m => {
-                const rs = m.red?.score, bs = m.blue?.score;
-                return rs != null && bs != null && rs >= 0 && bs >= 0;
-            })
-            .slice()
-            .sort((a, b) => _matchOrder(a) - _matchOrder(b));
+        const played = played0.slice().sort((a, b) => _matchOrder(a) - _matchOrder(b));
 
         for (const m of played) {
             const redAlliance = m.red;
