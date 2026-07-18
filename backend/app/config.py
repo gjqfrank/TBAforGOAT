@@ -37,3 +37,17 @@ ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
 SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", "")
+
+# ── GOATScout (Team 6907) sync credentials ──────────────────
+# Used by goatscout_sync.py to authenticate against auth.team6907.org
+# and pull prescout data into the local goatscout_data table.
+# All optional — sync is disabled when email/password/event_id are missing.
+GOATSCOUT_EMAIL = os.environ.get("GOATSCOUT_EMAIL", "")
+GOATSCOUT_PASSWORD = os.environ.get("GOATSCOUT_PASSWORD", "")
+# GOATSCOUT_EVENT_MAP is a JSON string: {"<event_key>": "<goatscout event uuid>"}
+# Allows one TBAforGOAT event to map to one GOATScout event id.
+GOATSCOUT_EVENT_MAP = os.environ.get("GOATSCOUT_EVENT_MAP", "{}")
+# Sync interval in seconds (default: 30 minutes). Set to 0 to disable the
+# background task entirely (the /api/goatscout/{event_key}/sync-prescout
+# endpoint still works for manual triggers).
+GOATSCOUT_SYNC_INTERVAL = int(os.environ.get("GOATSCOUT_SYNC_INTERVAL", "1800"))

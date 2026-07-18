@@ -34,6 +34,53 @@ async def _run_cache_cleanup() -> None:
             log.warning("Cache cleanup error: %s", e)
 
 
+async def _run_goatscout_sync() -> None:
+    """Periodically pull GOATScout prescout data into goatscout_data.
+
+    Honours GOATSCOUT_SYNC_INTERVAL (default 30 min). The loop exits early
+    if no event mappings or credentials are configured, so this task is a
+    no-op on deployments that don't use the GOATScout integration.
+    """
+    from .config import (
+        GOATSCOUT_EMAIL,
+        GOATSCOUT_PASSWORD,
+        GOATSCOUT_EVENT_MAP,
+        GOATSCOUT_SYNC_INTERVAL,
+    )
+    from .services.goatscout_sync import sync_all_mapped_events
+
+    if not GOATSCOUT_SYNC_INTERVAL or GOATSCOUT_SYNC_INTERVAL <= 0:
+        log.info("GOATScout background sync disabled (GOATSCOUT_SYNC_INTERVAL=0)")
+        return
+    if not (GOATSCOUT_EMAIL and GOATSCOUT_PASSWORD and GOATSCOUT_EVENT_MAP):
+        log.info(
+            "GOATScout background sync disabled — missing GOATSCOUT_EMAIL / "
+            "PASSWORD / EVENT_MAP env vars"
+        )
+        return
+
+    log.info(
+        "GOATScout background sync enabled (every %ds)",
+        GOATSCOUT_SYNC_INTERVAL,
+    )
+    # Run an initial sync shortly after startup (10s grace to let other
+    # workers warm up first), then on the configured interval.
+    await asyncio.sleep(10)
+    while True:
+        try:
+            results = await sync_all_mapped_events()
+            for r in results:
+                log.info(
+                    "GOATScout sync %s: synced=%d skipped=%d total=%d%s",
+                    r.get("event_key"), r.get("synced", 0),
+                    r.get("skipped", 0), r.get("total", 0),
+                    f" err={r['error']}" if r.get("error") else "",
+                )
+        except Exception as exc:
+            log.warning("GOATScout background sync failed: %s", exc)
+        await asyncio.sleep(GOATSCOUT_SYNC_INTERVAL)
+
+
 # ── Lifespan: start/stop background ingestion workers ──────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -53,6 +100,12 @@ async def lifespan(app: FastAPI):
         log.info("Ingestion workers started (%d tasks)", len(tasks))
     else:
         log.info("SUPABASE_URL not set — ingestion workers disabled")
+
+    # GOATScout prescout sync runs independently of the Supabase ingestion
+    # workers — it only needs its own credentials (GOATSCOUT_EMAIL etc.) and
+    # checks for them internally, so we always start it. If nothing is
+    # configured the task exits immediately.
+    tasks.append(asyncio.create_task(_run_goatscout_sync(), name="goatscout-sync"))
 
     yield
 

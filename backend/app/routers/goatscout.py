@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from ..services.supabase_client import get_supabase
 from ..services.error_utils import raise_api_error
+from ..services.goatscout_sync import sync_event
 
 router = APIRouter()
 
@@ -187,3 +188,22 @@ async def delete_goatscout(event_key: str, team_key: str):
         return {"status": "deleted", "team_key": team_key, "event_key": event_key}
     except Exception as e:
         raise_api_error(e, fallback_detail=f"Could not delete GoatScout data for {team_key}.")
+
+
+@router.post("/{event_key}/sync-prescout")
+async def sync_goatscout_prescout(event_key: str):
+    """Pull prescout data from Team 6907's GOATScout into goatscout_data.
+
+    Requires GOATSCOUT_EMAIL, GOATSCOUT_PASSWORD, and a GOATSCOUT_EVENT_MAP
+    entry mapping this event_key to a GOATScout event UUID. Returns a summary
+    of how many teams were synced vs skipped.
+    """
+    try:
+        result = await sync_event(event_key)
+        if result.get("error"):
+            raise HTTPException(status_code=400, detail=result["error"])
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise_api_error(e, fallback_detail=f"GOATScout sync failed for {event_key}.")
