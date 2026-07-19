@@ -1965,6 +1965,7 @@ tr.rookie-team-row {
 
 .tabs {
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
   align-items: center;
   background: var(--surface-glass);
@@ -1973,7 +1974,7 @@ tr.rookie-team-row {
   border-bottom: 1px solid var(--border);
   padding: .5rem .75rem;
   gap: .35rem;
-  overflow-x: auto;
+  overflow-x: visible;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
 }
