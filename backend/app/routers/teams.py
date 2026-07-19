@@ -86,6 +86,42 @@ async def awards_summary(teams: str = Query(..., description="Comma-separated te
         raise_api_error(e, fallback_detail="Could not load awards summary.")
 
 
+@router.get("/batch-epa")
+async def batch_epa(
+    teams: str = Query(..., description="Comma-separated team numbers"),
+    year: int = Query(2026),
+):
+    """Fetch current EPA for a batch of teams from Statbotics.
+
+    Returns ``{"1690": 60.5, "4414": 75.2, ...}``.
+    Teams not found in Statbotics are omitted from the response.
+    Used by GoatScout to compute ``initial_epa = robot_type_epa * copy_accuracy``.
+    """
+    try:
+        nums = [int(t.strip()) for t in teams.split(",") if t.strip()]
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid team numbers")
+    if not nums or len(nums) > 50:
+        raise HTTPException(status_code=400, detail="Provide 1-50 team numbers")
+
+    from ..services.statbotics_client import get_statbotics_client
+    sb = get_statbotics_client()
+
+    async def _fetch_one(team_num: int):
+        try:
+            data = await sb.get_team_year(team_num, year)
+            if data:
+                epa_block = data.get("epa") or {}
+                total = epa_block.get("total_points", {})
+                return str(team_num), round(total.get("mean", 0), 2)
+        except Exception:
+            pass
+        return str(team_num), None
+
+    results = await asyncio.gather(*[_fetch_one(n) for n in nums])
+    return {num: epa for num, epa in results if epa is not None}
+
+
 @router.get("/{team_number}/stats")
 async def team_stats(team_number: int, year: Optional[int] = None):
     try:

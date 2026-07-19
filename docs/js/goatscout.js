@@ -14,12 +14,18 @@ const GOATSCOUT_SELECT_METRICS = {
     ],
 };
 
+// Metrics that are auto-computed and must not be edited by hand.
+// `initial_epa` is derived from `robot_type` (EPA from Statbotics) ×
+// `copy_accuracy` and is updated whenever either input changes.
+const GOATSCOUT_READONLY_METRICS = new Set(['initial_epa']);
+
 const GOATSCOUT_METRIC_GROUPS = [
     { label: 'Meta', metrics: ['sessions'] },
     { label: 'Pre-Scout', metrics: [
         '状态', 'robot_type', '照片', '车高', '最大容量', 'Shooter',
         '过坡', 'Hood', 'Intake', '自动爬升', '手动爬升',
         '自动', '过 trench', '更新',
+        'copy_accuracy', 'initial_epa',
     ]},
     { label: 'Start Position', metrics: [
         'start_trenchFront', 'start_trenchRide', 'start_trenchBack',
@@ -59,6 +65,30 @@ const GOATSCOUT_METRIC_GROUPS = [
 
 let _goatscoutData = [];
 let _goatscoutEditMode = false;
+
+// Cache of team_number → current EPA (from Statbotics via /teams/batch-epa).
+// Populated in loadGoatScoutData() for every distinct robot_type team.
+let _gsEpaCache = {};
+
+// Extract the team number from a robot_type value.
+// '1690' → 1690, '6907（正赛）' → 6907, 'kitbot' / 'other' → null.
+function _robotTypeTeamNumber(robotType) {
+    if (!robotType) return null;
+    const m = String(robotType).match(/\d+/);
+    return m ? parseInt(m[0], 10) : null;
+}
+
+// Compute initial_epa = robotType's EPA × copy_accuracy.
+// Returns null if either input is missing/invalid.
+function _computeInitialEpa(robotType, copyAccuracy, epaCache) {
+    const teamNum = _robotTypeTeamNumber(robotType);
+    if (!teamNum) return null;
+    const epa = epaCache[teamNum];
+    if (epa == null) return null;
+    const acc = parseFloat(copyAccuracy);
+    if (isNaN(acc)) return null;
+    return Math.round(epa * acc * 100) / 100;
+}
 
 function isGoatScoutAdmin() {
     const user = (typeof Auth !== 'undefined') ? Auth.getUser() : null;
@@ -130,12 +160,38 @@ async function loadGoatScoutData() {
     if (status) status.textContent = 'Loading…';
     try {
         _goatscoutData = await API.goatscoutList(currentEvent);
+        // Pre-fetch EPA for every team referenced by a robot_type value so
+        // that initial_epa can be auto-computed in the render path.
+        await _refreshEpaCache();
         renderGoatScoutTable();
         if (status) status.textContent = `${_goatscoutData.length} teams`;
     } catch (e) {
         if (status) status.textContent = `Error: ${e.message}`;
         _goatscoutData = [];
         renderGoatScoutTable();
+    }
+}
+
+// Build a list of distinct team numbers from every row's robot_type and
+// fetch their EPA from Statbotics (via backend proxy). Also tops up the
+// cache with any team numbers added in edit mode without a full reload.
+async function _refreshEpaCache(extraTeamNums) {
+    const nums = new Set(extraTeamNums || []);
+    for (const row of _goatscoutData) {
+        const n = _robotTypeTeamNumber((row.metrics || {}).robot_type);
+        if (n) nums.add(n);
+    }
+    if (!nums.size) return;
+    // Skip team numbers we already have cached.
+    const missing = [...nums].filter(n => _gsEpaCache[n] == null);
+    if (!missing.length) return;
+    try {
+        const map = await API.batchEpa(missing, 2026);
+        for (const [k, v] of Object.entries(map || {})) {
+            _gsEpaCache[parseInt(k, 10)] = v;
+        }
+    } catch (e) {
+        // Non-fatal: cells will just show — instead of a computed value.
     }
 }
 
@@ -228,21 +284,35 @@ function renderGoatScoutTable(containerId = 'gs-content') {
         _effectiveMetricGroups().forEach(group => {
             const metaCls = group.label === 'Meta' ? 'gs-meta-sticky' : '';
             group.metrics.forEach(m => {
-                const val = (entry.metrics || {})[m] ?? '';
+                // initial_epa is always recomputed from robot_type × copy_accuracy
+                // so the displayed value stays in sync with the latest edits.
+                let val = (entry.metrics || {})[m] ?? '';
+                if (m === 'initial_epa') {
+                    const rt = (entry.metrics || {}).robot_type;
+                    const ca = (entry.metrics || {}).copy_accuracy;
+                    const computed = _computeInitialEpa(rt, ca, _gsEpaCache);
+                    if (computed != null) val = computed;
+                }
                 if (_goatscoutEditMode) {
-                    const opts = GOATSCOUT_SELECT_METRICS[m];
-                    if (opts) {
-                        let optHtml = '<option value=""></option>';
-                        for (const o of opts) {
-                            const sel = (val === o) ? ' selected' : '';
-                            optHtml += `<option value="${_esc(o)}"${sel}>${_esc(o)}</option>`;
-                        }
-                        html += `<td class="gs-cell-edit ${metaCls}"><select data-team="${entry.team_key}" data-metric="${m}">${optHtml}</select></td>`;
+                    if (GOATSCOUT_READONLY_METRICS.has(m)) {
+                        // Render as a disabled input so saveAllGoatScout still
+                        // picks up its value, but users can't type into it.
+                        html += `<td class="gs-cell-edit ${metaCls}"><input type="text" data-team="${entry.team_key}" data-metric="${m}" value="${_esc(val)}" disabled title="自动计算：robot_type EPA × copy_accuracy" /></td>`;
                     } else {
-                        html += `<td class="gs-cell-edit ${metaCls}"><input type="text" data-team="${entry.team_key}" data-metric="${m}" value="${_esc(val)}" /></td>`;
+                        const opts = GOATSCOUT_SELECT_METRICS[m];
+                        if (opts) {
+                            let optHtml = '<option value=""></option>';
+                            for (const o of opts) {
+                                const sel = (val === o) ? ' selected' : '';
+                                optHtml += `<option value="${_esc(o)}"${sel}>${_esc(o)}</option>`;
+                            }
+                            html += `<td class="gs-cell-edit ${metaCls}"><select data-team="${entry.team_key}" data-metric="${m}">${optHtml}</select></td>`;
+                        } else {
+                            html += `<td class="gs-cell-edit ${metaCls}"><input type="text" data-team="${entry.team_key}" data-metric="${m}" value="${_esc(val)}" /></td>`;
+                        }
                     }
                 } else {
-                    const display = val ? _esc(val) : '<span class="gs-empty-val">\u2014</span>';
+                    const display = val !== '' && val != null ? _esc(val) : '<span class="gs-empty-val">\u2014</span>';
                     html += `<td class="gs-cell ${metaCls}">${display}</td>`;
                 }
             });
@@ -286,6 +356,27 @@ function renderGoatScoutTable(containerId = 'gs-content') {
             el.addEventListener('click', (e) => {
                 e.stopPropagation();
                 handleRemoveMetricColumn(el.dataset.removeMetric);
+            });
+        });
+        // Live-recompute initial_epa when robot_type or copy_accuracy changes.
+        // Doesn't trigger a full re-render — just updates the disabled cell.
+        content.querySelectorAll('[data-metric="robot_type"], [data-metric="copy_accuracy"]').forEach(el => {
+            el.addEventListener('change', async () => {
+                const tk = el.dataset.team;
+                // Read the latest values of both inputs in this row.
+                const rtEl = content.querySelector(`[data-team="${tk}"][data-metric="robot_type"]`);
+                const caEl = content.querySelector(`[data-team="${tk}"][data-metric="copy_accuracy"]`);
+                const rt = rtEl?.value || '';
+                const ca = caEl?.value || '';
+                // If the user picked a robot_type we haven't cached yet,
+                // fetch its EPA on demand so the computed value is accurate.
+                const newTeam = _robotTypeTeamNumber(rt);
+                if (newTeam && _gsEpaCache[newTeam] == null) {
+                    await _refreshEpaCache([newTeam]);
+                }
+                const computed = _computeInitialEpa(rt, ca, _gsEpaCache);
+                const epaEl = content.querySelector(`[data-team="${tk}"][data-metric="initial_epa"]`);
+                if (epaEl) epaEl.value = computed != null ? computed : '';
             });
         });
     } else {

@@ -118,6 +118,8 @@ const API = {
         API.get(`/teams/${num}/stats${year ? `?year=${year}` : ''}`),    teamAwardsSummary: (teamNums) =>
         API.get(`/teams/awards-summary?teams=${teamNums.join(',')}`),    headToHead: (a, b, year, allTime) =>
         API.get(`/teams/head-to-head/${a}/${b}${year ? `?year=${year}&` : '?'}all_time=${allTime ? 'true' : 'false'}`),
+    batchEpa: (teamNums, year = 2026) =>
+        API.get(`/teams/batch-epa?teams=${teamNums.join(',')}&year=${year}`),
 
     // ── TIMS Overrides ──────────────────────────────────
     timsGet:     (teamKey) => API.get(`/teams/${teamKey}/tims-overrides`),
