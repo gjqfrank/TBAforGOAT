@@ -19,6 +19,17 @@ const GoatStrat = (() => {
     const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRoYm93dWRtend6bW1mYmV0bXVtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4ODMwMjMsImV4cCI6MjA5ODQ1OTAyM30.QgkuH1-KYj9x1ZjPeDjk_Bhp-4XKN9EF4BdptrZb4AM';
     const REST_BASE = SUPABASE_URL + '/rest/v1';
 
+    // Custom (non-TBA) offseason event placeholders that should always
+    // appear in the event dropdown even if TEAM_NUM isn't registered.
+    // Kept in sync with goatpredict.js CUSTOM_EVENTS until TBA publishes
+    // the real event and the placeholder is dropped.
+    const CUSTOM_EVENTS = [
+        {
+            event_key:  '2026cnsanya',
+            event_name: 'China Sanya Offseason Event',
+        },
+    ];
+
     // ── State ──────────────────────────────────────────────
     let _mounted = false;
     let _events = [];
@@ -226,6 +237,16 @@ const GoatStrat = (() => {
         try {
             const stats = await API.teamStats(TEAM_NUM, 2026);
             _events = stats?.events_this_year || [];
+
+            // Inject custom event placeholders (Sanya, etc.) at the top of
+            // the list so they're selectable even if TEAM_NUM isn't
+            // registered. Skip any whose key already came back from TBA.
+            for (const ce of CUSTOM_EVENTS) {
+                if (!_events.some(e => e.event_key === ce.event_key)) {
+                    _events.unshift(ce);
+                }
+            }
+
             if (!_events.length) {
                 sel.innerHTML = '<option value="">No events found for 6907 in 2026</option>';
                 return;
@@ -273,8 +294,15 @@ const GoatStrat = (() => {
             _matches6907 = all.filter(_has6907);
 
             if (!_matches6907.length) {
-                if (msel) msel.innerHTML = '<option value="">No matches with 6907</option>';
-                if (bd) bd.innerHTML = '<p class="gs-empty">Team 6907 has no matches at this event yet.</p>';
+                // Friendlier message for custom offseason events whose
+                // schedule hasn't been published yet.
+                const isCustom = CUSTOM_EVENTS.some(ce => ce.event_key === eventKey);
+                const matchMsg = isCustom ? '赛程尚未发布' : 'No matches with 6907';
+                const bdMsg = isCustom
+                    ? '赛程尚未发布。比赛开始后这里会显示比分拆解、Battle Station 笔记和 6907 战术计划。'
+                    : 'Team 6907 has no matches at this event yet.';
+                if (msel) msel.innerHTML = `<option value="">${_esc(matchMsg)}</option>`;
+                if (bd) bd.innerHTML = `<p class="gs-empty">${_esc(bdMsg)}</p>`;
                 return;
             }
 
