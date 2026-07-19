@@ -103,14 +103,20 @@ function _robotTypeTeamNumber(robotType) {
 
 // Compute initial_epa = robotType's EPA × copy_accuracy.
 // Returns null if either input is missing/invalid.
+// Handles copy_accuracy in two formats: "70" (decimal 0.70) or "70%" (percent).
 function _computeInitialEpa(robotType, copyAccuracy, epaCache) {
     const teamNum = _robotTypeTeamNumber(robotType);
     if (!teamNum) return null;
     const epa = epaCache[teamNum];
     if (epa == null) return null;
-    const acc = parseFloat(copyAccuracy);
-    if (isNaN(acc)) return null;
-    return Math.round(epa * acc * 100) / 100;
+    const s = String(copyAccuracy ?? '').trim();
+    if (!s) return null;
+    // Accept "70%" (percent) or "70" (treated as percent too, to match user input).
+    const m = s.match(/^(\d+(?:\.\d+)?)%?$/);
+    if (!m) return null;
+    const pct = parseFloat(m[1]);
+    if (isNaN(pct)) return null;
+    return Math.round(epa * pct / 100 * 100) / 100;
 }
 
 function isGoatScoutAdmin() {
@@ -325,7 +331,7 @@ function renderGoatScoutTable(containerId = 'gs-content') {
                     const rt = (entry.metrics || {}).robot_type;
                     const ca = (entry.metrics || {}).copy_accuracy;
                     const computed = _computeInitialEpa(rt, ca, _gsEpaCache);
-                    if (computed != null) val = computed;
+                    if (computed != null) val = String(computed);
                 }
                 if (_goatscoutEditMode) {
                     if (GOATSCOUT_READONLY_METRICS.has(m)) {

@@ -204,7 +204,7 @@ function _statCard(label, value, sub, tooltip) {
     const tip = tooltip ? ` title="${tooltip}"` : '';
     return `<div class="history-stat-card"${tip}><div class="hsc-value">${value}</div><div class="hsc-label">${label}</div>${sub ? `<div class="hsc-sub">${sub}</div>` : ''}</div>`;
 }
-function _esc(s) { return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function _esc(s) { return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
 /** Format ISO date (2026-03-15) as "Mar 15" */
 function _fmtDate(dateStr) {
