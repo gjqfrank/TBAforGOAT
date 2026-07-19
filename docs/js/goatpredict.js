@@ -27,6 +27,29 @@ const GoatPredict = (() => {
     const BASE_TIE_RATE     = 0.02;         // base tie probability in simulation
     const CLOSE_TIE_RATE    = 0.08;         // tie probability when alliances are close
 
+    // Custom (non-TBA) offseason event placeholders that should always
+    // appear in the event dropdown even if TEAM_NUM isn't registered.
+    // Mirrors backend `custom_events.py` — kept in sync manually until
+    // TBA publishes the real event and the placeholder is dropped.
+    const CUSTOM_EVENTS = [
+        {
+            event_key:    '2026cnsanya',
+            event_name:   'China Sanya Offseason Event',
+            event_type:   'Offseason',
+            start_date:   '2026-07-19',
+            end_date:     '2026-07-22',
+            city:         'Sanya',
+            state_prov:   '',
+            is_upcoming:  true,
+            qual_rank:    '-',
+            qual_record:  '0-0-0',
+            playoff_level:'-',
+            playoff_status:'-',
+            alliance_pick:'-',
+            alliance_number: null,
+        },
+    ];
+
     // ── State ──────────────────────────────────────────────
     let _mounted      = false;
     let _events       = [];
@@ -676,6 +699,16 @@ const GoatPredict = (() => {
         try {
             const stats = await API.teamStats(TEAM_NUM, YEAR);
             _events = stats?.events_this_year || [];
+
+            // Inject custom event placeholders (Sanya, etc.) at the top of
+            // the list so they're selectable even if TEAM_NUM isn't
+            // registered. Skip any whose key already came back from TBA.
+            for (const ce of CUSTOM_EVENTS) {
+                if (!_events.some(e => e.event_key === ce.event_key)) {
+                    _events.unshift(ce);
+                }
+            }
+
             if (!_events.length) {
                 if (sel) sel.innerHTML = `<option value="">No events found for ${TEAM_NUM} in ${YEAR}</option>`;
                 _renderAll();
@@ -719,7 +752,13 @@ const GoatPredict = (() => {
             _qualMatches = _filterQual(_allMatches);
 
             if (!_qualMatches.length) {
-                _setViewError('No qualification matches found for this event yet.');
+                // Friendlier message for custom offseason events whose
+                // schedule hasn't been published yet.
+                const isCustom = CUSTOM_EVENTS.some(ce => ce.event_key === eventKey);
+                const msg = isCustom
+                    ? '赛程尚未发布。比赛开始后这里会显示队伍评分、比赛预测和排名模拟。'
+                    : 'No qualification matches found for this event yet.';
+                _setViewError(msg);
                 return;
             }
 
