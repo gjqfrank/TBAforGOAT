@@ -491,7 +491,15 @@ function _effectiveMetricGroups() {
     const groups = GOATSCOUT_METRIC_GROUPS
         .filter(g => g.label !== 'Custom')
         .map(g => ({ label: g.label, metrics: [...g.metrics] }));
-    groups.push({ label: 'Custom', metrics: [...custom] });
+    // Filter out custom metrics that already exist in a built-in group.
+    // This handles the case where a metric (e.g. copy_accuracy) was promoted
+    // to a built-in group but is still saved in localStorage from a prior
+    // custom-column addition — we don't want it to show up twice.
+    const builtIn = new Set(groups.flatMap(g => g.metrics));
+    const dedupedCustom = custom.filter(m => !builtIn.has(m));
+    if (dedupedCustom.length > 0) {
+        groups.push({ label: 'Custom', metrics: [...dedupedCustom] });
+    }
     return groups;
 }
 
