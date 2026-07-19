@@ -16248,11 +16248,12 @@ tr:hover .compare-cb,
     padding: 1rem .75rem;
   }
 
-  /* ── Tab bar: compact scrollable pills with fade hints ── */
+  /* ── Tab bar: wraps to two rows on narrow screens ── */
 
   .tabs {
     padding: 0 .75rem;
-    overflow-x: auto;
+    flex-wrap: wrap;
+    overflow-x: visible;
     scrollbar-width: none;
     -webkit-overflow-scrolling: touch;
     position: relative;
