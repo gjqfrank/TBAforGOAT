@@ -9,7 +9,7 @@ const GOATSCOUT_ADMIN_EMAIL = 'gjqfrank@163.com';
 const GOATSCOUT_SELECT_METRICS = {
     robot_type: [
         '1690', '4414', '1323', '1678', '1114', '254', '2910', '118',
-        '7769', '9483', 'WCP', 'kitbot', '6907（正赛）', '9084',
+        '7769', '9483', '6766', 'kitbot', '6907（正赛）', '9084',
         '8044', '2231', 'other',
     ],
 };
