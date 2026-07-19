@@ -191,15 +191,27 @@ async def delete_goatscout(event_key: str, team_key: str):
 
 
 @router.post("/{event_key}/sync-prescout")
-async def sync_goatscout_prescout(event_key: str):
-    """Pull prescout data from Team 6907's GOATScout into goatscout_data.
+async def sync_goatscout_prescout(event_key: str, stages: Optional[str] = None):
+    """Pull scouting data from Team 6907's GOATScout into goatscout_data.
 
-    Requires GOATSCOUT_EMAIL, GOATSCOUT_PASSWORD, and a GOATSCOUT_EVENT_MAP
-    entry mapping this event_key to a GOATScout event UUID. Returns a summary
-    of how many teams were synced vs skipped.
+    Syncs prescout + match scouting data for practice / qualification / playoff
+    stages (3 API calls total). Requires GOATSCOUT_EMAIL, GOATSCOUT_PASSWORD,
+    and a GOATSCOUT_EVENT_MAP entry mapping this event_key to a GOATScout
+    event UUID.
+
+    Query params:
+      * stages — comma-separated list of stages to sync
+                 (default: "practice,qualification,playoff")
+
+    Returns a summary of how many teams were synced vs skipped, with
+    per-stage breakdown.
     """
     try:
-        result = await sync_event(event_key)
+        stage_list = (
+            [s.strip() for s in stages.split(",") if s.strip()]
+            if stages else None
+        )
+        result = await sync_event(event_key, stages=stage_list)
         if result.get("error"):
             raise HTTPException(status_code=400, detail=result["error"])
         return result

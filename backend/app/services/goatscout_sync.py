@@ -1,23 +1,30 @@
-"""GOATScout (Team 6907) prescout sync service.
+"""GOATScout (Team 6907) scouting sync service.
 
-Authenticates against `auth.team6907.org`, pulls prescout data from
-`goatscout.team6907.org`, maps the report fields into TBAforGOAT's
-`goatscout_data.metrics` JSONB column, and upserts rows per team.
+Pulls prescout + match scouting data from `goatscout.team6907.org` and
+writes it into TBAforGOAT's `goatscout_data.metrics` JSONB column.
 
-Designed to be invoked two ways:
-  * Manually via `POST /api/goatscout/{event_key}/sync-prescout`
-  * Automatically by the lifespan background task in main.py
+Uses the `/api/analysis?eventId=...&stage=...` endpoint which returns both
+prescout rows and stage-specific match scouting rows in a single call.
+Three calls (practice / qualification / playoff) fetch everything.
 
-Configuration (all optional — sync simply no-ops if missing):
-  * GOATSCOUT_EMAIL / GOATSCOUT_PASSWORD  — login credentials
-  * GOATSCOUT_EVENT_MAP                  — JSON {"<event_key>": "<gs_event_uuid>"}
-  * GOATSCOUT_SYNC_INTERVAL              — seconds between background runs
+Design:
+  * prescout fields are stored WITHOUT a prefix (backward-compatible with
+    the existing GoatScout editor).
+  * match scouting metrics (54 per-team stats produced by GOATScout's
+    analysis pipeline) are stored WITH a stage prefix:
+      `qual_start_trenchFront`, `practice_centerlineTrips`, `playoff_...`
+    This keeps each stage's data in its own namespace so a re-sync of one
+    stage doesn't clobber another.
+
+Invoked two ways:
+  * Manually: `POST /api/goatscout/{event_key}/sync-prescout`
+  * Background: main.py lifespan task every GOATSCOUT_SYNC_INTERVAL seconds
 """
 from __future__ import annotations
 
 import json
 import logging
-from typing import Any, Optional
+from typing import Any, Iterable, Optional
 
 import httpx
 
@@ -34,24 +41,48 @@ log = logging.getLogger(__name__)
 AUTH_BASE = "https://auth.team6907.org"
 SCOUT_BASE = "https://goatscout.team6907.org"
 LOGIN_URL = f"{AUTH_BASE}/api/login"
+ANALYSIS_URL = f"{SCOUT_BASE}/api/analysis"
 
-# Cookie name set by GOATLab SSO — we send it back on every scout API call.
+# Cookie name set by GOATLab SSO.
 SESSION_COOKIE = "__Secure-goatlab_session"
 
 # Author identity written into goatscout_data rows for synced records.
 SYNC_AUTHOR_DEVICE = "goatscout-sync"
 SYNC_AUTHOR_NAME = "GOATScout Sync"
 
-# HTTP timeouts — auth/team6907.org is occasionally slow.
 _HTTP_TIMEOUT = 30.0
+
+# Stages synced on every run. `qualification` is GOATScout's default
+# (what `/scout/{eventId}` with no ?stage= shows).
+DEFAULT_STAGES: tuple[str, ...] = ("practice", "qualification", "playoff")
+
+# ── Meta fields (excluded from metrics mapping) ────────────
+# prescoutRows meta fields — everything else is a prescout metric.
+_PRESCOUT_META: frozenset[str] = frozenset({
+    "eventTeamId", "teamNumber", "displayName", "status",
+    "photoCount", "photoUrls", "updatedByDisplayName", "updatedAt",
+})
+
+# analysis `rows` meta fields — everything else is a computed metric.
+# The row schema isn't fully known yet (no matches played), so we
+# exclude only the obvious identifiers and let everything else through.
+_ROW_META: frozenset[str] = frozenset({
+    "eventTeamId", "teamNumber", "displayName",
+    "teamKey", "matchCount", "sessionCount", "teamMatchCount",
+})
+
+# Short prefix used for qualification-stage metrics to match TBA
+# convention ("qm" = qualification match).
+_STAGE_PREFIX: dict[str, str] = {
+    "practice": "practice",
+    "qualification": "qual",
+    "playoff": "playoff",
+}
 
 
 # ── Event mapping ──────────────────────────────────────────
 def _load_event_map() -> dict[str, str]:
-    """Parse GOATSCOUT_EVENT_MAP env var (JSON) into a dict.
-
-    Returns ``{tbaforge_event_key: goatscout_event_uuid}``.
-    """
+    """Parse GOATSCOUT_EVENT_MAP env var (JSON) into a dict."""
     if not GOATSCOUT_EVENT_MAP:
         return {}
     try:
@@ -59,7 +90,6 @@ def _load_event_map() -> dict[str, str]:
         if not isinstance(data, dict):
             log.warning("GOATSCOUT_EVENT_MAP is not a JSON object — ignoring")
             return {}
-        # Normalise keys/values to strings.
         return {str(k): str(v) for k, v in data.items()}
     except (json.JSONDecodeError, TypeError) as exc:
         log.warning("GOATSCOUT_EVENT_MAP parse error: %s", exc)
@@ -73,41 +103,28 @@ def get_goatscout_event_id(event_key: str) -> Optional[str]:
 
 # ── Auth ──────────────────────────────────────────────────
 async def _login(client: httpx.AsyncClient) -> str:
-    """Authenticate against auth.team6907.org and return the session cookie.
-
-    Raises RuntimeError on any failure (bad credentials, network, etc.).
-    """
+    """Authenticate against auth.team6907.org and return the session cookie."""
     if not GOATSCOUT_EMAIL or not GOATSCOUT_PASSWORD:
         raise RuntimeError(
-            "GOATSCOUT_EMAIL and GOATSCOUT_PASSWORD must be set to sync prescout data."
+            "GOATSCOUT_EMAIL and GOATSCOUT_PASSWORD must be set to sync scouting data."
         )
-
     payload = {
         "login": GOATSCOUT_EMAIL,
         "password": GOATSCOUT_PASSWORD,
-        # returnTo just needs to be on the *.team6907.org domain — the cookie
-        # is scoped to the whole domain, so any subdomain URL works.
         "returnTo": f"{SCOUT_BASE}/api/me",
     }
     resp = await client.post(
-        LOGIN_URL,
-        json=payload,
-        timeout=_HTTP_TIMEOUT,
-        follow_redirects=False,  # we only need the Set-Cookie header
+        LOGIN_URL, json=payload, timeout=_HTTP_TIMEOUT, follow_redirects=False,
     )
     if resp.status_code >= 400:
-        # Body often contains a JSON error message.
         try:
             body = resp.json()
             detail = body.get("error") or body.get("message") or resp.text[:200]
         except Exception:
             detail = resp.text[:200]
         raise RuntimeError(f"GOATScout login failed (HTTP {resp.status_code}): {detail}")
-
     cookie = resp.cookies.get(SESSION_COOKIE)
     if not cookie:
-        # Some deployments return the cookie under a different casing or path.
-        # Walk all set cookies and pick the one whose name matches.
         for name, value in resp.cookies.items():
             if name == SESSION_COOKIE:
                 cookie = value
@@ -121,87 +138,54 @@ async def _login(client: httpx.AsyncClient) -> str:
 
 
 # ── Fetch ────────────────────────────────────────────────
-async def _fetch_prescout_list(
-    client: httpx.AsyncClient, event_id: str, cookie: str
-) -> list[dict[str, Any]]:
-    """Return the team list for a GOATScout event (with prescout status)."""
+async def _fetch_analysis(
+    client: httpx.AsyncClient, event_id: str, cookie: str, stage: str
+) -> dict[str, Any]:
+    """Fetch the analysis payload for one stage.
+
+    Returns ``{event, metrics, rows, recordSummary, prescoutCoverage, prescoutRows}``.
+    """
     resp = await client.get(
-        f"{SCOUT_BASE}/api/events/{event_id}/prescout",
+        ANALYSIS_URL,
+        params={"eventId": event_id, "stage": stage},
         cookies={SESSION_COOKIE: cookie},
         timeout=_HTTP_TIMEOUT,
     )
-    resp.raise_for_status()
-    body = resp.json()
-    # Body shape: {"event": {...}, "teams": [{eventTeamId, teamNumber, status, ...}]}
-    return body.get("teams", []) if isinstance(body, dict) else []
-
-
-async def _fetch_team_prescout(
-    client: httpx.AsyncClient,
-    event_id: str,
-    event_team_id: str,
-    cookie: str,
-) -> Optional[dict[str, Any]]:
-    """Return the detailed prescout report for a single team, or None."""
-    resp = await client.get(
-        f"{SCOUT_BASE}/api/events/{event_id}/prescout/{event_team_id}",
-        cookies={SESSION_COOKIE: cookie},
-        timeout=_HTTP_TIMEOUT,
-    )
-    if resp.status_code == 404:
-        return None
     resp.raise_for_status()
     return resp.json()
 
 
 # ── Field mapping ─────────────────────────────────────────
-# GOATScout prescout report fields → TBAforGOAT metrics keys.
-# We mirror the report's snake_case field names directly so the frontend
-# GoatScout editor can render them without renaming.
-_REPORT_FIELDS: tuple[str, ...] = (
-    "robotHeight",
-    "robotHeightOther",
-    "bumpTraversal",
-    "shooter",
-    "shooterOther",
-    "hood",
-    "intake",
-    "intakeOther",
-    "autoClimb",
-    "manualClimimb",
-    "autoRoutine",
-    "autoRoutineOther",
-    "trenchCapacityMode",
-    "trenchCapacity",
-    "maxCapacity",
-)
+def _map_prescout_row(row: dict[str, Any]) -> dict[str, Any]:
+    """Map a prescoutRows entry to metrics (no stage prefix).
 
-
-def _map_report_to_metrics(report: dict[str, Any] | None) -> dict[str, Any]:
-    """Translate a GOATScout prescout report into a metrics dict.
-
-    Returns an empty dict when ``report`` is None or contains no recognised
-    fields, so callers can skip writing empty rows.
+    Drops null/empty values so the metrics dict stays sparse and
+    merge-friendly.
     """
-    if not isinstance(report, dict):
-        return {}
     metrics: dict[str, Any] = {}
-    for field in _REPORT_FIELDS:
-        if field in report:
-            value = report[field]
-            # Skip null/empty values to keep metrics sparse & merge-friendly.
-            if value is None or value == "":
-                continue
-            metrics[field] = value
-    # Preserve any extra fields the GOATScout schema may add later
-    # (e.g. free-form notes). Skip the obvious structural ones.
-    _EXTRA_SKIP = {"id", "eventTeamId", "eventTeam", "updatedAt", "updatedBy"}
-    for key, value in report.items():
-        if key in _REPORT_FIELDS or key in _EXTRA_SKIP:
+    for key, value in row.items():
+        if key in _PRESCOUT_META:
             continue
         if value is None or value == "":
             continue
         metrics[key] = value
+    return metrics
+
+
+def _map_analysis_row(row: dict[str, Any], stage: str) -> dict[str, Any]:
+    """Map an analysis ``rows`` entry to metrics with a stage prefix.
+
+    Each metric becomes ``{prefix}_{metricId}`` (e.g. ``qual_start_trenchFront``)
+    so multiple stages can coexist in the same metrics JSONB without clobbering.
+    """
+    prefix = _STAGE_PREFIX.get(stage, stage)
+    metrics: dict[str, Any] = {}
+    for key, value in row.items():
+        if key in _ROW_META:
+            continue
+        if value is None or value == "":
+            continue
+        metrics[f"{prefix}_{key}"] = value
     return metrics
 
 
@@ -224,8 +208,6 @@ async def _upsert_team(
     )
     if existing.data:
         old_metrics = existing.data[0].get("metrics") or {}
-        # Merge: prefer incoming synced values, but keep any keys the local
-        # editor added that GOATScout doesn't know about.
         merged = {**old_metrics, **metrics}
         row = {
             "id": existing.data[0]["id"],
@@ -247,7 +229,7 @@ async def _upsert_team(
         }
         await sb.table("goatscout_data").upsert(row).execute()
 
-    # History log (best-effort — failure here shouldn't fail the sync).
+    # History log (best-effort).
     history_row = {
         "team_key": team_key,
         "event_key": event_key,
@@ -262,26 +244,30 @@ async def _upsert_team(
 
 
 # ── Public entrypoint ─────────────────────────────────────
-async def sync_event(event_key: str) -> dict[str, Any]:
-    """Sync GOATScout prescout data into goatscout_data for one event.
+async def sync_event(
+    event_key: str,
+    stages: Optional[Iterable[str]] = None,
+) -> dict[str, Any]:
+    """Sync GOATScout scouting data into goatscout_data for one event.
 
-    Returns a summary dict: ``{synced: int, skipped: int, total: int, event_id, error?}``.
+    Fetches prescout data + match-scouting data for each stage and
+    field-level-merges everything into goatscout_data.metrics per team.
+
+    Returns ``{synced, skipped, total, event_id, stages, error?}``.
     """
     event_id = get_goatscout_event_id(event_key)
     if not event_id:
         return {
-            "synced": 0,
-            "skipped": 0,
-            "total": 0,
+            "synced": 0, "skipped": 0, "total": 0,
             "error": f"No GOATScout event mapping for '{event_key}'. Set GOATSCOUT_EVENT_MAP.",
         }
     if not GOATSCOUT_EMAIL or not GOATSCOUT_PASSWORD:
         return {
-            "synced": 0,
-            "skipped": 0,
-            "total": 0,
+            "synced": 0, "skipped": 0, "total": 0,
             "error": "GOATSCOUT_EMAIL / GOATSCOUT_PASSWORD not configured.",
         }
+
+    stage_list = list(stages) if stages is not None else list(DEFAULT_STAGES)
 
     async with httpx.AsyncClient() as client:
         try:
@@ -290,61 +276,89 @@ async def sync_event(event_key: str) -> dict[str, Any]:
             log.error("GOATScout sync login failed: %s", exc)
             return {"synced": 0, "skipped": 0, "total": 0, "error": str(exc)}
 
-        try:
-            teams = await _fetch_prescout_list(client, event_id, cookie)
-        except Exception as exc:
-            log.error("GOATScout prescout list fetch failed: %s", exc)
-            return {"synced": 0, "skipped": 0, "total": 0, "error": str(exc)}
+        # Accumulate per-team metrics across all stages.
+        team_metrics: dict[str, dict[str, Any]] = {}
+        prescout_done = False
+        stage_summaries: list[dict[str, Any]] = []
 
+        for stage in stage_list:
+            try:
+                data = await _fetch_analysis(client, event_id, cookie, stage)
+            except Exception as exc:
+                log.error("GOATScout analysis fetch failed for stage=%s: %s", stage, exc)
+                stage_summaries.append({
+                    "stage": stage, "error": str(exc),
+                    "prescout": 0, "rows": 0,
+                })
+                continue
+
+            prescout_rows = data.get("prescoutRows") or []
+            analysis_rows = data.get("rows") or []
+
+            # Process prescoutRows only once — they're identical across stages.
+            if not prescout_done and prescout_rows:
+                prescout_count = 0
+                for row in prescout_rows:
+                    team_number = row.get("teamNumber")
+                    if not team_number:
+                        continue
+                    team_key = f"frc{team_number}"
+                    mapped = _map_prescout_row(row)
+                    if mapped:
+                        team_metrics.setdefault(team_key, {}).update(mapped)
+                        prescout_count += 1
+                prescout_done = True
+                log.info(
+                    "GOATScout sync %s: prescout mapped %d teams",
+                    event_key, prescout_count,
+                )
+
+            # Process stage-specific analysis rows.
+            row_count = 0
+            for row in analysis_rows:
+                team_number = row.get("teamNumber")
+                if not team_number:
+                    continue
+                team_key = f"frc{team_number}"
+                mapped = _map_analysis_row(row, stage)
+                if mapped:
+                    team_metrics.setdefault(team_key, {}).update(mapped)
+                    row_count += 1
+
+            stage_summaries.append({
+                "stage": stage,
+                "prescout": len(prescout_rows),
+                "rows": len(analysis_rows),
+                "rows_mapped": row_count,
+            })
+            log.info(
+                "GOATScout sync %s stage=%s: prescout=%d rows=%d mapped=%d",
+                event_key, stage, len(prescout_rows), len(analysis_rows), row_count,
+            )
+
+        # Upsert all accumulated team metrics.
         synced = 0
         skipped = 0
-        for team in teams:
-            team_number = team.get("teamNumber")
-            status = team.get("status")
-            event_team_id = team.get("eventTeamId")
-            if not team_number or not event_team_id:
-                skipped += 1
-                continue
-            # Skip teams with no prescout entered yet — saves 43 API calls when
-            # nothing has been filled in.
-            if status == "empty":
-                skipped += 1
-                continue
-            try:
-                detail = await _fetch_team_prescout(
-                    client, event_id, event_team_id, cookie
-                )
-            except Exception as exc:
-                log.warning(
-                    "GOATScout prescout fetch failed for team %s: %s",
-                    team_number, exc,
-                )
-                skipped += 1
-                continue
-
-            report = (detail or {}).get("report") if isinstance(detail, dict) else None
-            metrics = _map_report_to_metrics(report)
-            team_key = f"frc{team_number}"
+        for team_key, metrics in team_metrics.items():
             try:
                 if await _upsert_team(event_key, team_key, metrics):
                     synced += 1
                 else:
                     skipped += 1
             except Exception as exc:
-                log.error(
-                    "goatscout_data upsert failed for %s: %s", team_key, exc
-                )
+                log.error("goatscout_data upsert failed for %s: %s", team_key, exc)
                 skipped += 1
 
     log.info(
-        "GOATScout sync %s → %d synced, %d skipped, %d total",
-        event_key, synced, skipped, len(teams),
+        "GOATScout sync %s complete: %d synced, %d skipped, %d total teams",
+        event_key, synced, skipped, len(team_metrics),
     )
     return {
         "synced": synced,
         "skipped": skipped,
-        "total": len(teams),
+        "total": len(team_metrics),
         "event_id": event_id,
+        "stages": stage_summaries,
     }
 
 
@@ -356,14 +370,13 @@ async def sync_all_mapped_events() -> list[dict[str, Any]]:
     results = []
     for event_key in event_map:
         try:
-            results.append({**await sync_event(event_key), "event_key": event_key})
+            result = await sync_event(event_key)
+            results.append({**result, "event_key": event_key})
         except Exception as exc:
             log.error("GOATScout sync failed for %s: %s", event_key, exc)
             results.append({
                 "event_key": event_key,
-                "synced": 0,
-                "skipped": 0,
-                "total": 0,
+                "synced": 0, "skipped": 0, "total": 0,
                 "error": str(exc),
             })
     return results
