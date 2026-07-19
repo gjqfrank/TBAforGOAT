@@ -19,6 +19,29 @@ const GOATSCOUT_SELECT_METRICS = {
 // `copy_accuracy` and is updated whenever either input changes.
 const GOATSCOUT_READONLY_METRICS = new Set(['initial_epa']);
 
+// Hardcoded EPA fallback for robot_type teams.
+// Used when Statbotics API is unavailable (returns 500 or times out).
+// Values sourced from statbotics.io on 2026-07-19.
+// To refresh: visit statbotics.io, look up each team's EPA, update here.
+const _GS_EPA_FALLBACK = {
+    1690: 295.4,
+    4414: 356.9,
+    254: 328.1,
+    7769: 311.6,
+    1323: 310.0,
+    2056: 302.2,
+    27: 295.1,
+    1114: 287.6,
+    1678: 278.2,
+    118: 182.4,
+    9483: 261.3,
+    6766: 111.5,
+    6907: 133.1,
+    9084: 133.5,
+    8044: 256.5,
+    2231: 233.0,
+};
+
 const GOATSCOUT_METRIC_GROUPS = [
     { label: 'Meta', metrics: ['sessions'] },
     { label: 'Pre-Scout', metrics: [
@@ -175,6 +198,7 @@ async function loadGoatScoutData() {
 // Build a list of distinct team numbers from every row's robot_type and
 // fetch their EPA from Statbotics (via backend proxy). Also tops up the
 // cache with any team numbers added in edit mode without a full reload.
+// Falls back to hardcoded _GS_EPA_FALLBACK when Statbotics API is down.
 async function _refreshEpaCache(extraTeamNums) {
     const nums = new Set(extraTeamNums || []);
     for (const row of _goatscoutData) {
@@ -182,16 +206,26 @@ async function _refreshEpaCache(extraTeamNums) {
         if (n) nums.add(n);
     }
     if (!nums.size) return;
-    // Skip team numbers we already have cached.
+    // Skip team numbers we already have cached (from live API or fallback).
     const missing = [...nums].filter(n => _gsEpaCache[n] == null);
     if (!missing.length) return;
+    // Try backend proxy first (fetches live EPA from Statbotics).
     try {
         const map = await API.batchEpa(missing, 2026);
-        for (const [k, v] of Object.entries(map || {})) {
-            _gsEpaCache[parseInt(k, 10)] = v;
+        if (map) {
+            for (const [k, v] of Object.entries(map)) {
+                _gsEpaCache[parseInt(k, 10)] = v;
+            }
         }
     } catch (e) {
-        // Non-fatal: cells will just show — instead of a computed value.
+        // Non-fatal: fall through to hardcoded fallback below.
+    }
+    // Fill in any remaining gaps with hardcoded fallback values so
+    // initial_epa shows a number even when Statbotics API is unavailable.
+    for (const n of missing) {
+        if (_gsEpaCache[n] == null && _GS_EPA_FALLBACK[n] != null) {
+            _gsEpaCache[n] = _GS_EPA_FALLBACK[n];
+        }
     }
 }
 
