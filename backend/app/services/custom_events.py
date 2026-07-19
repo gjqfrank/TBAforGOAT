@@ -39,6 +39,9 @@ SANYA_TEAM_NUMBERS: list[int] = [
     10479, 6394, 6399, 11199, 11019, 9597, 6907, 8015, 6706, 11256,
     5849, 11328, 7047, 6766, 8214, 9635, 6487, 11118, 7594, 8810,
     8814, 10120, 10526, 11352,
+    # Teams registered in GOATScout but not in the original Sanya list.
+    # Added 2026-07-18 so their prescout data syncs into goatscout_data.
+    6353, 9991, 9992, 9994, 9995, 9996, 9997, 9999,
 ]
 
 # All custom events for quick lookup by key
