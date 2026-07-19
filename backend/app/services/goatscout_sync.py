@@ -193,9 +193,12 @@ def _map_analysis_row(row: dict[str, Any], stage: str) -> dict[str, Any]:
 async def _upsert_team(
     event_key: str, team_key: str, metrics: dict[str, Any]
 ) -> bool:
-    """Field-level merge upsert into goatscout_data. Returns True on write."""
-    if not metrics:
-        return False
+    """Field-level merge upsert into goatscout_data. Returns True on write.
+
+    A team is always upserted (even with empty metrics) so that every team
+    registered in GOATScout appears in the table — this lets the frontend
+    show the full team list before scouts fill in any prescout data.
+    """
     sb = await get_supabase()
     existing = (
         await sb.table("goatscout_data")
@@ -209,6 +212,10 @@ async def _upsert_team(
     if existing.data:
         old_metrics = existing.data[0].get("metrics") or {}
         merged = {**old_metrics, **metrics}
+        # Skip the write if nothing actually changed (avoids bumping
+        # updated_at and creating a redundant history row on every sync).
+        if merged == old_metrics and not metrics:
+            return False
         row = {
             "id": existing.data[0]["id"],
             "team_key": team_key,
@@ -296,6 +303,9 @@ async def sync_event(
             analysis_rows = data.get("rows") or []
 
             # Process prescoutRows only once — they're identical across stages.
+            # Every team registered in GOATScout is registered as a row in
+            # goatscout_data (even with empty prescout metrics) so the
+            # frontend can show the full team list.
             if not prescout_done and prescout_rows:
                 prescout_count = 0
                 for row in prescout_rows:
@@ -304,12 +314,13 @@ async def sync_event(
                         continue
                     team_key = f"frc{team_number}"
                     mapped = _map_prescout_row(row)
-                    if mapped:
-                        team_metrics.setdefault(team_key, {}).update(mapped)
-                        prescout_count += 1
+                    # Always register the team_key so _upsert_team runs,
+                    # even if prescout fields are all empty (status="empty").
+                    team_metrics.setdefault(team_key, {}).update(mapped)
+                    prescout_count += 1
                 prescout_done = True
                 log.info(
-                    "GOATScout sync %s: prescout mapped %d teams",
+                    "GOATScout sync %s: prescout registered %d teams",
                     event_key, prescout_count,
                 )
 
