@@ -747,8 +747,20 @@ const GoatPredict = (() => {
         _setViewLoading('Loading matches…');
 
         try {
-            const data = await API.allMatches(eventKey);
+            // TBA may not have this event yet (custom offseason) —
+            // that's fine, we still inject practice matches below.
+            let data = null;
+            try {
+                data = await API.allMatches(eventKey);
+            } catch (apiErr) { /* non-fatal */ }
             _allMatches = data?.matches || [];
+
+            // Inject manually-entered practice match results from
+            // data/practice_matches.js. These flow through the same
+            // OPR/EPA/prediction pipeline so early-event predictions
+            // are based on real game data, not just prescouting.
+            _injectPracticeMatches(eventKey, _allMatches);
+
             _qualMatches = _filterQual(_allMatches);
 
             if (!_qualMatches.length) {
@@ -766,6 +778,66 @@ const GoatPredict = (() => {
             _renderAll();
         } catch (e) {
             _setViewError(`Error loading matches: ${_esc(e.message)}`);
+        }
+    }
+
+    // ── Practice match injection ───────────────────────────
+    // Convert manually-entered practice match data (from
+    // practice_matches.js) into the same shape as TBA matches so it
+    // flows through the same OPR/EPA/prediction pipeline.
+    function _practiceToMatchFormat(pm, eventKey) {
+        const redScore  = (typeof pm.redScore  === 'number') ? pm.redScore  : -1;
+        const blueScore = (typeof pm.blueScore === 'number') ? pm.blueScore : -1;
+        const winner = redScore > blueScore ? 'red'
+                     : blueScore > redScore ? 'blue' : '';
+        return {
+            key: `${eventKey}_practice${pm.num}`,
+            comp_level: 'qm',                  // treat as qual so _filterQual includes it
+            match_number: 900 + pm.num,        // offset to avoid colliding with real quals
+            set_number: 1,
+            label: `Practice ${pm.num}`,
+            sort_key: [0, 900 + pm.num, 1],    // sort before real quals
+            time: null,
+            has_breakdown: false,
+            red: {
+                teams: (pm.red || []).map(n => ({ team_number: n, nickname: '' })),
+                score: redScore,
+                total_opr: 0,
+                alliance_number: null,
+            },
+            blue: {
+                teams: (pm.blue || []).map(n => ({ team_number: n, nickname: '' })),
+                score: blueScore,
+                total_opr: 0,
+                alliance_number: null,
+            },
+            winning_alliance: winner,
+            pred: null,
+            _isPractice: true,
+            _practiceAuto: {
+                red:  (typeof pm.redAuto  === 'number') ? pm.redAuto  : null,
+                blue: (typeof pm.blueAuto === 'number') ? pm.blueAuto : null,
+            },
+            _practiceRP: {
+                red:  Array.isArray(pm.redRP)  ? pm.redRP  : [false, false],
+                blue: Array.isArray(pm.blueRP) ? pm.blueRP : [false, false],
+            },
+        };
+    }
+
+    function _injectPracticeMatches(eventKey, matches) {
+        const pm = (typeof PRACTICE_MATCHES !== 'undefined')
+            ? (PRACTICE_MATCHES[eventKey] || [])
+            : [];
+        if (!pm.length) return;
+        // Only inject matches that have actual scores entered (skip
+        // all-zero placeholder rows so they don't pollute OPR).
+        const played = pm.filter(m =>
+            (typeof m.redScore === 'number' && m.redScore > 0) ||
+            (typeof m.blueScore === 'number' && m.blueScore > 0)
+        );
+        for (const m of played) {
+            matches.push(_practiceToMatchFormat(m, eventKey));
         }
     }
 
