@@ -157,14 +157,34 @@ async def _fetch_analysis(
 
 
 # ── Field mapping ─────────────────────────────────────────
+
+# Map GOATScout prescout field names (camelCase English) to the
+# column names the GoatScout frontend expects (mixed Chinese/Capitalized).
+# Only fields that appear in GOATSCOUT_METRIC_GROUPS' Pre-Scout group
+# need to be mapped here. "Other" variant fields (shooterOther, etc.)
+# are kept under their original key since the frontend has no column
+# for them.
+_PRESCOUT_FIELD_MAP: dict[str, str] = {
+    "hood":            "Hood",
+    "intake":          "Intake",
+    "shooter":         "Shooter",
+    "robotHeight":     "车高",
+    "maxCapacity":     "最大容量",
+    "bumpTraversal":   "过坡",
+    "autoClimb":       "自动爬升",
+    "manualClimb":     "手动爬升",
+    "autoRoutine":     "自动",
+    "trenchCapacity":  "过 trench",
+}
+
+
 def _map_prescout_row(row: dict[str, Any]) -> dict[str, Any]:
     """Map a prescoutRows entry to metrics (no stage prefix).
 
     Drops null/empty values so the metrics dict stays sparse and
-    merge-friendly. Also maps a few meta fields (status, photoCount,
-    updatedAt) into the Chinese display columns the frontend expects
-    ('状态', '照片', '更新') so the GoatScout table reflects real
-    prescouting progress instead of stale defaults.
+    merge-friendly. Maps meta fields (status, photoCount, updatedAt)
+    into Chinese display columns and renames technical fields to match
+    the GoatScout frontend's column names exactly.
     """
     metrics: dict[str, Any] = {}
 
@@ -199,7 +219,10 @@ def _map_prescout_row(row: dict[str, Any]) -> dict[str, Any]:
             continue
         if value is None or value == "":
             continue
-        metrics[key] = value
+        # Rename to the frontend column name (e.g. hood → Hood, robotHeight → 车高).
+        # Unmapped keys (shooterOther, intakeOther, etc.) keep their original name.
+        out_key = _PRESCOUT_FIELD_MAP.get(key, key)
+        metrics[out_key] = value
     return metrics
 
 
