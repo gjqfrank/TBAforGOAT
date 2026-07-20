@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import datetime
 from typing import Any, Iterable, Optional
 
 import httpx
@@ -160,9 +161,39 @@ def _map_prescout_row(row: dict[str, Any]) -> dict[str, Any]:
     """Map a prescoutRows entry to metrics (no stage prefix).
 
     Drops null/empty values so the metrics dict stays sparse and
-    merge-friendly.
+    merge-friendly. Also maps a few meta fields (status, photoCount,
+    updatedAt) into the Chinese display columns the frontend expects
+    ('状态', '照片', '更新') so the GoatScout table reflects real
+    prescouting progress instead of stale defaults.
     """
     metrics: dict[str, Any] = {}
+
+    # ── Meta field mappings (excluded from the generic loop below) ──
+    # status → 状态 (Chinese display)
+    _STATUS_MAP = {
+        "complete": "已完成",
+        "in_progress": "进行中",
+        "not_started": "未开始",
+    }
+    raw_status = row.get("status")
+    if raw_status is not None and raw_status != "":
+        metrics["状态"] = _STATUS_MAP.get(raw_status, raw_status)
+
+    # photoCount → 照片 (e.g. "2 张")
+    photo_count = row.get("photoCount")
+    if photo_count is not None and photo_count != "":
+        metrics["照片"] = f"{photo_count} 张"
+
+    # updatedAt → 更新 (e.g. "2026-07-20 01:34")
+    updated_at = row.get("updatedAt")
+    if updated_at:
+        try:
+            dt = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
+            metrics["更新"] = dt.strftime("%Y-%m-%d %H:%M")
+        except (ValueError, TypeError):
+            metrics["更新"] = updated_at
+
+    # ── Generic prescout fields (hood, intake, shooter, ...) ──
     for key, value in row.items():
         if key in _PRESCOUT_META:
             continue
